@@ -1,0 +1,23 @@
+{
+  "name": "s5",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Use S5",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/s5-dev/s5.js.git"
+  },
+  "keywords": [
+    "s5"
+  ],
+  "author": "s5-dev",
+  "contributors": ["redsolver", "Lume Web"],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/s5-dev/s5.js/issues"
+  },
+  "homepage": "https://github.com/s5-dev/s5.js#readme"
+}
