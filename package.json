@@ -14,10 +14,19 @@
     "s5"
   ],
   "author": "s5-dev",
-  "contributors": ["redsolver", "Lume Web"],
+  "contributors": [
+    "redsolver",
+    "Lume Web"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/s5-dev/s5.js/issues"
   },
-  "homepage": "https://github.com/s5-dev/s5.js#readme"
+  "homepage": "https://github.com/s5-dev/s5.js#readme",
+  "dependencies": {
+    "@noble/ciphers": "^1.0.0",
+    "@noble/ed25519": "^2.1.0",
+    "@noble/hashes": "^1.5.0",
+    "msgpackr": "^1.11.0"
+  }
 }
