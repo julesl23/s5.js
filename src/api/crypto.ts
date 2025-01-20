@@ -34,20 +34,19 @@ export interface CryptoImplementation {
         nonce: Uint8Array,
         ciphertext: Uint8Array,
     ): Promise<Uint8Array>;
+    // TODO maybe add AES-GCM cipher for large blobs
 }
 
 export class KeyPairEd25519 {
-    private readonly _bytes: Uint8Array;
+    readonly privKey: Uint8Array;
+    readonly pubKey: Uint8Array;
 
-    constructor(bytes: Uint8Array) {
-        this._bytes = bytes;
+    constructor(privKey: Uint8Array, pubKey: Uint8Array) {
+        this.privKey = privKey;
+        this.pubKey = pubKey;
     }
 
     public get publicKey(): Uint8Array {
-        return new Uint8Array([mkeyEd25519, ...this._bytes.subarray(32)]);
-    }
-
-    extractBytes(): Uint8Array {
-        return this._bytes;
+        return new Uint8Array([mkeyEd25519, ...this.pubKey]);
     }
 }
