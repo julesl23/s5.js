@@ -52,9 +52,9 @@ export function generatePhrase(crypto: CryptoImplementation): string {
  * @returns - The seed bytes.
  * @throws - Will throw if the phrase fails to validate, with the reason that the seed is invalid.
  */
-export function phraseToSeed(phrase: string): Uint8Array {
+export function phraseToSeed(phrase: string, crypto: CryptoImplementation): Uint8Array {
   phrase = sanitizePhrase(phrase);
-  const [valid, error, seed] = validatePhrase(phrase);
+  const [valid, error, seed] = validatePhrase(phrase, crypto);
   if (!valid || !seed) {
     throw new Error(error);
   }
