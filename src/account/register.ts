@@ -2,16 +2,17 @@ import { CryptoImplementation } from '../api/crypto';
 import { S5UserIdentity } from '../identity/identity';
 import { base64UrlNoPaddingDecode, base64UrlNoPaddingEncode } from '../util/base64';
 import { S5Portal } from './portal';
-import { signChallenge, CHALLENGE_TYPE_LOGIN } from './sign_challenge';
+import { signChallenge, CHALLENGE_TYPE_REGISTER } from './sign_challenge';
 
-const portalAccountLoginEndpoint = "account/login";
+const portalAccountRegisterEndpoint = "account/register";
 
-export async function portalAccountLogin(
+export async function portalAccountRegister(
     portal: S5Portal,
     identity: S5UserIdentity,
     seed: Uint8Array,
     label: string,
     crypto: CryptoImplementation,
+    authToken?: string,
 ): Promise<string> {
     const portalAccountsSeed: Uint8Array = identity.seeds.portalAccounts;
 
@@ -25,22 +26,26 @@ export async function portalAccountLogin(
 
     const publicKey = base64UrlNoPaddingEncode(portalAccountKeyPair.publicKey);
 
-    const loginRequestResponse = await fetch(portal.apiURL(portalAccountLoginEndpoint, { pubKey: publicKey }));
+    const registerRequestResponse = await fetch(portal.apiURL(portalAccountRegisterEndpoint, { pubKey: publicKey }), {
+        headers: authToken === undefined ? {} : {
+            'Authorization': `Bearer ${authToken}`,
+        }
+    });
 
-    if (!loginRequestResponse.ok) {
-        throw new Error(`HTTP ${loginRequestResponse.status}: ${loginRequestResponse.body}`);
+    if (!registerRequestResponse.ok) {
+        throw new Error(`HTTP ${registerRequestResponse.status}: ${registerRequestResponse.body}`);
     }
 
-    const challenge = base64UrlNoPaddingDecode((await loginRequestResponse.json()).challenge);
+    const challenge = base64UrlNoPaddingDecode((await registerRequestResponse.json()).challenge);
 
     const challengeResponse = await signChallenge(
         portalAccountKeyPair,
         challenge,
-        CHALLENGE_TYPE_LOGIN,
+        CHALLENGE_TYPE_REGISTER,
         portal.host,
         crypto,
     );
-    const loginResponse = await fetch(portal.apiURL(portalAccountLoginEndpoint), {
+    const registerResponse = await fetch(portal.apiURL(portalAccountRegisterEndpoint), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -53,8 +58,8 @@ export async function portalAccountLogin(
         })
     });
 
-    if (!loginResponse.ok) {
-        throw new Error(`HTTP ${loginResponse.status}: ${loginResponse.body}`);
+    if (!registerResponse.ok) {
+        throw new Error(`HTTP ${registerResponse.status}: ${registerResponse.body}`);
     }
-    return loginResponse.headers.getSetCookie()[0].split("=")[1];
+    return registerResponse.headers.getSetCookie()[0].split("=")[1];
 }

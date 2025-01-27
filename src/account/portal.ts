@@ -1,5 +1,5 @@
 // storage service, pinning service, gateway, portal
-class S5Portal {
+export class S5Portal {
     constructor(
         readonly protocol: string,
         readonly host: string,
