@@ -24,7 +24,7 @@ export interface S5APIInterface {
     pinHash(hash: Uint8Array): Promise<void>;
     unpinHash(hash: Uint8Array): Promise<void>;
 
-    registryGet(pk: Uint8Array): Promise<RegistryEntry>;
+    registryGet(pk: Uint8Array): Promise<RegistryEntry | undefined>;
     registryListen(pk: Uint8Array): AsyncIterator<RegistryEntry>;
     registrySet(entry: RegistryEntry): Promise<void>;
 

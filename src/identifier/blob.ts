@@ -7,7 +7,7 @@ import { blobIdentifierPrefixBytes } from "../constants"
 import { decodeLittleEndian, encodeLittleEndian } from "../util/little_endian";
 import Multibase from "./multibase.js";
 
-export default class BlobIdentifier extends Multibase {
+export class BlobIdentifier extends Multibase {
     readonly hash: Uint8Array;
     readonly size: number;
 
