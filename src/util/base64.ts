@@ -1,6 +1,6 @@
 import { base64url } from "multiformats/bases/base64";
 
-export function base64UrlNoPaddingEncode(input: Uint8Array): String {
+export function base64UrlNoPaddingEncode(input: Uint8Array): string {
     return base64url.encode(input);
 }
 
