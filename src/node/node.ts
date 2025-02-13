@@ -37,7 +37,7 @@ export class S5Node implements S5APIInterface {
         }
     }
     async downloadBlobAsBytes(hash: Uint8Array): Promise<Uint8Array> {
-        this.p2p.sendHashRequest(hash, [3]);
+        this.p2p.sendHashRequest(hash, [3, 5]);
         const hashStr = base64UrlNoPaddingEncode(hash);
 
         let urlsAlreadyTried: Set<string> = new Set([]);
@@ -46,13 +46,17 @@ export class S5Node implements S5APIInterface {
                 const url = location.parts[0];
                 if (!urlsAlreadyTried.has(url)) {
                     urlsAlreadyTried.add(url);
-                    const res = await fetch(url);
-                    if (res.status >= 200 && res.status < 300) {
-                        const bytes = new Uint8Array(await res.arrayBuffer())
-                        const bytesHash = await this.crypto.hashBlake3(bytes);
-                        if (areArraysEqual(bytesHash, hash.subarray(1))) {
-                            return bytes;
+                    try {
+                        const res = await fetch(url);
+                        if (res.status >= 200 && res.status < 300) {
+                            const bytes = new Uint8Array(await res.arrayBuffer())
+                            const bytesHash = await this.crypto.hashBlake3(bytes);
+                            if (areArraysEqual(bytesHash, hash.subarray(1))) {
+                                return bytes;
+                            }
                         }
+                    } catch (e) {
+                        console.debug('downloadBlobAsBytes', hash, e);
                     }
                 }
             }
