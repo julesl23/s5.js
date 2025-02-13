@@ -84,7 +84,7 @@ export class S5RegistryService {
         return msgpackr.pack([
             protocolMethodRegistryQuery,
             pk,
-        ]);
+        ]).subarray(1);
     }
 
     async get(pk: Uint8Array): Promise<RegistryEntry | undefined> {
@@ -111,7 +111,7 @@ export class S5RegistryService {
                 this.streams.set(key, new Subject<RegistryEntry>());
             }
 
-            if (!this.getFromDB(pk)) {
+            if ((await this.getFromDB(pk)) === undefined) {
                 console.debug(`[registry] get (clean) ${key}`);
                 for (let i = 0; i < 500; i++) {
                     await this.delay(5);
