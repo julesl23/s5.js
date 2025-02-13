@@ -1,6 +1,6 @@
 import { areArraysEqual } from '../util/arrays';
 import { base64UrlNoPaddingEncode } from '../util/base64';
-import { bytesToUtf8 } from '@noble/ciphers/utils';
+import { bytesToHex, bytesToUtf8 } from '@noble/ciphers/utils';
 import { CryptoImplementation, KeyPairEd25519 } from '../api/crypto';
 import { decodeLittleEndian } from '../util/little_endian';
 import { deserializeRegistryEntry } from '../registry/entry';
@@ -33,18 +33,19 @@ export class P2P {
     connectToNode(uri: string) {
         if (this.peers.has(uri)) return;
         const ws = new WebSocket(uri);
+        ws.binaryType = 'arraybuffer';
         const peer = new WebSocketPeer(ws, this);
         this.peers.set(uri, peer);
     }
 
-    blobLocations: Map<string, StorageLocation[]>;
+    blobLocations: Map<string, StorageLocation[]> = new Map();
 
     sendHashRequest(hash: Uint8Array, types: number[]) {
         const hashQueryPayload = msgpackr.pack([
             protocolMethodHashQuery,
             hash,
             types,
-        ]);
+        ]).subarray(1);
         for (const peer of this.peers.values()) {
             if (peer.isConnected) {
                 peer.send(hashQueryPayload)
@@ -112,7 +113,6 @@ class WebSocketPeer {
                 0
             ]).subarray(1);
             this.sendSigned(challengeResponse);
-
         } else if (data[0] === RECORD_TYPE_STORAGE_LOCATION) {
             const hash = data.subarray(1, 34);
             const type = data[34];
@@ -124,6 +124,7 @@ class WebSocketPeer {
                 const length = decodeLittleEndian(data.subarray(cursor, cursor + 2));
                 cursor += 2;
                 parts.push(bytesToUtf8(data.subarray(cursor, cursor + length)));
+                cursor += length;
             }
             cursor++;
             const publicKey = data.subarray(cursor, cursor + 33);
