@@ -53,13 +53,13 @@ export function generatePhrase(crypto: CryptoImplementation): string {
  * @throws - Will throw if the phrase fails to validate, with the reason that the seed is invalid.
  */
 export function phraseToSeed(phrase: string, crypto: CryptoImplementation): Uint8Array {
-  phrase = sanitizePhrase(phrase);
-  const [valid, error, seed] = validatePhrase(phrase, crypto);
-  if (!valid || !seed) {
-    throw new Error(error);
-  }
+    phrase = sanitizePhrase(phrase);
+    const [valid, error, seed] = validatePhrase(phrase, crypto);
+    if (!valid || !seed) {
+        throw new Error(error);
+    }
 
-  return seed;
+    return seed;
 }
 
 /**
@@ -72,61 +72,62 @@ export function phraseToSeed(phrase: string, crypto: CryptoImplementation): Uint
  * @returns - A boolean indicating whether the phrase is valid, a string explaining the error if it's not, and the final seed bytes.
  */
 export function validatePhrase(phrase: string, crypto: CryptoImplementation): [boolean, string, Uint8Array | null] {
-  phrase = sanitizePhrase(phrase);
-  const phraseWords = phrase.split(" ");
-  if (phraseWords.length !== PHRASE_LENGTH) {
-    return [false, `Phrase must be '${PHRASE_LENGTH}' words long, was '${phraseWords.length}'`, null];
-  }
-
-  // Build the seed words from phrase words.
-  const seedWords = new Uint16Array(SEED_WORDS_LENGTH);
-  let i = 0;
-  for (const word of phraseWords) {
-    // Check word length.
-    if (word.length < 3) {
-      return [false, `Word ${i + 1} is not at least 3 letters long`, null];
+    phrase = sanitizePhrase(phrase);
+    const phraseWords = phrase.split(" ");
+    if (phraseWords.length !== PHRASE_LENGTH) {
+        return [false, `Phrase must be '${PHRASE_LENGTH}' words long, was '${phraseWords.length}'`, null];
     }
 
-    // Iterate through the dictionary looking for the word prefix.
-    const prefix = word.slice(0, 3);
-    let bound = wordlist.length;
-    if (i === LAST_WORD_INDEX) {
-      bound = 256;
+    // Build the seed words from phrase words.
+    const seedWords = new Uint16Array(SEED_WORDS_LENGTH);
+    let i = 0;
+    for (const word of phraseWords) {
+        // Check word length.
+        if (word.length < 3) {
+            return [false, `Word ${i + 1} is not at least 3 letters long`, null];
+        }
+
+        // Iterate through the dictionary looking for the word prefix.
+        const prefix = word.slice(0, 3);
+        let bound = wordlist.length;
+        if (i === LAST_WORD_INDEX) {
+            bound = 256;
+        }
+        let found = -1;
+        for (let j = 0; j < bound; j++) {
+            const curPrefix = wordlist[j].slice(0, 3);
+            if (curPrefix === prefix) {
+                found = j;
+                break;
+            } else if (curPrefix > prefix) {
+                break;
+            }
+        }
+        // The prefix was not found in the dictionary.
+        if (found < 0) {
+            if (i === LAST_WORD_INDEX) {
+                return [false, `Prefix for word ${i + 1} must be found in the first 256 words of the dictionary`, null];
+            } else {
+                return [false, `Unrecognized prefix "${prefix}" at word ${i + 1}, not found in dictionary`, null];
+            }
+        }
+
+        seedWords[i] = found;
+
+        i++;
     }
-    let found = -1;
-    for (let j = 0; j < bound; j++) {
-      const curPrefix = wordlist[j].slice(0, 3);
-      if (curPrefix === prefix) {
-        found = j;
-        break;
-      } else if (curPrefix > prefix) {
-        break;
-      }
-    }
-    // The prefix was not found in the dictionary.
-    if (found < 0) {
-      if (i === LAST_WORD_INDEX) {
-        return [false, `Prefix for word ${i + 1} must be found in the first 256 words of the dictionary`, null];
-      } else {
-        return [false, `Unrecognized prefix "${prefix}" at word ${i + 1}, not found in dictionary`, null];
-      }
+    console.log(seedWords);
+
+    // Validate checksum.
+    const checksumWords = generateChecksumWordsFromSeedWords(seedWords, crypto);
+    for (let i = 0; i < CHECKSUM_WORDS_LENGTH; i++) {
+        const prefix = wordlist[checksumWords[i]].slice(0, 3);
+        if (phraseWords[i + SEED_WORDS_LENGTH].slice(0, 3) !== prefix) {
+            return [false, `Word "${phraseWords[i + SEED_WORDS_LENGTH]}" is not a valid checksum for the seed`, null];
+        }
     }
 
-    seedWords[i] = found;
-
-    i++;
-  }
-
-  // Validate checksum.
-  const checksumWords = generateChecksumWordsFromSeedWords(seedWords, crypto);
-  for (let i = 0; i < CHECKSUM_WORDS_LENGTH; i++) {
-    const prefix = wordlist[checksumWords[i]].slice(0, 3);
-    if (phraseWords[i + SEED_WORDS_LENGTH].slice(0, 3) !== prefix) {
-      return [false, `Word "${phraseWords[i + SEED_WORDS_LENGTH]}" is not a valid checksum for the seed`, null];
-    }
-  }
-
-  return [true, "", seedWordsToSeed(seedWords)];
+    return [true, "", seedWordsToSeed(seedWords)];
 }
 
 // ================
@@ -197,7 +198,7 @@ export function randomUint16Words(length: number, crypto: CryptoImplementation):
  */
 export function sanitizePhrase(phrase: string): string {
     // Remove duplicate adjacent spaces.
-    return phrase.trim().toLowerCase().replaceAll(/\s+/, " ");
+    return phrase.trim().toLowerCase().replaceAll(/\s+/g, " ");
 }
 
 /**

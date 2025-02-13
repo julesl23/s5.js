@@ -5,7 +5,7 @@
 
 const uniquePrefixLen = 3;
 
-const wordlist = [
+export const wordlist = [
   'abandon',
   'ability',
   'able',
