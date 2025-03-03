@@ -144,7 +144,9 @@ class WebSocketPeer {
 
         } else if (data[0] === RECORD_TYPE_REGISTRY_ENTRY) {
             const entry = deserializeRegistryEntry(data);
-            this.p2p.registry.put(entry);
+            try {
+                await this.p2p.registry.put(entry);
+            } catch (_) { }
         } else if (data[0] === protocolMethodSignedMessage) {
             const msg = msgpackr.unpack(new Uint8Array(
                 [0x94, ...data]
