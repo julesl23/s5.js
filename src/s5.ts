@@ -1,19 +1,27 @@
 import { CryptoImplementation } from './api/crypto';
 import { FS5 } from './fs/fs5';
 import { IDBStore } from './kv/idb';
+import { MemoryLevelStore } from './kv/memory_level';
 import { JSCryptoImplementation } from './api/crypto/js';
 import { KeyValueStore } from './kv/kv';
 import { S5APIInterface } from './api/s5';
 import { S5Node } from './node/node';
 import { S5UserIdentity } from './identity/identity';
+import { S5APIWithIdentity } from './identity/api';
+import { generatePhrase } from './identity/seed_phrase/seed_phrase';
+import { utf8ToBytes } from '@noble/ciphers/utils';
 
 export class S5 {
   private readonly node: S5Node;
+  private apiWithIdentity: S5APIWithIdentity | undefined;
+
   public get api(): S5APIInterface {
-    // TODO only return node API directly if there is no identity
+    if (this.hasIdentity) {
+      return this.apiWithIdentity!;
+    }
     return this.node;
   };
-  private _authBox: KeyValueStore;
+  private authStore: KeyValueStore;
   private identity?: S5UserIdentity;
 
   get crypto(): CryptoImplementation {
@@ -34,15 +42,15 @@ export class S5 {
 
   private constructor({
     node,
-    authBox,
+    authStore,
     identity,
   }: {
     node: S5Node;
-    authBox: KeyValueStore;
+    authStore: KeyValueStore;
     identity?: S5UserIdentity;
   }) {
     this.node = node;
-    this._authBox = authBox;
+    this.authStore = authStore;
     this.identity = identity;
   }
 
@@ -61,18 +69,48 @@ export class S5 {
   }): Promise<S5> {
     const crypto = new JSCryptoImplementation();
     const node = new S5Node(crypto);
-    await node.init((name: string) => IDBStore.open(name));
+    await node.init((name: string) => MemoryLevelStore.open());
     for (const uri of initialPeers) {
       node.p2p.connectToNode(uri);
     }
     await node.ensureInitialized();
 
-    // TODO Implement identity
-    const authBox = await IDBStore.open("s5_auth");
+    const authStore = await MemoryLevelStore.open();
+    // TODO Recover identity if it exists in authStore
     return new S5({
       node,
-      authBox,
+      authStore,
       identity: undefined,
     });
+  }
+
+  generateSeedPhrase(): string {
+    return generatePhrase(this.crypto);
+  }
+
+  async recoverIdentityFromSeedPhrase(seedPhrase: string): Promise<void> {
+    const newIdentity = await S5UserIdentity.fromSeedPhrase(
+      seedPhrase,
+      this.crypto,
+    );
+    this.authStore.put(utf8ToBytes('identity_main'), newIdentity.pack());
+    const apiWithIdentity = new S5APIWithIdentity(
+      this.node,
+      newIdentity,
+      this.authStore,
+    );
+    await apiWithIdentity.initStorageServices();
+    this.apiWithIdentity = apiWithIdentity;
+    this.identity = newIdentity;
+  }
+
+  async registerOnNewPortal(url: string, inviteCode?: string): Promise<void> {
+    if (!this.hasIdentity) {
+      throw new Error('No identity available');
+    }
+    await this.apiWithIdentity!.registerAccount(
+      url,
+      inviteCode,
+    );
   }
 }
