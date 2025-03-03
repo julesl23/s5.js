@@ -2,6 +2,9 @@ import * as msgpackr from 'msgpackr';
 import { decodeLittleEndian } from '../util/little_endian';
 import { base64UrlNoPaddingEncode } from '../util/base64';
 
+const metadataMagicByte = 0x5f;
+const cidTypeMetadataDirectory = 0x5d;
+
 export class FS5Directory {
     header: FS5DirectoryHeader;
     directories: { [key: string]: FS5DirectoryReference };
@@ -25,14 +28,30 @@ export class FS5Directory {
         }
         return new FS5Directory(res[0], dirs, files);
     }
+
+    serialize(): Uint8Array {
+        const dirs: { [key: string]: FS5DirectoryReferenceData } = {};
+        for (const key of Object.keys(this.directories)) {
+            dirs[key] = this.directories[key].data;
+        }
+        const files: { [key: string]: FS5FileReferenceData } = {};
+        for (const key of Object.keys(this.files)) {
+            files[key] = this.files[key].data;
+        }
+        return new Uint8Array([metadataMagicByte, cidTypeMetadataDirectory, msgpackr.pack([
+            this.header,
+            dirs,
+            files,
+        ]).subarray(1)])
+    }
 }
 
 interface FS5DirectoryHeader {
 
 }
 
-class FS5DirectoryReference {
-    private readonly data: FS5DirectoryReferenceData;
+export class FS5DirectoryReference {
+    readonly data: FS5DirectoryReferenceData;
     constructor(data: FS5DirectoryReferenceData) {
         this.data = data;
     };
@@ -66,8 +85,8 @@ interface FS5DirectoryReferenceData {
     5: Uint8Array | undefined,
 }
 
-class FS5FileReference {
-    private readonly data: FS5FileReferenceData;
+export class FS5FileReference {
+    readonly data: FS5FileReferenceData;
     constructor(data: FS5FileReferenceData) {
         this.data = data;
     };
@@ -104,6 +123,18 @@ interface FS5FileReferenceData {
     6: string | undefined,
 }
 
-interface FS5FileVersionData {
+export class FS5FileVersion {
+    readonly data: FS5FileVersionData;
+    constructor(data: FS5FileVersionData) {
+        this.data = data;
+    };
 
+    get ts(): BigInt {
+        return this.data[8];
+    }
+}
+
+interface FS5FileVersionData {
+    2: Uint8Array,
+    8: BigInt,
 }
