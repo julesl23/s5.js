@@ -71,7 +71,7 @@ export class S5Node implements S5APIInterface {
         throw new Error("Method not implemented.");
     }
     registrySet(entry: RegistryEntry): Promise<void> {
-        throw new Error("Method not implemented.");
+        return this.registry.put(entry, true);
     }
     uploadBlob(blob: Blob): Promise<BlobIdentifier> {
         throw new Error("Method not implemented.");
