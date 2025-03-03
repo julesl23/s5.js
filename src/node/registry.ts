@@ -67,7 +67,17 @@ export class S5RegistryService {
         }
 
         this.db.put(entry.pk, serializeRegistryEntry(entry));
-        // TODO this.broadcastEntry(entry, receivedFrom);
+        if (trusted) {
+            this.broadcastEntry(entry);
+        }
+    }
+    private broadcastEntry(entry: RegistryEntry): void {
+        const message = serializeRegistryEntry(entry);
+        for (const peer of this.p2p.peers.values()) {
+            if (peer.isConnected) {
+                peer.send(message);
+            }
+        }
     }
 
     private sendRegistryRequest(pk: Uint8Array): void {
