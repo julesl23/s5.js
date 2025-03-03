@@ -13,7 +13,7 @@ export async function portalAccountLogin(
     label: string,
     crypto: CryptoImplementation,
 ): Promise<string> {
-    const portalAccountsSeed: Uint8Array = identity.seeds.portalAccounts;
+    const portalAccountsSeed: Uint8Array = identity.portalAccountSeed;
 
     const portalAccountKey = await crypto.hashBlake3(
         new Uint8Array(
@@ -56,5 +56,5 @@ export async function portalAccountLogin(
     if (!loginResponse.ok) {
         throw new Error(`HTTP ${loginResponse.status}: ${loginResponse.body}`);
     }
-    return loginResponse.headers.getSetCookie()[0].split("=")[1];
+    return loginResponse.headers.getSetCookie()[0].split("=")[1].split(';')[0];
 }
