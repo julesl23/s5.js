@@ -17,7 +17,7 @@ export class FS5Directory {
     }
 
     static deserialize(data: Uint8Array): FS5Directory {
-        const res = msgpackr.unpack(data.subarray(2));
+        const res = new msgpackr.Unpackr({ useRecords: false, variableMapSize: true }).unpack(new Uint8Array([0x93, ...data.subarray(2)]));
         const dirs = {};
         for (const key of Object.keys(res[1])) {
             dirs[key] = new FS5DirectoryReference(res[1][key]);
@@ -38,7 +38,7 @@ export class FS5Directory {
         for (const key of Object.keys(this.files)) {
             files[key] = this.files[key].data;
         }
-        return new Uint8Array([metadataMagicByte, cidTypeMetadataDirectory, msgpackr.pack([
+        return new Uint8Array([metadataMagicByte, cidTypeMetadataDirectory, ...new msgpackr.Packr({ useRecords: false, variableMapSize: true }).pack([
             this.header,
             dirs,
             files,
