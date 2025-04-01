@@ -12,6 +12,8 @@ import { StreamMessage } from "../stream/message";
 import { base64UrlNoPaddingDecode, base64UrlNoPaddingEncode } from "../util/base64";
 import { HiddenJSONResponse, TrustedHiddenDBProvider } from "./hidden_db";
 import { S5UserIdentity } from "./identity";
+import { MULTIHASH_BLAKE3 } from "../constants";
+import { concatBytes } from "@noble/hashes/utils";
 
 const portalUploadEndpoint = 'upload';
 
@@ -168,8 +170,8 @@ export class S5APIWithIdentity implements S5APIInterface {
         if (Object.keys(this.accountConfigs).length == 0) {
             throw new Error("No portals available for upload");
         }
-        const blobHash = await this.crypto.hashBlake3Blob(blob);
-        const expectedBlobIdentifier = new BlobIdentifier(blobHash, blob.size);
+        const blake3Hash = await this.crypto.hashBlake3Blob(blob);
+        const expectedBlobIdentifier = new BlobIdentifier(concatBytes(new Uint8Array([MULTIHASH_BLAKE3]), blake3Hash), blob.size);
 
         const portals = Object.values(this.accountConfigs);
         for (const portal of portals.concat(portals, portals)) {

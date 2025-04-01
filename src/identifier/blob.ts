@@ -3,7 +3,7 @@
 ///
 
 import { concatBytes } from "@noble/ciphers/utils";
-import { blobIdentifierPrefixBytes } from "../constants"
+import { blobIdentifierPrefixBytes, MULTIHASH_BLAKE3 } from "../constants"
 import { decodeLittleEndian, encodeLittleEndian } from "../util/little_endian";
 import Multibase from "./multibase.js";
 
@@ -27,6 +27,17 @@ export class BlobIdentifier extends Multibase {
     }
 
     private static _fromBytes(bytes: Uint8Array): BlobIdentifier {
+        // handle legacy S5 CIDs
+        if (bytes[0] == 0x26) {
+            let hash = bytes.subarray(1, 34);
+            if (hash[0] == 0x1f){
+                hash[0] = MULTIHASH_BLAKE3;
+            }
+            let sizeBytes = bytes.subarray(34);
+            let size = decodeLittleEndian(sizeBytes);
+            return new BlobIdentifier(hash, size);
+        }
+
         // TODO Do some checks first
 
         let hash = bytes.subarray(2, 35);

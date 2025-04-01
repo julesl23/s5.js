@@ -37,6 +37,7 @@ export class S5Node implements S5APIInterface {
         }
     }
     async downloadBlobAsBytes(hash: Uint8Array): Promise<Uint8Array> {
+        hash[0] = 0x1f;
         this.p2p.sendHashRequest(hash, [3, 5]);
         const hashStr = base64UrlNoPaddingEncode(hash);
 

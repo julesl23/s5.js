@@ -245,11 +245,12 @@ export class FS5 {
                     encryptionKey: undefined,
                 };
             } else if (cid[1] == CID_TYPE_ENCRYPTED_MUTABLE) {
+                const encryptionAlgorithm = cid[2];
                 // TODO Verify that writeKey matches
                 return {
-                    publicKey: cid.subarray(34),
+                    publicKey: cid.subarray(35),
                     writeKey: writeKey,
-                    encryptionKey: cid.subarray(2, 34),
+                    encryptionKey: cid.subarray(3, 35),
                 };
             } else if (cid[1] == mhashBlake3Default) {
                 return {
@@ -364,11 +365,12 @@ export class FS5 {
             if (entry === undefined) return undefined;
 
             const data = entry.data;
-            if (data[0] == mhashBlake3) {
+            if (data[0] == mhashBlake3 || data[0] == mhashBlake3Default) {
                 hash = data.subarray(0, 33);
             } else {
                 hash = data.subarray(2, 35);
             }
+            hash[0] = mhashBlake3;
         }
 
         const metadataBytes = await this.api.downloadBlobAsBytes(hash);
