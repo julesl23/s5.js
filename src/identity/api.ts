@@ -70,7 +70,7 @@ export class S5APIWithIdentity implements S5APIInterface {
             try {
                 const portal: S5Portal = new S5Portal(
                     uri.protocol.replace(':', ''),
-                    uri.host + (uri.port ? `:${uri.port}` : ''),
+                    uri.hostname + (uri.port ? `:${uri.port}` : ''),
                     {},
                 );
                 const seed = base64UrlNoPaddingDecode(
@@ -93,7 +93,7 @@ export class S5APIWithIdentity implements S5APIInterface {
         const authToken = bytesToUtf8((await this.authStore.get(authTokenKey))!);
 
         const portalConfig = new S5Portal(uri.protocol.replace(':', ''),
-            uri.host + (uri.port ? `:${uri.port}` : ''),
+            uri.hostname + (uri.port ? `:${uri.port}` : ''),
             {
                 'authorization': `Bearer ${authToken}`,
             },);
@@ -124,7 +124,7 @@ export class S5APIWithIdentity implements S5APIInterface {
 
         const portalConfig = new S5Portal(
             uri.protocol.replace(':', ''),
-            uri.host + (uri.port ? `:${uri.port}` : ''),
+            uri.hostname + (uri.port ? `:${uri.port}` : ''),
             {},
         );
 
