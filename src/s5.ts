@@ -1,7 +1,6 @@
 import { CryptoImplementation } from './api/crypto';
 import { FS5 } from './fs/fs5';
 import { IDBStore } from './kv/idb';
-import { MemoryLevelStore } from './kv/memory_level';
 import { JSCryptoImplementation } from './api/crypto/js';
 import { KeyValueStore } from './kv/kv';
 import { S5APIInterface } from './api/s5';
@@ -13,7 +12,7 @@ import { utf8ToBytes } from '@noble/ciphers/utils';
 
 export class S5 {
   private readonly node: S5Node;
-  private apiWithIdentity: S5APIWithIdentity | undefined;
+  public apiWithIdentity: S5APIWithIdentity | undefined;
 
   public get api(): S5APIInterface {
     if (this.hasIdentity) {
@@ -69,14 +68,32 @@ export class S5 {
   }): Promise<S5> {
     const crypto = new JSCryptoImplementation();
     const node = new S5Node(crypto);
-    await node.init((name: string) => MemoryLevelStore.open());
+    await node.init((name: string) => IDBStore.open(name));
     for (const uri of initialPeers) {
       node.p2p.connectToNode(uri);
     }
     await node.ensureInitialized();
 
-    const authStore = await MemoryLevelStore.open();
-    // TODO Recover identity if it exists in authStore
+    const authStore = await IDBStore.open("auth");
+    if (await authStore.contains(utf8ToBytes('identity_main'))) {
+      const newIdentity = await S5UserIdentity.unpack(
+        await authStore.get(utf8ToBytes('identity_main')),
+        crypto,
+      );
+      const apiWithIdentity = new S5APIWithIdentity(
+        node,
+        newIdentity,
+        authStore,
+      );
+      await apiWithIdentity.initStorageServices();
+      const s5 = new S5({
+        node,
+        authStore,
+        identity: newIdentity,
+      });
+      s5.apiWithIdentity = apiWithIdentity;
+      return s5;
+    }
     return new S5({
       node,
       authStore,

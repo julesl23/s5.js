@@ -36,17 +36,12 @@ export class S5UserIdentity {
     }
 
     static unpack(bytes: Uint8Array): S5UserIdentity {
-        const data = msgpackr.unpack(new Uint8Array(
-            [0x92, ...bytes]
-        ));
-        return new S5UserIdentity(data[1])
+        const seeds = new msgpackr.Unpackr({ useRecords: true, variableMapSize: true }).unpack(bytes);
+        return new S5UserIdentity(seeds)
     }
 
     pack(): Uint8Array {
-        return msgpackr.pack([
-            authPayloadVersion1,
-            this.seeds,
-        ]).subarray(1);
+        return new msgpackr.Packr({ useRecords: true, variableMapSize: true }).pack(this.seeds);
     }
 
     static async fromSeedPhrase(
@@ -101,76 +96,76 @@ export class S5UserIdentity {
 
         const seeds: Map<number, Uint8Array> = new Map();
 
-        seeds[signingKeyPairTweak] = deriveHashInt(
+        seeds.set(signingKeyPairTweak, deriveHashInt(
             publicSubSeed,
             signingKeyPairTweak,
             crypto,
-        );
-        seeds[encryptionKeyPairTweak] = deriveHashInt(
+        ));
+        seeds.set(encryptionKeyPairTweak, deriveHashInt(
             publicSubSeed,
             encryptionKeyPairTweak,
             crypto,
-        );
-        seeds[resolverLinksTweak] = deriveHashInt(
+        ));
+        seeds.set(resolverLinksTweak, deriveHashInt(
             publicSubSeed,
             resolverLinksTweak,
             crypto,
-        );
-        seeds[publicReservedTweak1] = deriveHashInt(
+        ));
+        seeds.set(publicReservedTweak1, deriveHashInt(
             publicSubSeed,
             publicReservedTweak1,
             crypto,
-        );
-        seeds[publicReservedTweak2] = deriveHashInt(
+        ));
+        seeds.set(publicReservedTweak2, deriveHashInt(
             publicSubSeed,
             publicReservedTweak2,
             crypto,
-        );
-        seeds[storageServiceAccountsTweak] = deriveHashInt(
+        ));
+        seeds.set(storageServiceAccountsTweak, deriveHashInt(
             privateSubSeed,
             storageServiceAccountsTweak,
             crypto,
-        );
-        seeds[hiddenDBTweak] = deriveHashInt(
+        ));
+        seeds.set(hiddenDBTweak, deriveHashInt(
             privateSubSeed,
             hiddenDBTweak,
             crypto,
-        );
-        seeds[fileSystemTweak] = deriveHashInt(
+        ));
+        seeds.set(fileSystemTweak, deriveHashInt(
             privateSubSeed,
             fileSystemTweak,
             crypto,
-        );
-        seeds[privateReservedTweak1] = deriveHashInt(
+        ));
+        seeds.set(privateReservedTweak1, deriveHashInt(
             privateSubSeed,
             privateReservedTweak1,
             crypto,
-        );
-        seeds[privateReservedTweak2] = deriveHashInt(
+        ));
+        seeds.set(privateReservedTweak2, deriveHashInt(
             privateSubSeed,
             privateReservedTweak2,
             crypto,
-        );
-        seeds[extensionTweak] = deriveHashInt(
+        ));
+        seeds.set(extensionTweak, deriveHashInt(
             privateSubSeed,
             extensionTweak,
             crypto,
-        );
+        ));
 
         if (full) {
-            seeds[publicIdentityTweak] = publicIdentitySeed;
+            seeds.set(publicIdentityTweak, publicIdentitySeed);
         }
 
         return seeds;
     }
 
     get fsRootKey(): Uint8Array {
-        return this.seeds[fileSystemTweak]!;
+        return this.seeds.get(fileSystemTweak)!;
     }
     get hiddenDBKey(): Uint8Array {
-        return this.seeds[hiddenDBTweak]!;
+        return this.seeds.get(hiddenDBTweak)!;
     }
     get portalAccountSeed(): Uint8Array {
-        return this.seeds[storageServiceAccountsTweak]!;
+        return this.seeds.get(storageServiceAccountsTweak)!;
     }
 }
