@@ -43,7 +43,7 @@ export class S5Node implements S5APIInterface {
 
         let urlsAlreadyTried: Set<string> = new Set([]);
         while (true) {
-            for (const location of this.p2p.blobLocations[hashStr] ?? []) {
+            for (const location of this.p2p.blobLocations.get(hashStr) ?? []) {
                 const url = location.parts[0];
                 if (!urlsAlreadyTried.has(url)) {
                     urlsAlreadyTried.add(url);

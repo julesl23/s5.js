@@ -57,9 +57,9 @@ export class P2P {
         hash: Uint8Array,
         location: StorageLocation,
     ): void {
-        const array: StorageLocation[] = this.blobLocations[base64UrlNoPaddingEncode(hash)] ?? [];
+        const array: StorageLocation[] = this.blobLocations.get(base64UrlNoPaddingEncode(hash)) ?? [];
         array.push(location);
-        this.blobLocations[base64UrlNoPaddingEncode(hash)] = array;
+        this.blobLocations.set(base64UrlNoPaddingEncode(hash), array);
     }
 }
 
@@ -173,7 +173,7 @@ class WebSocketPeer {
             }
 
         } else {
-            console.debug('onmessage unknown', data);
+            // console.debug('onmessage unknown', data);
         }
 
     }
