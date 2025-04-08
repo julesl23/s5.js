@@ -56,5 +56,5 @@ export async function portalAccountLogin(
     if (!loginResponse.ok) {
         throw new Error(`HTTP ${loginResponse.status}: ${loginResponse.body}`);
     }
-    return loginResponse.headers.getSetCookie()[0].split("=")[1].split(';')[0];
+    return (await loginResponse.json()).authToken;
 }

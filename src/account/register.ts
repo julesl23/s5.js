@@ -61,5 +61,5 @@ export async function portalAccountRegister(
     if (!registerResponse.ok) {
         throw new Error(`HTTP ${registerResponse.status}: ${registerResponse.body}`);
     }
-    return registerResponse.headers.getSetCookie()[0].split("=")[1].split(';')[0];
+    return (await registerResponse.json()).authToken;
 }
