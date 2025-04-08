@@ -135,6 +135,7 @@ export class FS5FileVersion {
 }
 
 interface FS5FileVersionData {
-    2: Uint8Array,
+    1: Uint8Array | undefined,
+    2: Uint8Array | undefined,
     8: BigInt,
 }

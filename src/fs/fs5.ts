@@ -1,6 +1,6 @@
 import { base32 } from "multiformats/bases/base32";
 import { S5APIInterface } from "../api/s5";
-import { mkeyEd25519 } from "../constants";
+import { mkeyEd25519, MULTIHASH_BLAKE3 } from "../constants";
 import { decryptMutableBytes, encryptMutableBytes } from "../encryption/mutable";
 import Multibase from "../identifier/multibase";
 import { S5UserIdentity } from "../identity/identity";
@@ -8,6 +8,10 @@ import { createRegistryEntry, RegistryEntry } from "../registry/entry";
 import { base64UrlNoPaddingEncode } from "../util/base64";
 import { deriveHashInt } from "../util/derive_hash";
 import { FS5Directory, FS5DirectoryReference, FS5FileReference, FS5FileVersion } from "./directory";
+import { concatBytes } from "@noble/hashes/utils";
+import { encodeLittleEndian } from "../util/little_endian";
+import { BlobIdentifier } from "../identifier/blob";
+import { padFileSize } from "../encryption/padding";
 
 const mhashBlake3 = 0x1e;
 const mhashBlake3Default = 0x1f;
@@ -41,11 +45,69 @@ export class FS5 {
 
     public async uploadBlobWithoutEncryption(blob: Blob): Promise<FS5FileVersion> {
         const blobIdentifier = await this.api.uploadBlob(blob);
+        const oldCID = new Uint8Array([0x26, ...blobIdentifier.toBytes().subarray(2)]);
+        oldCID[1] = 0x1f;
         return new FS5FileVersion({
-            2: new Uint8Array([0x26, ...blobIdentifier.toBytes().subarray(2)]),
+            2: oldCid,
             8: BigInt(Date.now()),
         });
     }
+
+    public async uploadBlobEncrypted(blob: Blob): Promise<FS5FileVersion> {
+        const plaintextBlake3Hash = await this.api.crypto.hashBlake3Blob(blob);
+        const size = blob.size;
+        const plaintextBlobIdentifier = new BlobIdentifier(new Uint8Array([MULTIHASH_BLAKE3, ...plaintextBlake3Hash]), size)
+
+        const maxChunkSizeAsPowerOf2 = 18;
+        const maxChunkSize = 262144; // 256 KiB
+        const chunkCount = Math.ceil(size / maxChunkSize);
+        const totalSizeWithEncryptionOverhead = size + chunkCount * 16;
+        let padding = padFileSize(totalSizeWithEncryptionOverhead) - totalSizeWithEncryptionOverhead;
+        const lastChunkSize = size % maxChunkSize;
+        if ((padding + lastChunkSize) >= maxChunkSize) {
+            padding = maxChunkSize - lastChunkSize;
+        }
+
+        const encryptionKey = this.api.crypto.generateSecureRandomBytes(32);
+
+        let encryptedBlob = new Blob();
+
+        for (let chunkIndex = 0; chunkIndex < (chunkCount - 1); chunkIndex++) {
+            const plaintext = new Uint8Array(await blob.slice(chunkIndex * maxChunkSize, (chunkIndex + 1) * maxChunkSize).arrayBuffer());
+            const encrypted = await this.api.crypto.encryptXChaCha20Poly1305(encryptionKey, encodeLittleEndian(chunkIndex, 24), plaintext);
+            encryptedBlob = new Blob([encryptedBlob, encrypted]);
+        }
+        const lastChunkPlaintext = new Uint8Array([
+            ...(new Uint8Array(await blob.slice((chunkCount - 1) * maxChunkSize).arrayBuffer())),
+            ...(new Uint8Array(padding))
+        ]);
+
+        const lastChunkEncrypted = await this.api.crypto.encryptXChaCha20Poly1305(encryptionKey, encodeLittleEndian(chunkCount - 1, 24), lastChunkPlaintext);
+        encryptedBlob = new Blob([encryptedBlob, lastChunkEncrypted]);
+
+        const encryptedBlobIdentifier = await this.api.uploadBlob(encryptedBlob);
+
+        const plaintextCID = new Uint8Array([0x26, ...plaintextBlobIdentifier.toBytes().subarray(2)]);
+        plaintextCID[1] = 0x1f;
+
+        const cidTypeEncryptedStatic = 0xae;
+        const encryptedCIDBytes = new Uint8Array([
+            cidTypeEncryptedStatic,
+            ENCRYPTION_ALGORITHM_XCHACHA20POLY1305,
+            maxChunkSizeAsPowerOf2,
+            0x1f,
+            ...encryptedBlobIdentifier.hash.subarray(1),
+            ...encryptionKey,
+            ...encodeLittleEndian(padding, 4),
+            ...plaintextCID,
+        ])
+
+        return new FS5FileVersion({
+            1: encryptedCIDBytes,
+            8: BigInt(Date.now()),
+        });
+    }
+
     async createDirectory(
         path: string,
         name: string,
@@ -223,7 +285,6 @@ export class FS5 {
     }
 
     private async getKeySet(uri: string): Promise<KeySet> {
-        console.debug('getKeySet', uri);
         const url = new URL(uri);
         if (url.pathname.length < 2) {
             const cid = Multibase.decodeString(url.host);
