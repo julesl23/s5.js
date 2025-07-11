@@ -13,9 +13,9 @@ type OpenKeyValueStoreFunction = (name: string) => Promise<KeyValueStore>;
 
 export class S5Node implements S5APIInterface {
     readonly crypto: CryptoImplementation;
-    p2p: P2P;
-    registry: S5RegistryService;
-    private blobDB: KeyValueStore;
+    p2p!: P2P;
+    registry!: S5RegistryService;
+    private blobDB!: KeyValueStore;
 
     constructor(crypto: CryptoImplementation) {
         this.crypto = crypto;

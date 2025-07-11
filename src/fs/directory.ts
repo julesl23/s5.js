@@ -17,12 +17,12 @@ export class FS5Directory {
     }
 
     static deserialize(data: Uint8Array): FS5Directory {
-        const res = new msgpackr.Unpackr({ useRecords: false, variableMapSize: true }).unpack(new Uint8Array([0x93, ...data.subarray(2)]));
-        const dirs = {};
+        const res: any = new msgpackr.Unpackr({ useRecords: false, variableMapSize: true }).unpack(new Uint8Array([0x93, ...data.subarray(2)]));
+        const dirs: Record<string, any> = {};
         for (const key of Object.keys(res[1])) {
             dirs[key] = new FS5DirectoryReference(res[1][key]);
         }
-        const files = {};
+        const files: Record<string, any> = {};
         for (const key of Object.keys(res[2])) {
             files[key] = new FS5FileReference(res[2][key]);
         }
@@ -103,6 +103,7 @@ export class FS5FileReference {
 
     get cidString(): string {
         const cid = this.data[4][1] ?? this.data[4][2];
+        if (!cid) throw new Error("No CID available");
         return 'u' + base64UrlNoPaddingEncode(cid);
     }
 
@@ -112,6 +113,7 @@ export class FS5FileReference {
 
     get size(): number {
         const cid = this.data[4][1]?.subarray(72) ?? this.data[4][2];
+        if (!cid) throw new Error("No CID available for size calculation");
         return decodeLittleEndian(cid.subarray(34));
     }
 }

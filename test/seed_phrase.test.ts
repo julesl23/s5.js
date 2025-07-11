@@ -1,4 +1,4 @@
-import { expect, test, describe } from "bun:test";
+import { expect, test, describe } from "vitest";
 import { JSCryptoImplementation } from "../src/api/crypto/js";
 import { generatePhrase, hashToChecksumWords, validatePhrase } from "../src/identity/seed_phrase/seed_phrase";
 import { bytesToHex } from "@noble/hashes/utils";

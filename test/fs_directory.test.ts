@@ -1,4 +1,4 @@
-import { expect, test, describe } from "bun:test";
+import { expect, test, describe } from "vitest";
 import { bytesToHex } from "@noble/hashes/utils";
 import { FS5Directory, FS5DirectoryReference, FS5FileReference } from "../src/fs/directory";
 
@@ -32,6 +32,7 @@ describe("registry", async () => {
                     6: "text/plain",
                     5: 0,
                     4: {
+                        
                         2: new Uint8Array([0x26, 0x1e, ...new Uint8Array(32), 55]),
                         8: timestamp,
                     },

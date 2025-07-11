@@ -9,11 +9,11 @@ import { S5RegistryService } from './registry';
 import * as msgpackr from 'msgpackr';
 
 export class P2P {
-    crypto: CryptoImplementation;
-    keyPair: KeyPairEd25519;
-    nodePubKey: Uint8Array;
+    crypto!: CryptoImplementation;
+    keyPair!: KeyPairEd25519;
+    nodePubKey!: Uint8Array;
     peers: Map<string, WebSocketPeer> = new Map();
-    registry: S5RegistryService;
+    registry!: S5RegistryService;
 
     public get isConnectedToNetwork(): boolean {
         for (const [_, peer] of this.peers) {
@@ -74,11 +74,11 @@ const protocolMethodSignedMessage = 10;
 
 class WebSocketPeer {
     displayName: string;
-    nodePubKey: Uint8Array;
+    nodePubKey!: Uint8Array;
     isConnected: boolean = false;
 
     p2p: P2P;
-    challenge: Uint8Array;
+    challenge!: Uint8Array;
 
 
     constructor(public socket: WebSocket, p2p: P2P) {

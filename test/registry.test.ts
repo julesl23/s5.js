@@ -1,4 +1,4 @@
-import { expect, test, describe } from "bun:test";
+import { expect, test, describe } from "vitest";
 import { JSCryptoImplementation } from "../src/api/crypto/js";
 import { createRegistryEntry, deserializeRegistryEntry, serializeRegistryEntry, verifyRegistryEntry } from "../src/registry/entry";
 import { bytesToHex } from "@noble/hashes/utils";

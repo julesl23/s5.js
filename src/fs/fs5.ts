@@ -48,7 +48,8 @@ export class FS5 {
         const oldCID = new Uint8Array([0x26, ...blobIdentifier.toBytes().subarray(2)]);
         oldCID[1] = 0x1f;
         return new FS5FileVersion({
-            2: oldCid,
+            1: undefined,
+            2: oldCID,
             8: BigInt(Date.now()),
         });
     }
@@ -104,6 +105,7 @@ export class FS5 {
 
         return new FS5FileVersion({
             1: encryptedCIDBytes,
+            2: undefined,
             8: BigInt(Date.now()),
         });
     }

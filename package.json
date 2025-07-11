@@ -4,7 +4,13 @@
   "type": "module",
   "description": "Use S5",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "type-check": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
@@ -32,5 +38,10 @@
     "msgpackr": "^1.11.0",
     "multiformats": "^13.3.1",
     "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.13",
+    "@vitest/ui": "^3.2.4",
+    "vitest": "^3.2.4"
   }
 }

@@ -1,4 +1,4 @@
-import { expect, test, describe } from "bun:test";
+import { expect, test, describe } from "vitest";
 import { deriveHashInt, deriveHashString } from "../src/util/derive_hash";
 import { JSCryptoImplementation } from "../src/api/crypto/js";
 import { bytesToHex } from "@noble/hashes/utils";

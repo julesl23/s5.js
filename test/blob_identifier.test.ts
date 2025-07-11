@@ -1,4 +1,4 @@
-import { expect, test, describe } from "bun:test";
+import { expect, test, describe } from "vitest";
 import { BlobIdentifier } from "../src/identifier/blob";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 

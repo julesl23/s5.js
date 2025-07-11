@@ -77,8 +77,8 @@ export class S5 {
     const authStore = await IDBStore.open("auth");
     if (await authStore.contains(utf8ToBytes('identity_main'))) {
       const newIdentity = await S5UserIdentity.unpack(
-        await authStore.get(utf8ToBytes('identity_main')),
-        crypto,
+        (await authStore.get(utf8ToBytes('identity_main'))) as Uint8Array,
+        
       );
       const apiWithIdentity = new S5APIWithIdentity(
         node,
