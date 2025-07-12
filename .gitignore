@@ -51,3 +51,7 @@ debug_*.js
 # Logs
 logs
 *.log
+
+# Miscellaneous
+docs/design/
+docs/grant/
