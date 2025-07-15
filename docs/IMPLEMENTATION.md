@@ -17,23 +17,23 @@
 ### Phase 1: Core Infrastructure (Design Doc 1, Grant Month 2)
 
 - [ ] **1.1 Add CBOR Dependencies**
-  - [ ] Install cbor-x package
+  - [x] Install cbor-x package
   - [ ] Install xxhash-wasm package
-  - [ ] Install @noble/hashes package
+  - [x] Install @noble/hashes package
   - [ ] Verify bundle size impact
   - [ ] Create bundle size baseline measurement
 - [ ] **1.2 Create DirV1 Types Matching Rust**
-  - [ ] Create src/fs/dirv1/types.ts
-  - [ ] Define DirV1 interface
+  - [x] Create src/fs/dirv1/types.ts
+  - [x] Define DirV1 interface
   - [ ] Define DirHeader interface
-  - [ ] Define DirRef interface
-  - [ ] Define FileRef interface
-  - [ ] Define BlobLocation types
-  - [ ] Define DirLink types
+  - [x] Define DirRef interface
+  - [x] Define FileRef interface
+  - [x] Define BlobLocation types
+  - [x] Define DirLink types
   - [ ] Define HAMTShardingConfig interface
   - [ ] Define PutOptions interface
   - [ ] Define ListOptions interface
-  - [ ] Write comprehensive type tests
+  - [x] Write comprehensive type tests
 - [x] **1.3 Create CBOR Configuration** ✅ 2025-01-12
   - [x] Create src/fs/dirv1/cbor-config.ts
   - [x] Configure deterministic encoding
