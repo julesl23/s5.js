@@ -7,7 +7,8 @@ import { S5UserIdentity } from "../identity/identity";
 import { createRegistryEntry, RegistryEntry } from "../registry/entry";
 import { base64UrlNoPaddingEncode } from "../util/base64";
 import { deriveHashInt } from "../util/derive_hash";
-import { FS5Directory, FS5DirectoryReference, FS5FileReference, FS5FileVersion } from "./directory";
+import { DirV1, FileRef, DirRef, DirLink } from "./dirv1/types";
+import { DirV1Serialiser } from "./dirv1/serialisation";
 import { concatBytes } from "@noble/hashes/utils";
 import { encodeLittleEndian } from "../util/little_endian";
 import { BlobIdentifier } from "../identifier/blob";
@@ -21,7 +22,7 @@ const CID_TYPE_ENCRYPTED_MUTABLE = 0x5e;
 
 const ENCRYPTION_ALGORITHM_XCHACHA20POLY1305 = 0xa6;
 
-type DirectoryTransactionFunction = (dir: FS5Directory, writeKey: Uint8Array) => Promise<FS5Directory | undefined>;
+type DirectoryTransactionFunction = (dir: DirV1, writeKey: Uint8Array) => Promise<DirV1 | undefined>;
 
 export class FS5 {
     readonly api: S5APIInterface;
@@ -33,7 +34,7 @@ export class FS5 {
     }
 
 
-    public async list(path: string): Promise<FS5Directory | undefined> {
+    public async list(path: string): Promise<DirV1 | undefined> {
         const ks = await this.getKeySet(
             await this._preprocessLocalPath(path),
         );
@@ -43,18 +44,15 @@ export class FS5 {
     }
 
 
-    public async uploadBlobWithoutEncryption(blob: Blob): Promise<FS5FileVersion> {
+    public async uploadBlobWithoutEncryption(blob: Blob): Promise<{ hash: Uint8Array; size: number }> {
         const blobIdentifier = await this.api.uploadBlob(blob);
-        const oldCID = new Uint8Array([0x26, ...blobIdentifier.toBytes().subarray(2)]);
-        oldCID[1] = 0x1f;
-        return new FS5FileVersion({
-            1: undefined,
-            2: oldCID,
-            8: BigInt(Date.now()),
-        });
+        return {
+            hash: blobIdentifier.hash.subarray(1), // Remove multihash prefix
+            size: blob.size
+        };
     }
 
-    public async uploadBlobEncrypted(blob: Blob): Promise<FS5FileVersion> {
+    public async uploadBlobEncrypted(blob: Blob): Promise<{ hash: Uint8Array; size: number; encryptionKey: Uint8Array }> {
         const plaintextBlake3Hash = await this.api.crypto.hashBlake3Blob(blob);
         const size = blob.size;
         const plaintextBlobIdentifier = new BlobIdentifier(new Uint8Array([MULTIHASH_BLAKE3, ...plaintextBlake3Hash]), size)
@@ -103,29 +101,29 @@ export class FS5 {
             ...plaintextCID,
         ])
 
-        return new FS5FileVersion({
-            1: encryptedCIDBytes,
-            2: undefined,
-            8: BigInt(Date.now()),
-        });
+        return {
+            hash: plaintextBlake3Hash,
+            size: size,
+            encryptionKey: encryptionKey
+        };
     }
 
     async createDirectory(
         path: string,
         name: string,
-    ): Promise<FS5DirectoryReference> {
+    ): Promise<DirRef> {
         // TODO validateFileSystemEntityName(name);
 
-        let dirReference: FS5DirectoryReference | undefined;
+        let dirReference: DirRef | undefined;
 
         const res = await this.runTransactionOnDirectory(
             await this._preprocessLocalPath(path),
             async (dir, writeKey) => {
-                if (Object.hasOwn(dir.directories, name)) {
+                if (dir.dirs.has(name)) {
                     throw new Error('Directory already contains a subdirectory with the same name');
                 }
                 const newDir = await this._createDirectory(name, writeKey);
-                dir.directories[name] = newDir;
+                dir.dirs.set(name, newDir);
                 dirReference = newDir;
                 return dir;
             },
@@ -146,7 +144,7 @@ export class FS5 {
         const res = await this.runTransactionOnDirectory(
             await this._preprocessLocalPath(directoryPath),
             async (dir, _) => {
-                if (Object.hasOwn(dir.files, fileName)) {
+                if (dir.files.has(fileName)) {
                     throw 'Directory already contains a file with the same name';
                 }
                 const file = new FS5FileReference(
@@ -160,7 +158,7 @@ export class FS5 {
                     }
                 );
                 // file.file.ext = null;
-                dir.files[fileName] = file;
+                dir.files.set(fileName, file);
                 fileReference = file;
 
                 return dir;
@@ -180,9 +178,12 @@ export class FS5 {
         if (ks.writeKey == null) throw new Error(`Missing write access for ${uri}`);
         try {
             const transactionRes = await transaction(
-                dir?.directory ??
-                new FS5Directory({}, {}, {},
-                ),
+                dir?.directory ?? {
+                    magic: "S5.pro",
+                    header: {},
+                    dirs: new Map(),
+                    files: new Map()
+                },
                 ks.writeKey!,
             );
             if (transactionRes == null) {
@@ -194,11 +195,11 @@ export class FS5 {
             // TODO Make sure this is secure
             const newBytes = ks.encryptionKey !== undefined
                 ? await encryptMutableBytes(
-                    transactionRes.serialize(),
+                    DirV1Serialiser.serialise(transactionRes),
                     ks.encryptionKey!,
                     this.api.crypto,
                 )
-                : transactionRes.serialize();
+                : DirV1Serialiser.serialise(transactionRes);
 
             const cid = await this.api.uploadBlob(new Blob([newBytes]));
 
@@ -231,8 +232,8 @@ export class FS5 {
                 const names = ['home', 'archive'];
                 let hasChanges = false;
                 for (const name of names) {
-                    if (Object.hasOwn(dir.directories, name)) continue;
-                    dir.directories[name] = await this._createDirectory(name, writeKey);
+                    if (dir.dirs.has(name)) continue;
+                    dir.dirs.set(name, await this._createDirectory(name, writeKey));
                     hasChanges = true;
                 }
                 if (!hasChanges) return undefined;
@@ -245,31 +246,33 @@ export class FS5 {
     async _createDirectory(
         name: string,
         writeKey: Uint8Array,
-    ): Promise<FS5DirectoryReference> {
+    ): Promise<DirRef> {
         const newWriteKey = this.api.crypto.generateSecureRandomBytes(32);
 
         const ks = await this._deriveKeySetFromWriteKey(newWriteKey);
 
-        const encryptionNonce = this.api.crypto.generateSecureRandomBytes(24);
+        // Create empty DirV1
+        const emptyDir: DirV1 = {
+            magic: "S5.pro",
+            header: {},
+            dirs: new Map(),
+            files: new Map()
+        };
+        
+        // Serialize and upload
+        const serialized = DirV1Serialiser.serialise(emptyDir);
+        const cid = await this.api.uploadBlob(new Blob([serialized]));
 
-        const encryptedWriteKey = await this.api.crypto.encryptXChaCha20Poly1305(
-            writeKey,
-            encryptionNonce,
-            newWriteKey,
-        );
+        // Create DirRef pointing to the new directory
+        const dirRef: DirRef = {
+            link: {
+                type: 'fixed_hash_blake3',
+                hash: cid.hash.subarray(1) // Remove multihash prefix
+            },
+            ts_seconds: Math.floor(Date.now() / 1000)
+        };
 
-        return new FS5DirectoryReference(
-            {
-                1: name,
-                2: BigInt(Date.now()),
-                4: new Uint8Array(
-                    [0x01, ...encryptionNonce, ...encryptedWriteKey],
-                ),
-                3: ks.publicKey,
-                // TODO Maybe use encryption prefix here
-                5: ks.encryptionKey,
-            }
-        );
+        return dirRef;
     }
     async _deriveKeySetFromWriteKey(writeKey: Uint8Array): Promise<KeySet> {
         const publicKey =
@@ -335,7 +338,7 @@ export class FS5 {
             throw new Error(`Parent Directory of "${uri}" does not exist`);
         }
 
-        const dir = parentDirectory.directory.directories[lastPathSegment];
+        const dir = parentDirectory.directory.dirs.get(lastPathSegment);
         if (dir == undefined) {
             throw new Error(`Directory "${uri}" does not exist`);
         }
@@ -416,7 +419,7 @@ export class FS5 {
     }
 
     private async _getDirectoryMetadata(
-        ks: KeySet): Promise<{ directory: FS5Directory, entry?: RegistryEntry } | undefined> {
+        ks: KeySet): Promise<{ directory: DirV1, entry?: RegistryEntry } | undefined> {
         let entry: RegistryEntry | undefined;
 
         let hash: Uint8Array;
@@ -447,9 +450,9 @@ export class FS5 {
                 ks.encryptionKey!,
                 this.api.crypto,
             );
-            return { directory: FS5Directory.deserialize(decryptedMetadataBytes), entry };
+            return { directory: DirV1Serialiser.deserialise(decryptedMetadataBytes), entry };
         } else {
-            return { directory: FS5Directory.deserialize(metadataBytes), entry };
+            return { directory: DirV1Serialiser.deserialise(metadataBytes), entry };
         }
     }
 }
