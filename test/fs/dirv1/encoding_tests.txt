@@ -1,0 +1,31 @@
+   Compiling fs5 v0.1.0 (/mnt/e/dev/Fabstir/partners/S5/GitHub/s5-rs/fs5)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.44s
+     Running `target/debug/examples/test_encode`
+=== S5 FS5 CBOR Test Vectors ===
+
+Test 1: Empty Directory
+Hex: 846653352e70726fa0a0a0
+Bytes: [132, 102, 83, 53, 46, 112, 114, 111, 160, 160, 160]
+Length: 11 bytes
+
+Test 2: Directory with one file (test.txt, 1024 bytes)
+Hex: 846653352e70726fa0a0a168746573742e747874a2035820000000000000000000000000000000000000000000000000000000000000000004190400
+Length: 60 bytes
+
+Test 3: Directory with file + metadata
+Hex: 846653352e70726fa0a0a16970686f746f2e6a7067a4035820ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff04190800066a696d6167652f6a706567071a499602d2
+Length: 79 bytes
+
+Test 4: Directory with subdirectory (blake3 link)
+Hex: 846653352e70726fa0a166737562646972a10258211e4242424242424242424242424242424242424242424242424242424242424242a0
+Length: 55 bytes
+
+Test 5: Complex directory
+Hex: 846653352e70726fa0a164646f6373a30258211e3333333333333333333333333333333333333333333333333333333333333333071a499602d2081a075bcd15a268646174612e62696ea20358202222222222222222222222222222222222222222222222222222222222222222041910006a726561646d652e747874a2035820111111111111111111111111111111111111111111111111111111111111111104190200
+Length: 165 bytes
+
+=== CBOR Structure Analysis ===
+First 20 bytes of empty dir: [84, 66, 53, 35, 2e, 70, 72, 6f, a0, a0, a0]
+
+=== DirLink Encoding Test ===
+Directory with blake3 link hex: 846653352e70726fa0a16474657374a10258211eaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0

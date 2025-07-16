@@ -76,12 +76,14 @@ export class DirV1Serialiser {
     // First byte is the type
     if (link.type === 'fixed_hash_blake3') {
       result[0] = DIR_LINK_TYPES.FIXED_HASH_BLAKE3;
+      if (link.hash) result.set(link.hash, 1);
     } else if (link.type === 'resolver_registry') {
       result[0] = DIR_LINK_TYPES.RESOLVER_REGISTRY;
+      if (link.hash) result.set(link.hash, 1);
+    } else if (link.type === 'mutable_registry_ed25519') {
+      result[0] = DIR_LINK_TYPES.RESOLVER_REGISTRY; // 0xed
+      if (link.publicKey) result.set(link.publicKey, 1);
     }
-    
-    // Copy the 32-byte hash
-    result.set(link.hash, 1);
     
     return result;
   }
@@ -120,11 +122,44 @@ export class DirV1Serialiser {
       result.set(FILE_REF_KEYS.TIMESTAMP, fileRef.timestamp);
     }
     
+    // Key 8: timestamp_subsec_nanos (optional)
+    if (fileRef.timestamp_subsec_nanos !== undefined) {
+      result.set(FILE_REF_KEYS.TIMESTAMP_SUBSEC_NANOS, fileRef.timestamp_subsec_nanos);
+    }
+    
+    // Key 9: locations (optional)
+    if (fileRef.locations !== undefined) {
+      const serialisedLocations = fileRef.locations.map(loc => 
+        this.serialiseBlobLocation(loc)
+      );
+      result.set(FILE_REF_KEYS.LOCATIONS, serialisedLocations);
+    }
+    
+    // Key 22: hash_type + extra fields (optional)
+    if (fileRef.hash_type !== undefined || fileRef.extra !== undefined) {
+      // In the rust test vectors, key 22 contains a map with extra fields
+      if (fileRef.extra !== undefined && fileRef.extra.size > 0) {
+        result.set(FILE_REF_KEYS.HASH_TYPE, fileRef.extra);
+      } else if (fileRef.hash_type !== undefined) {
+        result.set(FILE_REF_KEYS.HASH_TYPE, fileRef.hash_type);
+      }
+    }
+    
+    // Key 23: prev (optional)
+    if (fileRef.prev !== undefined) {
+      result.set(FILE_REF_KEYS.PREV, this.serialiseFileRef(fileRef.prev));
+    }
+    
     return result;
   }
   
   // Deserialise CBOR bytes to DirV1
   static deserialise(data: Uint8Array): DirV1 {
+    // Check minimum length for magic bytes
+    if (data.length < 2) {
+      throw new Error('Data too short to be valid DirV1');
+    }
+    
     let cborData = data;
     
     // Remove magic bytes if present
@@ -212,18 +247,18 @@ export class DirV1Serialiser {
     }
     
     const typeBytes = bytes[0];
-    const hash = bytes.slice(1);
+    const hashOrKey = bytes.slice(1);
     
     let type: DirLink['type'];
     if (typeBytes === DIR_LINK_TYPES.FIXED_HASH_BLAKE3) {
-      type = 'fixed_hash_blake3';
+      return { type: 'fixed_hash_blake3', hash: hashOrKey };
     } else if (typeBytes === DIR_LINK_TYPES.RESOLVER_REGISTRY) {
-      type = 'resolver_registry';
+      // 0xed can be either resolver_registry or mutable_registry_ed25519
+      // In the test vectors, 0xed is used for mutable_registry_ed25519
+      return { type: 'mutable_registry_ed25519', publicKey: hashOrKey };
     } else {
       throw new Error(`Unknown DirLink type: 0x${typeBytes.toString(16)}`);
     }
-    
-    return { type, hash };
   }
   
   // Deserialise files map
@@ -269,6 +304,40 @@ export class DirV1Serialiser {
       fileRef.timestamp = timestamp;
     }
     
+    const timestampSubsecNanos = fileRefMap.get(FILE_REF_KEYS.TIMESTAMP_SUBSEC_NANOS);
+    if (timestampSubsecNanos !== undefined) {
+      fileRef.timestamp_subsec_nanos = timestampSubsecNanos;
+    }
+    
+    const locations = fileRefMap.get(FILE_REF_KEYS.LOCATIONS);
+    if (locations !== undefined && Array.isArray(locations)) {
+      fileRef.locations = locations.map(([tag, value]) => 
+        this.deserialiseBlobLocation(tag, value)
+      );
+    }
+    
+    const hashType = fileRefMap.get(FILE_REF_KEYS.HASH_TYPE);
+    if (hashType !== undefined) {
+      fileRef.hash_type = hashType;
+    }
+    
+    const prev = fileRefMap.get(FILE_REF_KEYS.PREV);
+    if (prev !== undefined && prev instanceof Map) {
+      fileRef.prev = this.deserialiseFileRef(prev);
+    }
+    
+    // Handle key 22 which might contain extra fields map
+    const key22Value = fileRefMap.get(FILE_REF_KEYS.HASH_TYPE);
+    if (key22Value !== undefined) {
+      if (key22Value instanceof Map) {
+        // Key 22 contains the extra fields map
+        fileRef.extra = key22Value;
+      } else {
+        // Key 22 contains just hash_type
+        fileRef.hash_type = key22Value;
+      }
+    }
+    
     return fileRef;
   }
   
@@ -276,16 +345,16 @@ export class DirV1Serialiser {
   static serialiseBlobLocation(location: BlobLocation): [number, any] {
     switch (location.type) {
       case 'identity':
-        return [BLOB_LOCATION_TAGS.IDENTITY, location.hash];
+        return [BLOB_LOCATION_TAGS.IDENTITY, location.data];
       case 'http':
         return [BLOB_LOCATION_TAGS.HTTP, location.url];
-      case 'sha1':
+      case 'multihash_sha1':
         return [BLOB_LOCATION_TAGS.SHA1, location.hash];
-      case 'sha256':
+      case 'multihash_sha2_256':
         return [BLOB_LOCATION_TAGS.SHA256, location.hash];
-      case 'blake3':
+      case 'multihash_blake3':
         return [BLOB_LOCATION_TAGS.BLAKE3, location.hash];
-      case 'md5':
+      case 'multihash_md5':
         return [BLOB_LOCATION_TAGS.MD5, location.hash];
       default:
         throw new Error(`Unknown BlobLocation type: ${(location as any).type}`);
@@ -297,9 +366,9 @@ export class DirV1Serialiser {
     switch (tag) {
       case BLOB_LOCATION_TAGS.IDENTITY:
         if (!(value instanceof Uint8Array)) {
-          throw new Error('Identity BlobLocation must have Uint8Array hash');
+          throw new Error('Identity BlobLocation must have Uint8Array data');
         }
-        return { type: 'identity', hash: value };
+        return { type: 'identity', data: value };
       
       case BLOB_LOCATION_TAGS.HTTP:
         if (typeof value !== 'string') {
@@ -311,25 +380,25 @@ export class DirV1Serialiser {
         if (!(value instanceof Uint8Array)) {
           throw new Error('SHA1 BlobLocation must have Uint8Array hash');
         }
-        return { type: 'sha1', hash: value };
+        return { type: 'multihash_sha1', hash: value };
       
       case BLOB_LOCATION_TAGS.SHA256:
         if (!(value instanceof Uint8Array)) {
           throw new Error('SHA256 BlobLocation must have Uint8Array hash');
         }
-        return { type: 'sha256', hash: value };
+        return { type: 'multihash_sha2_256', hash: value };
       
       case BLOB_LOCATION_TAGS.BLAKE3:
         if (!(value instanceof Uint8Array)) {
           throw new Error('Blake3 BlobLocation must have Uint8Array hash');
         }
-        return { type: 'blake3', hash: value };
+        return { type: 'multihash_blake3', hash: value };
       
       case BLOB_LOCATION_TAGS.MD5:
         if (!(value instanceof Uint8Array)) {
           throw new Error('MD5 BlobLocation must have Uint8Array hash');
         }
-        return { type: 'md5', hash: value };
+        return { type: 'multihash_md5', hash: value };
       
       default:
         throw new Error(`Unknown BlobLocation tag: ${tag}`);

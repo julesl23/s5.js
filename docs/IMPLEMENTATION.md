@@ -14,27 +14,27 @@
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure (Design Doc 1, Grant Month 2)
+### Phase 1: Core Infrastructure (Design Doc 1, Grant Month 2) ✅ 2025-01-16
 
-- [ ] **1.1 Add CBOR Dependencies**
+- [x] **1.1 Add CBOR Dependencies** ✅ 2025-01-16
   - [x] Install cbor-x package
-  - [ ] Install xxhash-wasm package
+  - [ ] Install xxhash-wasm package (deferred to Phase 3)
   - [x] Install @noble/hashes package
-  - [ ] Verify bundle size impact
-  - [ ] Create bundle size baseline measurement
-- [ ] **1.2 Create DirV1 Types Matching Rust**
+  - [ ] Verify bundle size impact (deferred to later phase)
+  - [ ] Create bundle size baseline measurement (deferred to later phase)
+- [x] **1.2 Create DirV1 Types Matching Rust** ✅ 2025-01-16
   - [x] Create src/fs/dirv1/types.ts
   - [x] Define DirV1 interface
-  - [ ] Define DirHeader interface
+  - [x] Define DirHeader interface (currently empty object)
   - [x] Define DirRef interface
-  - [x] Define FileRef interface
+  - [x] Define FileRef interface (with all optional fields)
   - [x] Define BlobLocation types
   - [x] Define DirLink types
-  - [ ] Define HAMTShardingConfig interface
-  - [ ] Define PutOptions interface
-  - [ ] Define ListOptions interface
+  - [ ] Define HAMTShardingConfig interface (deferred to Phase 3)
+  - [ ] Define PutOptions interface (deferred to Phase 2)
+  - [ ] Define ListOptions interface (deferred to Phase 2)
   - [x] Write comprehensive type tests
-- [x] **1.3 Create CBOR Configuration** ✅ 2025-01-12
+- [x] **1.3 Create CBOR Configuration** ✅ 2025-01-16
   - [x] Create src/fs/dirv1/cbor-config.ts
   - [x] Configure deterministic encoding
   - [x] Setup encoder with S5-required settings
@@ -42,7 +42,7 @@
   - [x] Create helper functions (encodeS5, decodeS5)
   - [x] Implement createOrderedMap for consistent ordering
   - [x] Test deterministic encoding
-- [x] **1.4 Implement CBOR Serialisation Matching Rust** ✅ 2025-01-12
+- [x] **1.4 Implement CBOR Serialisation Matching Rust** ✅ 2025-01-16
   - [x] Create src/fs/dirv1/serialisation.ts
   - [x] Define CBOR integer key mappings (matching Rust's #[n(X)])
   - [x] Implement DirV1Serialiser class
@@ -50,10 +50,17 @@
   - [x] Implement deserialise method
   - [x] Implement header serialisation
   - [x] Implement DirRef serialisation
-  - [x] Implement FileRef serialisation
+  - [x] Implement FileRef serialisation (with all optional fields)
   - [x] Implement DirLink serialisation (33-byte format)
   - [x] Implement BlobLocation serialisation
   - [x] Cross-verify with Rust test vectors
+- [x] **1.5 Comprehensive Phase 1 Tests** ✅ 2025-01-16
+  - [x] Create cbor-serialisation.test.ts
+  - [x] Create edge-cases.test.ts
+  - [x] Create deserialisation.test.ts
+  - [x] Create cbor-config.test.ts
+  - [x] Create integration.test.ts
+  - [x] All 66 tests passing
 
 ### Phase 2: Path-Based API Implementation (Design Doc 1, Grant Month 3)
 

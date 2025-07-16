@@ -10,7 +10,7 @@
 | Month | Target Date | Status         | Progress |
 | ----- | ----------- | -------------- | -------- |
 | 1     | 7/2/25      | ✅ Completed   | 100%     |
-| 2     | 8/2/25      | ⏳ Pending     | 0%       |
+| 2     | 8/2/25      | 🚧 In Progress | 25%      |
 | 3     | 9/2/25      | ⏳ Pending     | 0%       |
 | 4     | 10/2/25     | ⏳ Pending     | 0%       |
 | 5     | 11/2/25     | ⏳ Pending     | 0%       |
@@ -58,15 +58,15 @@
 ## Month 2: Path Helpers v0.1
 
 **Target Date:** 8/2/25  
-**Status:** ⏳ Pending
+**Status:** 🚧 In Progress
 
-### Planned Deliverables
+### Deliverables
 
-- [ ] Basic get/put for single-level directories
-- [ ] Comprehensive unit tests
+- [x] CBOR integration foundation ✅ 2025-01-16
+- [x] DirV1 type definitions ✅ 2025-01-16
+- [x] Comprehensive unit tests (66 Phase 1 tests) ✅ 2025-01-16
+- [ ] Basic get/put for single-level directories (Phase 2)
 - [ ] Initial API documentation
-- [ ] CBOR integration foundation
-- [ ] DirV1 type definitions
 
 ### Success Criteria
 

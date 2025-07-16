@@ -5,11 +5,17 @@ export interface FileRef {
   size: number | bigint;
   media_type?: string;
   timestamp?: number;
+  timestamp_subsec_nanos?: number;
+  locations?: BlobLocation[];
+  hash_type?: number;
+  extra?: Map<string, any>;
+  prev?: FileRef;
 }
 
 export interface DirLink {
-  type: 'fixed_hash_blake3' | 'resolver_registry';
-  hash: Uint8Array; // 32 bytes
+  type: 'fixed_hash_blake3' | 'resolver_registry' | 'mutable_registry_ed25519';
+  hash?: Uint8Array; // 32 bytes - for fixed_hash_blake3 and resolver_registry
+  publicKey?: Uint8Array; // 32 bytes - for mutable_registry_ed25519
 }
 
 export interface DirRef {
@@ -30,7 +36,11 @@ export const FILE_REF_KEYS = {
   HASH: 3,
   SIZE: 4,
   MEDIA_TYPE: 6,
-  TIMESTAMP: 7
+  TIMESTAMP: 7,
+  TIMESTAMP_SUBSEC_NANOS: 8,
+  LOCATIONS: 9,
+  HASH_TYPE: 22,
+  PREV: 23
 } as const;
 
 // CBOR integer keys for DirRef
@@ -48,12 +58,12 @@ export const DIR_LINK_TYPES = {
 
 // BlobLocation types
 export type BlobLocation = 
-  | { type: 'identity'; hash: Uint8Array }
+  | { type: 'identity'; data: Uint8Array }
   | { type: 'http'; url: string }
-  | { type: 'sha1'; hash: Uint8Array }
-  | { type: 'sha256'; hash: Uint8Array }
-  | { type: 'blake3'; hash: Uint8Array }
-  | { type: 'md5'; hash: Uint8Array };
+  | { type: 'multihash_sha1'; hash: Uint8Array }
+  | { type: 'multihash_sha2_256'; hash: Uint8Array }
+  | { type: 'multihash_blake3'; hash: Uint8Array }
+  | { type: 'multihash_md5'; hash: Uint8Array };
 
 // BlobLocation CBOR tags
 export const BLOB_LOCATION_TAGS = {

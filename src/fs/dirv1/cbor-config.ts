@@ -30,17 +30,11 @@ function preprocessValue(value: any): any {
     return new Map(entries);
   }
   
-  // Handle Maps - ensure proper sorting for string keys
+  // Handle Maps - keep them as-is to preserve insertion order
   if (value instanceof Map) {
-    // For string-keyed maps, sort by key
-    if (value.size > 0 && typeof value.keys().next().value === 'string') {
-      const sortedEntries = Array.from(value.entries()).sort((a, b) => {
-        const aKey = a[0].toString();
-        const bKey = b[0].toString();
-        return aKey.localeCompare(bKey);
-      });
-      return new Map(sortedEntries);
-    }
+    // For Maps, CBOR will encode them with their natural order
+    // We don't sort them to preserve insertion order
+    return value;
   }
   
   // Handle large integers - ensure they stay as bigints
@@ -63,3 +57,13 @@ export function encodeS5(value: any): Uint8Array {
 export function decodeS5(data: Uint8Array): any {
   return encoder.decode(data);
 }
+
+// Helper to create ordered map from object
+export function createOrderedMap<V>(obj: Record<string, V>): Map<string, V> {
+  const entries = Object.entries(obj).sort((a, b) => a[0].localeCompare(b[0]));
+  return new Map(entries);
+}
+
+// Export encoder instances for testing
+export const s5Encoder = encoder;
+export const s5Decoder = encoder; // Same instance handles both
