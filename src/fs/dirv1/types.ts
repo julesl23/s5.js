@@ -74,3 +74,28 @@ export const BLOB_LOCATION_TAGS = {
   BLAKE3: 0x1e,
   MD5: 0xd5
 } as const;
+
+// Phase 2 types
+export interface PutOptions {
+  mediaType?: string;
+  timestamp?: number;
+}
+
+export interface ListResult {
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+  mediaType?: string;
+  timestamp?: number;
+}
+
+export interface GetOptions {
+  defaultMediaType?: string;
+}
+
+export interface ListOptions {
+  // Reserved for future pagination support (Phase 2.2)
+  // limit?: number;
+  // cursor?: string;
+  // filter?: (item: ListResult) => boolean;
+}

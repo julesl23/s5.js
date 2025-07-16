@@ -13,6 +13,8 @@ import { concatBytes } from "@noble/hashes/utils";
 import { encodeLittleEndian } from "../util/little_endian";
 import { BlobIdentifier } from "../identifier/blob";
 import { padFileSize } from "../encryption/padding";
+import { PutOptions, ListResult, GetOptions, ListOptions } from "./dirv1/types";
+import { encodeS5, decodeS5 } from "./dirv1/cbor-config";
 
 const mhashBlake3 = 0x1e;
 const mhashBlake3Default = 0x1f;
@@ -33,14 +35,253 @@ export class FS5 {
         this.identity = identity;
     }
 
+    // Phase 2: Path-based API methods
+    
+    /**
+     * Get data at the specified path
+     * @param path Path to the file (e.g., "home/file.txt")
+     * @returns The decoded data or undefined if not found
+     */
+    public async get(path: string, options?: GetOptions): Promise<any | undefined> {
+        const segments = path.split('/').filter(s => s);
+        
+        if (segments.length === 0) {
+            return undefined; // Root directory doesn't have data
+        }
+        
+        const fileName = segments[segments.length - 1];
+        const dirPath = segments.slice(0, -1).join('/') || '';
+        
+        // Load the parent directory
+        const dir = await this._loadDirectory(dirPath);
+        if (!dir) {
+            return undefined;
+        }
+        
+        // Find the file
+        const fileRef = dir.files.get(fileName);
+        if (!fileRef) {
+            return undefined;
+        }
+        
+        // Download the file data
+        const data = await this.api.downloadBlobAsBytes(new Uint8Array([MULTIHASH_BLAKE3, ...fileRef.hash]));
+        
+        // Try to decode the data
+        try {
+            // First try CBOR
+            return decodeS5(data);
+        } catch {
+            // If CBOR fails, try JSON
+            try {
+                const text = new TextDecoder().decode(data);
+                return JSON.parse(text);
+            } catch {
+                // If JSON fails, check if it's valid UTF-8 text
+                try {
+                    const text = new TextDecoder('utf-8', { fatal: true }).decode(data);
+                    return text;
+                } catch {
+                    // Otherwise return as binary
+                    return data;
+                }
+            }
+        }
+    }
 
-    public async list(path: string): Promise<DirV1 | undefined> {
-        const ks = await this.getKeySet(
-            await this._preprocessLocalPath(path),
-        );
-        const res = await this._getDirectoryMetadata(ks);
+    /**
+     * Store data at the specified path
+     * @param path Path where to store the data (e.g., "home/file.txt")
+     * @param data The data to store (string, object, or Uint8Array)
+     * @param options Optional parameters like mediaType
+     */
+    public async put(path: string, data: any, options?: PutOptions): Promise<void> {
+        const segments = path.split('/').filter(s => s);
+        
+        if (segments.length === 0) {
+            throw new Error("Cannot put data at root directory");
+        }
+        
+        const fileName = segments[segments.length - 1];
+        const dirPath = segments.slice(0, -1).join('/') || '';
+        
+        // Encode the data
+        let encodedData: Uint8Array;
+        let mediaType = options?.mediaType;
+        
+        if (data instanceof Uint8Array) {
+            encodedData = data;
+            mediaType = mediaType || 'application/octet-stream';
+        } else if (typeof data === 'string') {
+            encodedData = new TextEncoder().encode(data);
+            mediaType = mediaType || 'text/plain';
+        } else {
+            // Use CBOR for objects
+            encodedData = encodeS5(data);
+            mediaType = mediaType || 'application/cbor';
+        }
+        
+        // Upload the blob
+        const blob = new Blob([encodedData]);
+        const { hash, size } = await this.uploadBlobWithoutEncryption(blob);
+        
+        // Create FileRef
+        const fileRef: FileRef = {
+            hash: hash,
+            size: size,
+            media_type: mediaType,
+            timestamp: options?.timestamp || Math.floor(Date.now() / 1000)
+        };
+        
+        // Update the parent directory
+        await this._updateDirectory(dirPath, async (dir, writeKey) => {
+            // Ensure intermediate directories exist
+            if (!dir) {
+                throw new Error(`Parent directory ${dirPath} does not exist`);
+            }
+            
+            dir.files.set(fileName, fileRef);
+            return dir;
+        });
+    }
 
-        return res?.directory;
+    /**
+     * Get metadata for a file or directory at the specified path
+     * @param path Path to the file or directory
+     * @returns Metadata object or undefined if not found
+     */
+    public async getMetadata(path: string): Promise<Record<string, any> | undefined> {
+        const segments = path.split('/').filter(s => s);
+        
+        if (segments.length === 0) {
+            // Root directory metadata
+            const dir = await this._loadDirectory('');
+            if (!dir) return undefined;
+            
+            return {
+                type: 'directory',
+                name: '/',
+                fileCount: dir.files.size,
+                directoryCount: dir.dirs.size
+            };
+        }
+        
+        const itemName = segments[segments.length - 1];
+        const parentPath = segments.slice(0, -1).join('/') || '';
+        
+        // Load parent directory
+        const parentDir = await this._loadDirectory(parentPath);
+        if (!parentDir) return undefined;
+        
+        // Check if it's a file
+        const fileRef = parentDir.files.get(itemName);
+        if (fileRef) {
+            return {
+                type: 'file',
+                name: itemName,
+                size: Number(fileRef.size),
+                mediaType: fileRef.media_type || 'application/octet-stream',
+                timestamp: fileRef.timestamp
+            };
+        }
+        
+        // Check if it's a directory
+        const dirRef = parentDir.dirs.get(itemName);
+        if (dirRef) {
+            // Load the directory to get its metadata
+            const dir = await this._loadDirectory(segments.join('/'));
+            if (!dir) return undefined;
+            
+            return {
+                type: 'directory',
+                name: itemName,
+                fileCount: dir.files.size,
+                directoryCount: dir.dirs.size,
+                timestamp: dirRef.ts_seconds
+            };
+        }
+        
+        return undefined;
+    }
+
+    /**
+     * Delete a file or empty directory at the specified path
+     * @param path Path to the file or directory to delete
+     * @returns true if deleted, false if not found
+     */
+    public async delete(path: string): Promise<boolean> {
+        const segments = path.split('/').filter(s => s);
+        
+        if (segments.length === 0) {
+            throw new Error("Cannot delete root directory");
+        }
+        
+        const itemName = segments[segments.length - 1];
+        const parentPath = segments.slice(0, -1).join('/') || '';
+        
+        let deleted = false;
+        
+        await this._updateDirectory(parentPath, async (dir, writeKey) => {
+            if (!dir) {
+                return undefined; // Parent doesn't exist
+            }
+            
+            // Check if it's a file
+            if (dir.files.has(itemName)) {
+                dir.files.delete(itemName);
+                deleted = true;
+                return dir;
+            }
+            
+            // Check if it's a directory
+            if (dir.dirs.has(itemName)) {
+                // Check if directory is empty
+                const targetDir = await this._loadDirectory(segments.join('/'));
+                if (targetDir && targetDir.files.size === 0 && targetDir.dirs.size === 0) {
+                    dir.dirs.delete(itemName);
+                    deleted = true;
+                    return dir;
+                }
+            }
+            
+            return undefined; // No changes
+        });
+        
+        return deleted;
+    }
+
+
+    /**
+     * List files and directories at the specified path
+     * @param path Path to the directory
+     * @returns Async iterator of ListResult items
+     */
+    public async *list(path: string, options?: ListOptions): AsyncIterableIterator<ListResult> {
+        const dir = await this._loadDirectory(path);
+        
+        if (!dir) {
+            return; // Directory doesn't exist - return empty iterator
+        }
+        
+        // Yield files
+        for (const [name, fileRef] of dir.files) {
+            yield {
+                name,
+                type: 'file',
+                size: Number(fileRef.size),
+                mediaType: fileRef.media_type,
+                timestamp: fileRef.timestamp
+            };
+        }
+        
+        // Yield directories
+        for (const [name, dirRef] of dir.dirs) {
+            yield {
+                name,
+                type: 'directory',
+                timestamp: dirRef.ts_seconds
+            };
+        }
     }
 
 
@@ -454,6 +695,52 @@ export class FS5 {
         } else {
             return { directory: DirV1Serialiser.deserialise(metadataBytes), entry };
         }
+    }
+
+    // Phase 2 helper methods
+    
+    /**
+     * Load a directory at the specified path
+     * @param path Path to the directory (e.g., "home/docs")
+     * @returns The DirV1 object or undefined if not found
+     */
+    private async _loadDirectory(path: string): Promise<DirV1 | undefined> {
+        const preprocessedPath = await this._preprocessLocalPath(path || 'home');
+        const ks = await this.getKeySet(preprocessedPath);
+        const metadata = await this._getDirectoryMetadata(ks);
+        return metadata?.directory;
+    }
+    
+    /**
+     * Update a directory at the specified path
+     * @param path Path to the directory
+     * @param updater Function to update the directory
+     */
+    private async _updateDirectory(
+        path: string,
+        updater: DirectoryTransactionFunction
+    ): Promise<void> {
+        // Create intermediate directories if needed
+        const segments = path.split('/').filter(s => s);
+        
+        // First ensure all parent directories exist
+        for (let i = 1; i <= segments.length; i++) {
+            const currentPath = segments.slice(0, i).join('/');
+            const parentPath = segments.slice(0, i - 1).join('/') || '';
+            const dirName = segments[i - 1];
+            
+            // Check if this directory exists
+            const dir = await this._loadDirectory(currentPath);
+            if (!dir && currentPath !== path) {
+                // Create this intermediate directory
+                await this.createDirectory(parentPath || 'home', dirName);
+            }
+        }
+        
+        // Now perform the update
+        const preprocessedPath = await this._preprocessLocalPath(path || 'home');
+        const result = await this.runTransactionOnDirectory(preprocessedPath, updater);
+        result.unwrap();
     }
 }
 interface KeySet {

@@ -65,7 +65,8 @@
 - [x] CBOR integration foundation ✅ 2025-01-16
 - [x] DirV1 type definitions ✅ 2025-01-16
 - [x] Comprehensive unit tests (66 Phase 1 tests) ✅ 2025-01-16
-- [ ] Basic get/put for single-level directories (Phase 2)
+- [x] Basic get/put for single-level directories (Phase 2) ✅ 2025-01-16
+- [x] Path-based API implementation (get, put, delete, list, getMetadata) ✅ 2025-01-16
 - [ ] Initial API documentation
 
 ### Success Criteria
