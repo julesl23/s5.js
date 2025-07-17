@@ -242,7 +242,8 @@
 
 ## Notes
 
-- Maintain backward compatibility with existing s5.js API
+- This is a clean implementation using CBOR and DirV1 format
+- No backward compatibility with old S5 data formats (MessagePack)
 - Follow existing code conventions
 - Commit regularly with clear messages
 - Create feature branches for each phase
