@@ -87,6 +87,7 @@ export interface ListResult {
   size?: number;
   mediaType?: string;
   timestamp?: number;
+  cursor?: string;
 }
 
 export interface GetOptions {
@@ -94,8 +95,14 @@ export interface GetOptions {
 }
 
 export interface ListOptions {
-  // Reserved for future pagination support (Phase 2.2)
-  // limit?: number;
-  // cursor?: string;
-  // filter?: (item: ListResult) => boolean;
+  limit?: number;
+  cursor?: string;
+  // filter?: (item: ListResult) => boolean; // Reserved for future
+}
+
+// Internal cursor data structure
+export interface CursorData {
+  position: string; // Current position (name of last item)
+  type: 'file' | 'directory'; // Type of last item
+  timestamp?: number; // For stability checks
 }
