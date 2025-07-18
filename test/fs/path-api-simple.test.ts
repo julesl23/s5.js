@@ -309,7 +309,7 @@ describe("Path-Based API - Simple Integration", () => {
       name: 'test.txt',
       size: 42,
       mediaType: 'text/plain',
-      timestamp: 1234567890
+      timestamp: 1234567890000 // Converted to milliseconds
     });
 
     // Get directory metadata
@@ -319,7 +319,7 @@ describe("Path-Based API - Simple Integration", () => {
       name: 'subdir',
       fileCount: 1,
       directoryCount: 0,
-      timestamp: 1234567890
+      timestamp: 1234567890000 // Converted to milliseconds
     });
 
     // Get non-existent metadata

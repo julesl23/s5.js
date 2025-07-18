@@ -17,6 +17,54 @@ import { PutOptions, ListResult, GetOptions, ListOptions, CursorData } from "./d
 import { encodeS5, decodeS5 } from "./dirv1/cbor-config";
 import { base64UrlNoPaddingDecode } from "../util/base64";
 
+// Media type mappings
+const MEDIA_TYPE_MAP: Record<string, string> = {
+    // Images
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    'ico': 'image/x-icon',
+    
+    // Documents
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    
+    // Text
+    'txt': 'text/plain',
+    'html': 'text/html',
+    'htm': 'text/html',
+    'css': 'text/css',
+    'js': 'application/javascript',
+    'mjs': 'application/javascript',
+    'json': 'application/json',
+    'xml': 'application/xml',
+    'md': 'text/markdown',
+    
+    // Media
+    'mp3': 'audio/mpeg',
+    'mp4': 'video/mp4',
+    'avi': 'video/x-msvideo',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    
+    // Archives
+    'zip': 'application/zip',
+    'tar': 'application/x-tar',
+    'gz': 'application/gzip',
+    '7z': 'application/x-7z-compressed',
+    
+    // Other
+    'bin': 'application/octet-stream',
+    'exe': 'application/x-msdownload',
+    'csv': 'text/csv',
+    'yaml': 'text/yaml',
+    'yml': 'text/yaml'
+};
+
 const mhashBlake3 = 0x1e;
 const mhashBlake3Default = 0x1f;
 
@@ -26,6 +74,48 @@ const CID_TYPE_ENCRYPTED_MUTABLE = 0x5e;
 const ENCRYPTION_ALGORITHM_XCHACHA20POLY1305 = 0xa6;
 
 type DirectoryTransactionFunction = (dir: DirV1, writeKey: Uint8Array) => Promise<DirV1 | undefined>;
+
+// Helper function to get media type from file extension
+function getMediaTypeFromExtension(filename: string): string | undefined {
+    const lastDot = filename.lastIndexOf('.');
+    if (lastDot === -1) return undefined;
+    
+    const ext = filename.substring(lastDot + 1).toLowerCase();
+    return MEDIA_TYPE_MAP[ext];
+}
+
+// Helper function to normalize path
+function normalizePath(path: string): string {
+    // Remove leading slashes
+    path = path.replace(/^\/+/, '');
+    // Replace multiple consecutive slashes with single slash
+    path = path.replace(/\/+/g, '/');
+    // Remove trailing slashes
+    path = path.replace(/\/+$/, '');
+    return path;
+}
+
+// Helper function to convert Map to plain object recursively
+function mapToObject(value: any): any {
+    if (value instanceof Map) {
+        const obj: any = {};
+        for (const [k, v] of value) {
+            obj[k] = mapToObject(v);
+        }
+        return obj;
+    } else if (Array.isArray(value)) {
+        return value.map(v => mapToObject(v));
+    } else if (value && typeof value === 'object' && !(value instanceof Uint8Array)) {
+        const obj: any = {};
+        for (const k in value) {
+            if (value.hasOwnProperty(k)) {
+                obj[k] = mapToObject(value[k]);
+            }
+        }
+        return obj;
+    }
+    return value;
+}
 
 export class FS5 {
     readonly api: S5APIInterface;
@@ -44,6 +134,7 @@ export class FS5 {
      * @returns The decoded data or undefined if not found
      */
     public async get(path: string, options?: GetOptions): Promise<any | undefined> {
+        path = normalizePath(path);
         const segments = path.split('/').filter(s => s);
         
         if (segments.length === 0) {
@@ -68,10 +159,31 @@ export class FS5 {
         // Download the file data
         const data = await this.api.downloadBlobAsBytes(new Uint8Array([MULTIHASH_BLAKE3, ...fileRef.hash]));
         
+        // Check if this is binary data based on media type
+        const isBinaryType = fileRef.media_type && (
+            fileRef.media_type === 'application/octet-stream' ||
+            fileRef.media_type.startsWith('image/') ||
+            fileRef.media_type.startsWith('audio/') ||
+            fileRef.media_type.startsWith('video/') ||
+            fileRef.media_type === 'application/zip' ||
+            fileRef.media_type === 'application/gzip' ||
+            fileRef.media_type === 'application/x-tar' ||
+            fileRef.media_type === 'application/x-7z-compressed' ||
+            fileRef.media_type === 'application/pdf' ||
+            fileRef.media_type === 'application/x-msdownload'
+        );
+        
+        // If it's marked as binary, return as-is
+        if (isBinaryType) {
+            return data;
+        }
+        
         // Try to decode the data
         try {
             // First try CBOR
-            return decodeS5(data);
+            const decoded = decodeS5(data);
+            // Convert Map to plain object if needed
+            return mapToObject(decoded);
         } catch {
             // If CBOR fails, try JSON
             try {
@@ -81,6 +193,20 @@ export class FS5 {
                 // If JSON fails, check if it's valid UTF-8 text
                 try {
                     const text = new TextDecoder('utf-8', { fatal: true }).decode(data);
+                    // Additional check: if the text contains control characters (except tab/newline), treat as binary
+                    let hasControlChars = false;
+                    for (let i = 0; i < text.length; i++) {
+                        const code = text.charCodeAt(i);
+                        if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+                            hasControlChars = true;
+                            break;
+                        }
+                    }
+                    
+                    if (hasControlChars) {
+                        return data; // Return as binary
+                    }
+                    
                     return text;
                 } catch {
                     // Otherwise return as binary
@@ -97,6 +223,7 @@ export class FS5 {
      * @param options Optional parameters like mediaType
      */
     public async put(path: string, data: any, options?: PutOptions): Promise<void> {
+        path = normalizePath(path);
         const segments = path.split('/').filter(s => s);
         
         if (segments.length === 0) {
@@ -106,20 +233,25 @@ export class FS5 {
         const fileName = segments[segments.length - 1];
         const dirPath = segments.slice(0, -1).join('/') || '';
         
+        // Handle null/undefined data
+        if (data === null || data === undefined) {
+            data = '';
+        }
+        
         // Encode the data
         let encodedData: Uint8Array;
         let mediaType = options?.mediaType;
         
         if (data instanceof Uint8Array) {
             encodedData = data;
-            mediaType = mediaType || 'application/octet-stream';
+            mediaType = mediaType || getMediaTypeFromExtension(fileName) || 'application/octet-stream';
         } else if (typeof data === 'string') {
             encodedData = new TextEncoder().encode(data);
-            mediaType = mediaType || 'text/plain';
+            mediaType = mediaType || getMediaTypeFromExtension(fileName) || 'text/plain';
         } else {
             // Use CBOR for objects
             encodedData = encodeS5(data);
-            mediaType = mediaType || 'application/cbor';
+            mediaType = mediaType || getMediaTypeFromExtension(fileName) || 'application/cbor';
         }
         
         // Upload the blob
@@ -131,7 +263,7 @@ export class FS5 {
             hash: hash,
             size: size,
             media_type: mediaType,
-            timestamp: options?.timestamp || Math.floor(Date.now() / 1000)
+            timestamp: options?.timestamp ? Math.floor(options.timestamp / 1000) : Math.floor(Date.now() / 1000)
         };
         
         // Update the parent directory
@@ -152,6 +284,7 @@ export class FS5 {
      * @returns Metadata object or undefined if not found
      */
     public async getMetadata(path: string): Promise<Record<string, any> | undefined> {
+        path = normalizePath(path);
         const segments = path.split('/').filter(s => s);
         
         if (segments.length === 0) {
@@ -182,7 +315,7 @@ export class FS5 {
                 name: itemName,
                 size: Number(fileRef.size),
                 mediaType: fileRef.media_type || 'application/octet-stream',
-                timestamp: fileRef.timestamp
+                timestamp: fileRef.timestamp ? fileRef.timestamp * 1000 : undefined // Convert to milliseconds
             };
         }
         
@@ -198,7 +331,7 @@ export class FS5 {
                 name: itemName,
                 fileCount: dir.files.size,
                 directoryCount: dir.dirs.size,
-                timestamp: dirRef.ts_seconds
+                timestamp: dirRef.ts_seconds ? dirRef.ts_seconds * 1000 : undefined // Convert to milliseconds
             };
         }
         
@@ -211,6 +344,7 @@ export class FS5 {
      * @returns true if deleted, false if not found
      */
     public async delete(path: string): Promise<boolean> {
+        path = normalizePath(path);
         const segments = path.split('/').filter(s => s);
         
         if (segments.length === 0) {
@@ -258,6 +392,7 @@ export class FS5 {
      * @returns Async iterator of ListResult items
      */
     public async *list(path: string, options?: ListOptions): AsyncIterableIterator<ListResult> {
+        path = normalizePath(path);
         const dir = await this._loadDirectory(path);
         
         if (!dir) {
@@ -331,9 +466,9 @@ export class FS5 {
             if (item.type === 'file') {
                 result.size = Number(item.data.size);
                 result.mediaType = item.data.media_type;
-                result.timestamp = item.data.timestamp;
+                result.timestamp = item.data.timestamp ? item.data.timestamp * 1000 : undefined; // Convert to milliseconds
             } else {
-                result.timestamp = item.data.ts_seconds;
+                result.timestamp = item.data.ts_seconds ? item.data.ts_seconds * 1000 : undefined; // Convert to milliseconds
             }
             
             yield result;
