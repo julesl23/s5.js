@@ -1,5 +1,3 @@
-Here's an improved version of the API documentation combining the best of both:
-
 # Enhanced S5.js Path-Based API Documentation
 
 ## Table of Contents
