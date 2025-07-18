@@ -2,10 +2,10 @@
 /// This implementation follows the S5 v1 spec at https://docs.sfive.net/spec/api-interface.html
 ///
 
-import { BlobIdentifier } from "../identifier/blob";
-import { RegistryEntry } from "../registry/entry";
-import { StreamMessage } from "../stream/message";
-import { CryptoImplementation } from "./crypto";
+import { BlobIdentifier } from "../identifier/blob.js";
+import { RegistryEntry } from "../registry/entry.js";
+import { StreamMessage } from "../stream/message.js";
+import { CryptoImplementation } from "./crypto.js";
 
 export interface S5APIInterface {
     /// Blocks until the S5 API is initialized and ready to be used

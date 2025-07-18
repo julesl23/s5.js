@@ -3,8 +3,19 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Use S5",
+  "main": "./dist/src/index.js",
+  "module": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./dist/*": "./dist/*"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/fix-esm-imports.js",
     "dev": "tsc --watch",
     "test": "vitest",
     "test:run": "vitest run",

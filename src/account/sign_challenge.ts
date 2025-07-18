@@ -1,4 +1,4 @@
-import { CryptoImplementation, KeyPairEd25519 } from '../api/crypto';
+import { CryptoImplementation, KeyPairEd25519 } from '../api/crypto.js';
 
 const CHALLENGE_SIZE = 32;
 

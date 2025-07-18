@@ -2,8 +2,8 @@
 /// This implementation follows the S5 v1 spec at https://docs.sfive.net/spec/key-derivation.html
 ///
 
-import { CryptoImplementation } from "../api/crypto";
-import { encodeLittleEndian } from "./little_endian";
+import { CryptoImplementation } from "../api/crypto.js";
+import { encodeLittleEndian } from "./little_endian.js";
 
 export function deriveHashString(
     base: Uint8Array,

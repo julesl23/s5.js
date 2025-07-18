@@ -1,5 +1,5 @@
 import { expect, test, describe } from "vitest";
-import { BlobIdentifier } from "../src/identifier/blob";
+import { BlobIdentifier } from "../src/identifier/blob.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 
 describe("blob_identifier", () => {

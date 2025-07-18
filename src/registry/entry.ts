@@ -1,6 +1,6 @@
-import { CryptoImplementation, KeyPairEd25519 } from "../api/crypto";
-import { RECORD_TYPE_REGISTRY_ENTRY } from "../constants";
-import { decodeLittleEndian, encodeLittleEndian } from "../util/little_endian";
+import { CryptoImplementation, KeyPairEd25519 } from "../api/crypto.js";
+import { RECORD_TYPE_REGISTRY_ENTRY } from "../constants.js";
+import { decodeLittleEndian, encodeLittleEndian } from "../util/little_endian.js";
 
 export interface RegistryEntry {
     /// public key with multicodec prefix

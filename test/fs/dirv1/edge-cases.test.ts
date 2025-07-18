@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
-import { DirV1Serialiser } from "../../../src/fs/dirv1/serialisation";
-import type { DirV1, FileRef, DirRef } from "../../../src/fs/dirv1/types";
+import { DirV1Serialiser } from "../../../src/fs/dirv1/serialisation.js";
+import type { DirV1, FileRef, DirRef } from "../../../src/fs/dirv1/types.js";
 
 describe("Edge Cases", () => {
   describe("File and directory names", () => {

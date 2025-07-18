@@ -1,6 +1,6 @@
 import { expect, test, describe } from "vitest";
-import { JSCryptoImplementation } from "../src/api/crypto/js";
-import { generatePhrase, hashToChecksumWords, validatePhrase } from "../src/identity/seed_phrase/seed_phrase";
+import { JSCryptoImplementation } from "../src/api/crypto/js.js";
+import { generatePhrase, hashToChecksumWords, validatePhrase } from "../src/identity/seed_phrase/seed_phrase.js";
 import { bytesToHex } from "@noble/hashes/utils";
 
 describe("seed_phrase", () => {

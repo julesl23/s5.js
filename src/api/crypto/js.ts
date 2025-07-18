@@ -1,5 +1,5 @@
 import { BLAKE3, blake3 } from '@noble/hashes/blake3';
-import { CryptoImplementation, KeyPairEd25519 } from "../crypto";
+import { CryptoImplementation, KeyPairEd25519 } from "../crypto.js";
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 import * as ed from '@noble/ed25519';
 

@@ -1,6 +1,6 @@
 import { expect, test, describe } from "vitest";
-import { JSCryptoImplementation } from "../src/api/crypto/js";
-import { createRegistryEntry, deserializeRegistryEntry, serializeRegistryEntry, verifyRegistryEntry } from "../src/registry/entry";
+import { JSCryptoImplementation } from "../src/api/crypto/js.js";
+import { createRegistryEntry, deserializeRegistryEntry, serializeRegistryEntry, verifyRegistryEntry } from "../src/registry/entry.js";
 import { bytesToHex } from "@noble/hashes/utils";
 
 describe("registry", async () => {

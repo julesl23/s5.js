@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
-import { DirV1Serialiser } from "../../../src/fs/dirv1/serialisation";
-import { RUST_TEST_VECTORS, INVALID_CBOR_TESTS } from "./rust-test-vectors";
-import type { DirV1 } from "../../../src/fs/dirv1/types";
+import { DirV1Serialiser } from "../../../src/fs/dirv1/serialisation.js";
+import { RUST_TEST_VECTORS, INVALID_CBOR_TESTS } from "./rust-test-vectors.js";
+import type { DirV1 } from "../../../src/fs/dirv1/types.js";
 
 describe("Deserialisation", () => {
   describe("Rust test vector deserialisation", () => {

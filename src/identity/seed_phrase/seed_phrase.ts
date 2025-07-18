@@ -1,8 +1,8 @@
 // MIT License
 // Copyright (c) 2021 Skynet Labs
 
-import { CryptoImplementation } from "../../api/crypto";
-import { wordlist } from "./wordlist";
+import { CryptoImplementation } from "../../api/crypto.js";
+import { wordlist } from "./wordlist.js";
 
 export const SEED_LENGTH = 16;
 export const SEED_WORDS_LENGTH = 13;

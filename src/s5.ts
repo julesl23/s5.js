@@ -1,13 +1,13 @@
-import { CryptoImplementation } from './api/crypto';
-import { FS5 } from './fs/fs5';
-import { IDBStore } from './kv/idb';
-import { JSCryptoImplementation } from './api/crypto/js';
-import { KeyValueStore } from './kv/kv';
-import { S5APIInterface } from './api/s5';
-import { S5Node } from './node/node';
-import { S5UserIdentity } from './identity/identity';
-import { S5APIWithIdentity } from './identity/api';
-import { generatePhrase } from './identity/seed_phrase/seed_phrase';
+import { CryptoImplementation } from './api/crypto.js';
+import { FS5 } from './fs/fs5.js';
+import { IDBStore } from './kv/idb.js';
+import { JSCryptoImplementation } from './api/crypto/js.js';
+import { KeyValueStore } from './kv/kv.js';
+import { S5APIInterface } from './api/s5.js';
+import { S5Node } from './node/node.js';
+import { S5UserIdentity } from './identity/identity.js';
+import { S5APIWithIdentity } from './identity/api.js';
+import { generatePhrase } from './identity/seed_phrase/seed_phrase.js';
 import { utf8ToBytes } from '@noble/ciphers/utils';
 
 export class S5 {

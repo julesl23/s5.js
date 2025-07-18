@@ -3,8 +3,8 @@
 ///
 
 import { concatBytes } from "@noble/ciphers/utils";
-import { blobIdentifierPrefixBytes, MULTIHASH_BLAKE3 } from "../constants"
-import { decodeLittleEndian, encodeLittleEndian } from "../util/little_endian";
+import { blobIdentifierPrefixBytes, MULTIHASH_BLAKE3 } from "../constants.js"
+import { decodeLittleEndian, encodeLittleEndian } from "../util/little_endian.js";
 import Multibase from "./multibase.js";
 
 export class BlobIdentifier extends Multibase {

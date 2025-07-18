@@ -1,8 +1,8 @@
-import { base64UrlNoPaddingEncode } from "../util/base64";
-import { deserializeRegistryEntry, RegistryEntry, serializeRegistryEntry, verifyRegistryEntry } from "../registry/entry";
-import { KeyValueStore } from "../kv/kv";
-import { mkeyEd25519 } from "../constants";
-import { P2P } from "./p2p";
+import { base64UrlNoPaddingEncode } from "../util/base64.js";
+import { deserializeRegistryEntry, RegistryEntry, serializeRegistryEntry, verifyRegistryEntry } from "../registry/entry.js";
+import { KeyValueStore } from "../kv/kv.js";
+import { mkeyEd25519 } from "../constants.js";
+import { P2P } from "./p2p.js";
 import { Subject } from "rxjs";
 import * as msgpackr from 'msgpackr';
 

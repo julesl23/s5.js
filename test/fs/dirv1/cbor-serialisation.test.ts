@@ -1,14 +1,13 @@
 import { describe, test, expect, beforeEach } from "vitest";
-import { DirV1Serialiser } from "../../../src/fs/dirv1/serialisation";
-import { encodeS5, decodeS5, createOrderedMap } from "../../../src/fs/dirv1/cbor-config";
+import { DirV1Serialiser } from "../../../src/fs/dirv1/serialisation.js";
+import { encodeS5, decodeS5, createOrderedMap } from "../../../src/fs/dirv1/cbor-config.js";
 import type { 
   DirV1, 
   FileRef, 
   DirRef, 
   DirLink, 
-  BlobLocation,
-  DirHeader 
-} from "../../../src/fs/dirv1/types";
+  BlobLocation
+} from "../../../src/fs/dirv1/types.js";
 
 describe("CBOR Serialisation", () => {
   describe("Basic CBOR encoding", () => {

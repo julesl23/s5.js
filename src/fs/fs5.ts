@@ -1,21 +1,21 @@
 import { base32 } from "multiformats/bases/base32";
-import { S5APIInterface } from "../api/s5";
-import { mkeyEd25519, MULTIHASH_BLAKE3 } from "../constants";
-import { decryptMutableBytes, encryptMutableBytes } from "../encryption/mutable";
-import Multibase from "../identifier/multibase";
-import { S5UserIdentity } from "../identity/identity";
-import { createRegistryEntry, RegistryEntry } from "../registry/entry";
-import { base64UrlNoPaddingEncode } from "../util/base64";
-import { deriveHashInt } from "../util/derive_hash";
-import { DirV1, FileRef, DirRef, DirLink } from "./dirv1/types";
-import { DirV1Serialiser } from "./dirv1/serialisation";
+import { S5APIInterface } from "../api/s5.js";
+import { mkeyEd25519, MULTIHASH_BLAKE3 } from "../constants.js";
+import { decryptMutableBytes, encryptMutableBytes } from "../encryption/mutable.js";
+import Multibase from "../identifier/multibase.js";
+import { S5UserIdentity } from "../identity/identity.js";
+import { createRegistryEntry, RegistryEntry } from "../registry/entry.js";
+import { base64UrlNoPaddingEncode } from "../util/base64.js";
+import { deriveHashInt } from "../util/derive_hash.js";
+import { DirV1, FileRef, DirRef, DirLink } from "./dirv1/types.js";
+import { DirV1Serialiser } from "./dirv1/serialisation.js";
 import { concatBytes } from "@noble/hashes/utils";
-import { encodeLittleEndian } from "../util/little_endian";
-import { BlobIdentifier } from "../identifier/blob";
-import { padFileSize } from "../encryption/padding";
-import { PutOptions, ListResult, GetOptions, ListOptions, CursorData } from "./dirv1/types";
-import { encodeS5, decodeS5 } from "./dirv1/cbor-config";
-import { base64UrlNoPaddingDecode } from "../util/base64";
+import { encodeLittleEndian } from "../util/little_endian.js";
+import { BlobIdentifier } from "../identifier/blob.js";
+import { padFileSize } from "../encryption/padding.js";
+import { PutOptions, ListResult, GetOptions, ListOptions, CursorData } from "./dirv1/types.js";
+import { encodeS5, decodeS5 } from "./dirv1/cbor-config.js";
+import { base64UrlNoPaddingDecode } from "../util/base64.js";
 
 // Media type mappings
 const MEDIA_TYPE_MAP: Record<string, string> = {

@@ -1,13 +1,13 @@
-import { CryptoImplementation } from "../api/crypto";
-import { S5APIInterface } from "../api/s5";
-import { BlobIdentifier } from "../identifier/blob";
-import { KeyValueStore } from "../kv/kv";
-import { RegistryEntry } from "../registry/entry";
-import { StreamMessage } from "../stream/message";
-import { areArraysEqual } from "../util/arrays";
-import { base64UrlNoPaddingEncode } from "../util/base64";
-import { P2P } from "./p2p";
-import { S5RegistryService } from "./registry";
+import { CryptoImplementation } from "../api/crypto.js";
+import { S5APIInterface } from "../api/s5.js";
+import { BlobIdentifier } from "../identifier/blob.js";
+import { KeyValueStore } from "../kv/kv.js";
+import { RegistryEntry } from "../registry/entry.js";
+import { StreamMessage } from "../stream/message.js";
+import { areArraysEqual } from "../util/arrays.js";
+import { base64UrlNoPaddingEncode } from "../util/base64.js";
+import { P2P } from "./p2p.js";
+import { S5RegistryService } from "./registry.js";
 
 type OpenKeyValueStoreFunction = (name: string) => Promise<KeyValueStore>;
 

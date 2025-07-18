@@ -1,5 +1,5 @@
 import { IDBPDatabase, openDB } from "idb";
-import { KeyValueStore } from "./kv";
+import { KeyValueStore } from "./kv.js";
 
 export class IDBStore implements KeyValueStore {
     static async open(name: string): Promise<IDBStore> {

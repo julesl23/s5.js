@@ -1,7 +1,7 @@
 import * as msgpackr from 'msgpackr';
-import { CryptoImplementation } from '../api/crypto';
-import { deriveHashInt } from '../util/derive_hash';
-import { validatePhrase } from './seed_phrase/seed_phrase';
+import { CryptoImplementation } from '../api/crypto.js';
+import { deriveHashInt } from '../util/derive_hash.js';
+import { validatePhrase } from './seed_phrase/seed_phrase.js';
 
 const authPayloadVersion1 = 0x01;
 

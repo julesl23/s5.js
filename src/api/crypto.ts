@@ -2,7 +2,7 @@
 /// This implementation follows the S5 v1 spec at https://docs.sfive.net/spec/api-interface.html
 ///
 
-import { mkeyEd25519 } from "../constants";
+import { mkeyEd25519 } from "../constants.js";
 
 export interface CryptoImplementation {
     generateSecureRandomBytes(length: number): Uint8Array;

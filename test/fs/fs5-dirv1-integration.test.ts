@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
-import { DirV1, FileRef, DirRef } from "../../src/fs/dirv1/types";
-import { DirV1Serialiser } from "../../src/fs/dirv1/serialisation";
+import { DirV1, FileRef, DirRef } from "../../src/fs/dirv1/types.js";
+import { DirV1Serialiser } from "../../src/fs/dirv1/serialisation.js";
 
 describe("FS5 to DirV1 Integration", () => {
 
@@ -49,7 +49,7 @@ describe("FS5 to DirV1 Integration", () => {
     expect(dirRef.link).toHaveProperty('type');
     expect(dirRef.link).toHaveProperty('hash');
     expect(dirRef.link.hash).toBeInstanceOf(Uint8Array);
-    expect(dirRef.link.hash.length).toBe(32);
+    expect(dirRef.link.hash!.length).toBe(32);
   });
 
   test("DirV1 serialization should produce valid CBOR", () => {

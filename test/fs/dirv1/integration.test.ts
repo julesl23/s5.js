@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
-import { DirV1Serialiser } from "../../../src/fs/dirv1/serialisation";
-import { createOrderedMap } from "../../../src/fs/dirv1/cbor-config";
-import type { DirV1, FileRef, DirRef } from "../../../src/fs/dirv1/types";
+import { DirV1Serialiser } from "../../../src/fs/dirv1/serialisation.js";
+import { createOrderedMap } from "../../../src/fs/dirv1/cbor-config.js";
+import type { DirV1, FileRef, DirRef } from "../../../src/fs/dirv1/types.js";
 
 describe("Integration Tests", () => {
   describe("Real-world scenarios", () => {

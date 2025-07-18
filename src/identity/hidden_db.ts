@@ -1,9 +1,9 @@
 import { bytesToUtf8, utf8ToBytes } from "@noble/ciphers/utils";
-import { S5APIInterface } from "../api/s5";
-import { decryptMutableBytes, encryptMutableBytes } from "../encryption/mutable";
-import { BlobIdentifier } from "../identifier/blob";
-import { createRegistryEntry } from "../registry/entry";
-import { deriveHashInt, deriveHashString } from "../util/derive_hash";
+import { S5APIInterface } from "../api/s5.js";
+import { decryptMutableBytes, encryptMutableBytes } from "../encryption/mutable.js";
+import { BlobIdentifier } from "../identifier/blob.js";
+import { createRegistryEntry } from "../registry/entry.js";
+import { deriveHashInt, deriveHashString } from "../util/derive_hash.js";
 
 interface HiddenRawDataResponse {
     data?: Uint8Array;

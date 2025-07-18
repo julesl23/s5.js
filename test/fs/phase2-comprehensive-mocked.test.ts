@@ -50,6 +50,7 @@ class MockIdentity {
 }
 
 // Extended FS5 with mocked directory operations
+// @ts-ignore - overriding private methods for testing
 class MockedFS5 extends FS5 {
   private directories: Map<string, DirV1> = new Map();
   private writeKeys: Map<string, Uint8Array> = new Map();
@@ -95,11 +96,13 @@ class MockedFS5 extends FS5 {
   }
 
   // Override _loadDirectory to use our mock
+  // @ts-ignore - accessing private method for testing
   async _loadDirectory(path: string): Promise<DirV1 | undefined> {
     return this.directories.get(path);
   }
 
   // Override _updateDirectory to use our mock
+  // @ts-ignore - accessing private method for testing
   async _updateDirectory(
     path: string,
     updater: (dir: DirV1, writeKey: Uint8Array) => Promise<DirV1 | undefined>

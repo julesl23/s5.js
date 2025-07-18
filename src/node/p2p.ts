@@ -1,11 +1,11 @@
-import { areArraysEqual } from '../util/arrays';
-import { base64UrlNoPaddingEncode } from '../util/base64';
+import { areArraysEqual } from '../util/arrays.js';
+import { base64UrlNoPaddingEncode } from '../util/base64.js';
 import { bytesToHex, bytesToUtf8 } from '@noble/ciphers/utils';
-import { CryptoImplementation, KeyPairEd25519 } from '../api/crypto';
-import { decodeLittleEndian } from '../util/little_endian';
-import { deserializeRegistryEntry } from '../registry/entry';
-import { mkeyEd25519, RECORD_TYPE_REGISTRY_ENTRY, RECORD_TYPE_STORAGE_LOCATION } from '../constants';
-import { S5RegistryService } from './registry';
+import { CryptoImplementation, KeyPairEd25519 } from '../api/crypto.js';
+import { decodeLittleEndian } from '../util/little_endian.js';
+import { deserializeRegistryEntry } from '../registry/entry.js';
+import { mkeyEd25519, RECORD_TYPE_REGISTRY_ENTRY, RECORD_TYPE_STORAGE_LOCATION } from '../constants.js';
+import { S5RegistryService } from './registry.js';
 import * as msgpackr from 'msgpackr';
 
 export class P2P {

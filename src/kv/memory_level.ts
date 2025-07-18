@@ -1,5 +1,5 @@
 import { MemoryLevel } from "memory-level";
-import { KeyValueStore } from "./kv";
+import { KeyValueStore } from "./kv.js";
 
 export class MemoryLevelStore implements KeyValueStore {
     static async open(): Promise<MemoryLevelStore> {

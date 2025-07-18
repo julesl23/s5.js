@@ -6,16 +6,14 @@ const encoder = new Encoder({
   useRecords: false,
   variableMapSize: false,
   useFloat32: 0,
-  largeBigIntToNumber: false,
   tagUint8Array: false,
   pack: false,
   sequential: true,
   structuredClone: false,
   maxSharedStructures: 0,
   structures: [],
-  saveStructures: false,
-  bundleStrings: false,
-  writeFunction: false,
+  saveStructures: () => false,
+  bundleStrings: false
 });
 
 // Helper to preprocess values before encoding

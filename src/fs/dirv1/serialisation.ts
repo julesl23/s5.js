@@ -1,6 +1,6 @@
-import { encodeS5, decodeS5 } from './cbor-config';
-import type { DirV1, FileRef, DirRef, DirLink, BlobLocation } from './types';
-import { FILE_REF_KEYS, DIR_REF_KEYS, DIR_LINK_TYPES, BLOB_LOCATION_TAGS } from './types';
+import { encodeS5, decodeS5 } from './cbor-config.js';
+import type { DirV1, FileRef, DirRef, DirLink, BlobLocation } from './types.js';
+import { FILE_REF_KEYS, DIR_REF_KEYS, DIR_LINK_TYPES, BLOB_LOCATION_TAGS } from './types.js';
 
 export class DirV1Serialiser {
   // Serialise DirV1 to CBOR bytes with magic prefix

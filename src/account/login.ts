@@ -1,8 +1,8 @@
-import { CryptoImplementation } from '../api/crypto';
-import { S5UserIdentity } from '../identity/identity';
-import { base64UrlNoPaddingDecode, base64UrlNoPaddingEncode } from '../util/base64';
-import { S5Portal } from './portal';
-import { signChallenge, CHALLENGE_TYPE_LOGIN } from './sign_challenge';
+import { CryptoImplementation } from '../api/crypto.js';
+import { S5UserIdentity } from '../identity/identity.js';
+import { base64UrlNoPaddingDecode, base64UrlNoPaddingEncode } from '../util/base64.js';
+import { S5Portal } from './portal.js';
+import { signChallenge, CHALLENGE_TYPE_LOGIN } from './sign_challenge.js';
 
 const portalAccountLoginEndpoint = "account/login";
 

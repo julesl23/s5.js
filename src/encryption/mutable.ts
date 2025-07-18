@@ -1,6 +1,6 @@
-import { CryptoImplementation } from "../api/crypto";
-import { decodeLittleEndian, encodeLittleEndian } from "../util/little_endian";
-import { checkPaddedBlock, padFileSize } from "./padding";
+import { CryptoImplementation } from "../api/crypto.js";
+import { decodeLittleEndian, encodeLittleEndian } from "../util/little_endian.js";
+import { checkPaddedBlock, padFileSize } from "./padding.js";
 
 const encryptionNonceLength = 24;
 const encryptionOverheadLength = 16;
