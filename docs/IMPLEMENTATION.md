@@ -134,24 +134,24 @@
   - [ ] Verify O(log n) access times
   - [ ] Test memory usage
 
-### Phase 4: Utility Functions (Design Doc 1, Grant Month 6)
+### Phase 4: Utility Functions (Design Doc 1, Grant Month 6) ✅ 2025-07-20
 
-- [ ] **4.1 Directory Walker**
-  - [ ] Create src/fs/utils/walker.ts
-  - [ ] Implement walk async iterator
-  - [ ] Implement count method
-  - [ ] Add recursive options
-  - [ ] Add filter support
-  - [ ] Add maxDepth support
-  - [ ] Add cursor resume support
-- [ ] **4.2 Batch Operations**
-  - [ ] Create src/fs/utils/batch.ts
-  - [ ] Implement copyDirectory
-  - [ ] Implement deleteDirectory
-  - [ ] Implement \_ensureDirectory
-  - [ ] Add resume support with cursors
-  - [ ] Add progress callbacks
-  - [ ] Add error handling options
+- [x] **4.1 Directory Walker** ✅ 2025-07-20
+  - [x] Create src/fs/utils/walker.ts
+  - [x] Implement walk async iterator
+  - [x] Implement count method
+  - [x] Add recursive options
+  - [x] Add filter support
+  - [x] Add maxDepth support
+  - [x] Add cursor resume support
+- [x] **4.2 Batch Operations** ✅ 2025-07-20
+  - [x] Create src/fs/utils/batch.ts
+  - [x] Implement copyDirectory
+  - [x] Implement deleteDirectory
+  - [x] Implement \_ensureDirectory
+  - [x] Add resume support with cursors
+  - [x] Add progress callbacks
+  - [x] Add error handling options
 
 ### Phase 5: Media Processing Foundation (Design Doc 2, Grant Month 4)
 
