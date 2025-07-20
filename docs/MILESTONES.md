@@ -87,7 +87,7 @@
 ## Month 3: Path-cascade Optimisation
 
 **Target Date:** 9/2/25  
-**Status:** 🚧 In Progress (Week 1 of 4 Complete)
+**Status:** 🚧 In Progress (Week 2 of 4 Complete)
 
 ### Planned Deliverables
 
@@ -95,8 +95,11 @@
 - [x] LWW conflict resolution ✅ 2025-01-16
 - [x] Cursor-based pagination ✅ 2025-01-16
 - [ ] Documentation and examples
-- [ ] HAMT integration (Week 1/4 Complete)
+- [ ] HAMT integration (Week 2/4 Complete)
   - [x] Basic HAMT structure and operations ✅ 2025-01-20
+  - [x] Node splitting and lazy loading ✅ 2025-01-20
+  - [x] CBOR serialization for HAMT ✅ 2025-01-20
+  - [x] Cursor support for iteration ✅ 2025-01-20
   - [x] Bitmap operations and hash functions ✅ 2025-01-20
   - [ ] Node splitting and navigation (Week 2)
   - [ ] FS5 integration and auto-sharding (Week 3)

@@ -106,19 +106,20 @@
 
 ### Phase 3: HAMT Integration (Design Doc 1, Grant Month 3)
 
-- [ ] **3.1 HAMT Implementation** (Week 1 Complete ✅ 2025-01-20)
+- [ ] **3.1 HAMT Implementation** (Week 1 Complete ✅ 2025-01-20, Week 2 Complete ✅ 2025-01-20)
   - [x] Create src/fs/hamt/hamt.ts
   - [x] Implement HAMTNode structure
-  - [x] Implement insert method (basic leaf insertion)
-  - [x] Implement get method (leaf retrieval)
-  - [x] Implement entries async iterator (basic version)
-  - [ ] Implement entriesFrom for cursor support (Week 2)
-  - [ ] Implement getPathForKey for cursor generation (Week 2)
-- [ ] **3.2 HAMT Operations** (Week 1 Partial ✅ 2025-01-20)
-  - [ ] Implement node splitting logic (Week 2)
+  - [x] Implement insert method (with node splitting)
+  - [x] Implement get method (with node navigation)
+  - [x] Implement entries async iterator (full traversal)
+  - [x] Implement entriesFrom for cursor support (Week 2 ✅)
+  - [x] Implement getPathForKey for cursor generation (Week 2 ✅)
+- [ ] **3.2 HAMT Operations** (Week 2 Complete ✅ 2025-01-20)
+  - [x] Implement node splitting logic (Week 2 ✅)
   - [x] Implement hash functions (xxhash64/blake3)
   - [x] Implement bitmap operations (HAMTBitmapOps class)
-  - [x] Implement node serialisation/deserialisation (basic)
+  - [x] Implement node serialisation/deserialisation (with CBOR)
+  - [x] Implement node caching (Week 2 ✅)
   - [ ] Implement memory management (allocate/free) (Week 3)
 - [ ] **3.3 Directory Integration** (Week 3)
   - [ ] Implement \_serialiseShardedDirectory
