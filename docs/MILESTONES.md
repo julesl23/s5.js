@@ -1,6 +1,3 @@
-## MILESTONES.md
-
-```markdown
 # Enhanced S5.js Grant Milestone Tracking
 
 **Duration:** 8 months
@@ -58,17 +55,17 @@
 ## Month 2: Path Helpers v0.1
 
 **Target Date:** 8/2/25  
-**Status:** ✅ Completed (Early - 2025-01-16)
+**Status:** ✅ Completed (Early - 2025-07-15)
 
 ### Deliverables
 
-- [x] CBOR integration foundation ✅ 2025-01-16
-- [x] DirV1 type definitions ✅ 2025-01-16
-- [x] Comprehensive unit tests (66 Phase 1 tests) ✅ 2025-01-16
-- [x] Basic get/put for single-level directories (Phase 2) ✅ 2025-01-16
-- [x] Path-based API implementation (get, put, delete, list, getMetadata) ✅ 2025-01-16
-- [x] Cursor-based pagination support (Phase 2.2) ✅ 2025-01-16
-- [x] Initial API documentation ✅ 2025-01-16
+- [x] CBOR integration foundation ✅ 2025-07-15
+- [x] DirV1 type definitions ✅ 2025-07-15
+- [x] Comprehensive unit tests (66 Phase 1 tests) ✅ 2025-07-15
+- [x] Basic get/put for single-level directories (Phase 2) ✅ 2025-07-15
+- [x] Path-based API implementation (get, put, delete, list, getMetadata) ✅ 2025-07-15
+- [x] Cursor-based pagination support (Phase 2.2) ✅ 2025-07-15
+- [x] Initial API documentation ✅ 2025-07-15
 
 ### Success Criteria
 
@@ -93,7 +90,7 @@
 
 - [ ] Multi-level directory update with single `registrySet`
 - [ ] LWW conflict resolution
-- [x] Cursor-based pagination ✅ 2025-01-16
+- [x] Cursor-based pagination ✅ 2025-07-15
 - [ ] Documentation and examples
 - [ ] HAMT integration
 
@@ -274,5 +271,4 @@
 
 - All deliverables MIT licensed
 - Code will be submitted as PRs to upstream s5.js repository
-- Temporary fork at github.com/Fabstir/s5.js until merged
-```
+- Temporary fork at github.com/julesl23/s5.js until merged
