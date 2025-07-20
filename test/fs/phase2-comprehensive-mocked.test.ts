@@ -601,7 +601,7 @@ describe("Phase 2 - Comprehensive Tests", () => {
         const metadata = await fs.getMetadata(`home/timestamps/file${i}.txt`);
         // S5 stores timestamps in seconds, so we lose millisecond precision
         // We need to compare at second precision
-        const expectedTimestamp = Math.floor(timestamps[i] / 1000) * 1000;
+        const expectedTimestamp = new Date(Math.floor(timestamps[i] / 1000) * 1000).toISOString();
         expect(metadata?.timestamp).toBe(expectedTimestamp);
       }
     });

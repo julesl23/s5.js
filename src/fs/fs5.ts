@@ -292,11 +292,21 @@ export class FS5 {
             const dir = await this._loadDirectory('');
             if (!dir) return undefined;
             
+            const oldestTimestamp = this._getOldestTimestamp(dir);
+            const newestTimestamp = this._getNewestTimestamp(dir);
+            
             return {
                 type: 'directory',
-                name: '/',
+                name: 'root',
                 fileCount: dir.files.size,
-                directoryCount: dir.dirs.size
+                directoryCount: dir.dirs.size,
+                sharding: dir.header.sharding,
+                created: oldestTimestamp 
+                    ? new Date(oldestTimestamp * 1000).toISOString()
+                    : undefined,
+                modified: newestTimestamp
+                    ? new Date(newestTimestamp * 1000).toISOString()
+                    : undefined
             };
         }
         
@@ -310,12 +320,11 @@ export class FS5 {
         // Check if it's a file
         const fileRef = parentDir.files.get(itemName);
         if (fileRef) {
+            const metadata = this._extractFileMetadata(fileRef);
             return {
                 type: 'file',
                 name: itemName,
-                size: Number(fileRef.size),
-                mediaType: fileRef.media_type || 'application/octet-stream',
-                timestamp: fileRef.timestamp ? fileRef.timestamp * 1000 : undefined // Convert to milliseconds
+                ...metadata
             };
         }
         
@@ -326,12 +335,23 @@ export class FS5 {
             const dir = await this._loadDirectory(segments.join('/'));
             if (!dir) return undefined;
             
+            const oldestTimestamp = this._getOldestTimestamp(dir);
+            const newestTimestamp = this._getNewestTimestamp(dir);
+            const dirMetadata = this._extractDirMetadata(dirRef);
+            
             return {
                 type: 'directory',
                 name: itemName,
                 fileCount: dir.files.size,
                 directoryCount: dir.dirs.size,
-                timestamp: dirRef.ts_seconds ? dirRef.ts_seconds * 1000 : undefined // Convert to milliseconds
+                sharding: dir.header.sharding,
+                created: oldestTimestamp 
+                    ? new Date(oldestTimestamp * 1000).toISOString()
+                    : undefined,
+                modified: newestTimestamp
+                    ? new Date(newestTimestamp * 1000).toISOString()
+                    : undefined,
+                ...dirMetadata
             };
         }
         
@@ -989,6 +1009,97 @@ export class FS5 {
         const preprocessedPath = await this._preprocessLocalPath(path || 'home');
         const result = await this.runTransactionOnDirectory(preprocessedPath, updater);
         result.unwrap();
+    }
+
+    /**
+     * Get the oldest timestamp from all files and subdirectories in a directory
+     * @param dir Directory to scan
+     * @returns Oldest timestamp in seconds, or undefined if no timestamps found
+     */
+    private _getOldestTimestamp(dir: DirV1): number | undefined {
+        let oldest: number | undefined;
+
+        // Check all files
+        for (const [_, file] of dir.files) {
+            if (file.timestamp && (!oldest || file.timestamp < oldest)) {
+                oldest = file.timestamp;
+            }
+        }
+
+        // Check all subdirectories
+        for (const [_, subdir] of dir.dirs) {
+            if (subdir.ts_seconds && (!oldest || subdir.ts_seconds < oldest)) {
+                oldest = subdir.ts_seconds;
+            }
+        }
+
+        return oldest;
+    }
+
+    /**
+     * Get the newest timestamp from all files and subdirectories in a directory
+     * @param dir Directory to scan
+     * @returns Newest timestamp in seconds, or undefined if no timestamps found
+     */
+    private _getNewestTimestamp(dir: DirV1): number | undefined {
+        let newest: number | undefined;
+
+        // Check all files
+        for (const [_, file] of dir.files) {
+            if (file.timestamp && (!newest || file.timestamp > newest)) {
+                newest = file.timestamp;
+            }
+        }
+
+        // Check all subdirectories
+        for (const [_, subdir] of dir.dirs) {
+            if (subdir.ts_seconds && (!newest || subdir.ts_seconds > newest)) {
+                newest = subdir.ts_seconds;
+            }
+        }
+
+        return newest;
+    }
+
+    /**
+     * Extract detailed metadata from a FileRef
+     * @param file FileRef to extract metadata from
+     * @returns Metadata object with all file properties
+     */
+    private _extractFileMetadata(file: FileRef): Record<string, any> {
+        const metadata: Record<string, any> = {
+            size: Number(file.size),
+            mediaType: file.media_type || 'application/octet-stream',
+            timestamp: file.timestamp
+                ? new Date(file.timestamp * 1000).toISOString()
+                : undefined,
+            custom: file.extra ? Object.fromEntries(file.extra) : undefined,
+        };
+
+        // Add optional fields if present
+        if (file.locations && file.locations.length > 0) {
+            metadata.locations = file.locations;
+        }
+
+        if (file.prev) {
+            metadata.hasHistory = true;
+        }
+
+        return metadata;
+    }
+
+    /**
+     * Extract metadata from a DirRef
+     * @param dir DirRef to extract metadata from
+     * @returns Metadata object with directory properties
+     */
+    private _extractDirMetadata(dir: DirRef): Record<string, any> {
+        return {
+            timestamp: dir.ts_seconds
+                ? new Date(dir.ts_seconds * 1000).toISOString()
+                : undefined,
+            extra: dir.extra,
+        };
     }
 }
 interface KeySet {

@@ -83,11 +83,13 @@
   - [x] Implement \_updateDirectory with LWW conflict resolution
   - [ ] Implement \_createEmptyDirectory (handled by existing createDirectory)
   - [ ] Implement \_getFileFromDirectory (integrated into get method)
-- [ ] **2.4 Metadata Extraction** (partially complete)
-  - [ ] Implement \_getOldestTimestamp
-  - [ ] Implement \_getNewestTimestamp
-  - [ ] Implement \_extractFileMetadata (basic version in getMetadata)
-  - [ ] Implement \_extractDirMetadata (basic version in getMetadata)
+- [x] **2.4 Metadata Extraction** ✅ 2025-01-20
+  - [x] Implement \_getOldestTimestamp
+  - [x] Implement \_getNewestTimestamp
+  - [x] Implement \_extractFileMetadata (full version with locations, history)
+  - [x] Implement \_extractDirMetadata (with timestamp ISO formatting)
+  - [x] Enhanced getMetadata to include created/modified timestamps for directories
+  - [x] Added comprehensive test suite (19 tests) for metadata extraction
 - [x] **2.5 Directory Operations** ✅ 2025-01-16
   - [x] Update createDirectory to use new structure (existing method works)
   - [x] Update createFile to use FileRef (existing method works)

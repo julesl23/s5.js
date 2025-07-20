@@ -293,7 +293,7 @@ describe("Path-Based API - Simple Integration", () => {
       magic: "S5.pro",
       header: {},
       dirs: new Map(),
-      files: new Map([["inner.txt", { hash: new Uint8Array(32), size: 10 }]])
+      files: new Map([["inner.txt", { hash: new Uint8Array(32), size: 10, timestamp: 1234567890 }]])
     };
 
     (fs as any)._loadDirectory = async (path: string) => {
@@ -309,18 +309,23 @@ describe("Path-Based API - Simple Integration", () => {
       name: 'test.txt',
       size: 42,
       mediaType: 'text/plain',
-      timestamp: 1234567890000 // Converted to milliseconds
+      timestamp: new Date(1234567890 * 1000).toISOString(), // Now returns ISO string
+      custom: undefined
     });
 
     // Get directory metadata
     const dirMeta = await fs.getMetadata("home/subdir");
-    expect(dirMeta).toEqual({
+    expect(dirMeta).toMatchObject({
       type: 'directory',
       name: 'subdir',
       fileCount: 1,
       directoryCount: 0,
-      timestamp: 1234567890000 // Converted to milliseconds
+      sharding: undefined,
+      timestamp: new Date(1234567890 * 1000).toISOString() // Now returns ISO string
     });
+    // Check for created/modified timestamps which depend on directory contents
+    expect(dirMeta?.created).toBeDefined();
+    expect(dirMeta?.modified).toBeDefined();
 
     // Get non-existent metadata
     const notFound = await fs.getMetadata("home/missing");
