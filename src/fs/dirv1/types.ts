@@ -24,9 +24,34 @@ export interface DirRef {
   ts_nanos?: number;
 }
 
+/**
+ * HAMT sharding configuration for large directories
+ */
+export interface HAMTShardingConfig {
+  type: "hamt";
+  config: {
+    bitsPerLevel: number;      // Default: 5 (32-way branching)
+    maxInlineEntries: number;  // Default: 1000 (trigger point)
+    hashFunction: 0 | 1;       // 0=xxhash64, 1=blake3
+  };
+  root?: {
+    cid: Uint8Array;          // Root HAMT node CID
+    totalEntries: number;      // Total entries in HAMT
+    depth: number;            // Maximum depth of tree
+  };
+}
+
+/**
+ * Directory header with optional extensions
+ */
+export interface DirHeader {
+  sharding?: HAMTShardingConfig;
+  [key: string]: any;  // Allow other extensions
+}
+
 export interface DirV1 {
   magic: string; // "S5.pro"
-  header: Record<string, any>;
+  header: DirHeader;
   dirs: Map<string, DirRef>;
   files: Map<string, FileRef>;
 }

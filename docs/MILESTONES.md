@@ -11,7 +11,7 @@
 | ----- | ----------- | -------------- | -------- |
 | 1     | 7/2/25      | ✅ Completed   | 100%     |
 | 2     | 8/2/25      | ✅ Completed   | 100%     |
-| 3     | 9/2/25      | ⏳ Pending     | 0%       |
+| 3     | 9/2/25      | 🚧 In Progress | 25%      |
 | 4     | 10/2/25     | ⏳ Pending     | 0%       |
 | 5     | 11/2/25     | ⏳ Pending     | 0%       |
 | 6     | 12/2/25     | ⏳ Pending     | 0%       |
@@ -87,27 +87,40 @@
 ## Month 3: Path-cascade Optimisation
 
 **Target Date:** 9/2/25  
-**Status:** ⏳ Pending
+**Status:** 🚧 In Progress (Week 1 of 4 Complete)
 
 ### Planned Deliverables
 
-- [ ] Multi-level directory update with single `registrySet`
-- [ ] LWW conflict resolution
+- [x] Multi-level directory update with single `registrySet` ✅ 2025-01-16
+- [x] LWW conflict resolution ✅ 2025-01-16
 - [x] Cursor-based pagination ✅ 2025-01-16
 - [ ] Documentation and examples
-- [ ] HAMT integration
+- [ ] HAMT integration (Week 1/4 Complete)
+  - [x] Basic HAMT structure and operations ✅ 2025-01-20
+  - [x] Bitmap operations and hash functions ✅ 2025-01-20
+  - [ ] Node splitting and navigation (Week 2)
+  - [ ] FS5 integration and auto-sharding (Week 3)
+  - [ ] Performance benchmarks (Week 4)
+
+### Progress Details
+
+**Week 1 (2025-01-20):** ✅ Complete
+- Created HAMT implementation with basic insert/get
+- Implemented bitmap operations for 32-way branching
+- Added xxhash64 and blake3 hash function support
+- 32 new tests passing (183 total tests)
 
 ### Success Criteria
 
-- Deep path updates result in exactly one `registrySet` call
-- Concurrent writes resolve correctly
-- HAMT activates at 1000+ entries
-- Performance benchmarks established
+- Deep path updates result in exactly one `registrySet` call ✅
+- Concurrent writes resolve correctly ✅
+- HAMT activates at 1000+ entries (pending Week 3)
+- Performance benchmarks established (pending Week 4)
 
 ### Dependencies
 
-- Path helpers v0.1 complete
-- HAMT implementation ready
+- Path helpers v0.1 complete ✅
+- HAMT implementation ready (Week 1/4 complete)
 
 ---
 

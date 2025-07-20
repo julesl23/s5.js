@@ -106,26 +106,26 @@
 
 ### Phase 3: HAMT Integration (Design Doc 1, Grant Month 3)
 
-- [ ] **3.1 HAMT Implementation**
-  - [ ] Create src/fs/hamt/hamt.ts
-  - [ ] Implement HAMTNode structure
-  - [ ] Implement insert method
-  - [ ] Implement get method
-  - [ ] Implement entries async iterator
-  - [ ] Implement entriesFrom for cursor support
-  - [ ] Implement getPathForKey for cursor generation
-- [ ] **3.2 HAMT Operations**
-  - [ ] Implement node splitting logic
-  - [ ] Implement hash functions (xxhash64/blake3)
-  - [ ] Implement bitmap operations
-  - [ ] Implement node serialisation/deserialisation
-  - [ ] Implement memory management (allocate/free)
-- [ ] **3.3 Directory Integration**
+- [ ] **3.1 HAMT Implementation** (Week 1 Complete ✅ 2025-01-20)
+  - [x] Create src/fs/hamt/hamt.ts
+  - [x] Implement HAMTNode structure
+  - [x] Implement insert method (basic leaf insertion)
+  - [x] Implement get method (leaf retrieval)
+  - [x] Implement entries async iterator (basic version)
+  - [ ] Implement entriesFrom for cursor support (Week 2)
+  - [ ] Implement getPathForKey for cursor generation (Week 2)
+- [ ] **3.2 HAMT Operations** (Week 1 Partial ✅ 2025-01-20)
+  - [ ] Implement node splitting logic (Week 2)
+  - [x] Implement hash functions (xxhash64/blake3)
+  - [x] Implement bitmap operations (HAMTBitmapOps class)
+  - [x] Implement node serialisation/deserialisation (basic)
+  - [ ] Implement memory management (allocate/free) (Week 3)
+- [ ] **3.3 Directory Integration** (Week 3)
   - [ ] Implement \_serialiseShardedDirectory
   - [ ] Implement \_listWithHAMT
   - [ ] Update \_getFileFromDirectory for HAMT
   - [ ] Test automatic sharding activation
-- [ ] **3.4 Performance Verification**
+- [ ] **3.4 Performance Verification** (Week 4)
   - [ ] Benchmark 10K entries
   - [ ] Benchmark 100K entries
   - [ ] Benchmark 1M entries
