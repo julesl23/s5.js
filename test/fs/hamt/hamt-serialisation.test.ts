@@ -119,6 +119,13 @@ describe("HAMT Serialisation", () => {
     });
 
     test("should serialise internal nodes with CID references", async () => {
+      // Create HAMT with lower threshold to force node creation
+      hamt = new HAMT(api as any, {
+        bitsPerLevel: 5,
+        maxInlineEntries: 8,
+        hashFunction: 0
+      });
+
       // Insert enough entries to force internal nodes
       for (let i = 0; i < 50; i++) {
         const ref: FileRef = {
@@ -335,8 +342,15 @@ describe("HAMT Serialisation", () => {
 
   describe("Node caching", () => {
     test("should cache nodes by CID string", async () => {
-      // Insert entries
-      for (let i = 0; i < 30; i++) {
+      // Create HAMT with lower threshold to force node creation
+      hamt = new HAMT(api as any, {
+        bitsPerLevel: 5,
+        maxInlineEntries: 8,
+        hashFunction: 0
+      });
+
+      // Insert entries to create deep structure
+      for (let i = 0; i < 50; i++) {
         const ref: FileRef = {
           hash: new Uint8Array(32).fill(i),
           size: 100
@@ -344,18 +358,17 @@ describe("HAMT Serialisation", () => {
         await hamt.insert(`f:cache${i}.txt`, ref);
       }
 
-      // Access same entry multiple times
-      const key = "f:cache15.txt";
-      const result1 = await hamt.get(key);
-      const result2 = await hamt.get(key);
-      const result3 = await hamt.get(key);
+      // Serialize and deserialize to force node loading
+      const serialized = hamt.serialise();
+      const hamt2 = await HAMT.deserialise(serialized, api as any);
 
-      // Should return same result
-      expect(result1).toEqual(result2);
-      expect(result2).toEqual(result3);
+      // Access entries to trigger node loading
+      const result1 = await hamt2.get("f:cache15.txt");
+      const result2 = await hamt2.get("f:cache25.txt");
+      const result3 = await hamt2.get("f:cache35.txt");
 
-      // Check cache exists
-      const nodeCache = (hamt as any).nodeCache;
+      // Check cache exists and has entries
+      const nodeCache = (hamt2 as any).nodeCache;
       expect(nodeCache).toBeDefined();
       expect(nodeCache.size).toBeGreaterThan(0);
     });

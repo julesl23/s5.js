@@ -220,7 +220,7 @@ export class HAMT {
       const newNode: HAMTNode = {
         bitmap: 0,
         children: [],
-        count: leaf.entries.length,
+        count: 0, // Will be updated as we insert
         depth: depth + 1
       };
 
@@ -522,22 +522,34 @@ export class HAMT {
     cursor: number[],
     depth: number
   ): AsyncIterableIterator<[string, FileRef | DirRef]> {
-    const startIndex = depth < cursor.length ? cursor[depth] : 0;
+    // Special case: if we have a single leaf at index 0
+    if (node.children.length === 1 && 
+        node.children[0].type === "leaf" && 
+        node.bitmap === 1 &&
+        depth === 0) {
+      const leaf = node.children[0];
+      // Skip entries up to and including cursor position
+      const startEntry = cursor.length >= 2 ? cursor[1] + 1 : 0;
+      for (let j = startEntry; j < leaf.entries.length; j++) {
+        yield leaf.entries[j];
+      }
+      return;
+    }
+
+    const startIndex = depth * 2 < cursor.length ? cursor[depth * 2] : 0;
 
     for (let i = startIndex; i < node.children.length; i++) {
       const child = node.children[i];
       
       if (child.type === "leaf") {
-        // For leaf nodes, skip entries if we're at the cursor depth
-        const skipEntries = depth === cursor.length - 2 && i === startIndex;
         let startEntry = 0;
         
-        if (skipEntries && cursor.length > depth + 1) {
-          // Skip to the entry after the cursor position
-          startEntry = cursor[depth + 1] + 1;
-        } else if (i === startIndex && depth === cursor.length - 1) {
-          // Skip entire leaf if it's the cursor leaf
-          continue;
+        // If this is the leaf at cursor position, skip entries
+        if (i === startIndex && depth * 2 + 1 < cursor.length) {
+          startEntry = cursor[depth * 2 + 1] + 1;
+        } else if (i > startIndex) {
+          // For leaves after the cursor position, include all entries
+          startEntry = 0;
         }
         
         for (let j = startEntry; j < child.entries.length; j++) {
@@ -547,8 +559,8 @@ export class HAMT {
         // Load and iterate child node
         const childNode = await this._loadNode(child.cid);
         
-        if (i === startIndex && depth + 1 < cursor.length) {
-          // Continue from cursor position
+        if (i === startIndex && depth * 2 + 2 < cursor.length) {
+          // Continue from cursor position in child
           yield* this._iterateNodeFrom(childNode, cursor, depth + 1);
         } else {
           // Iterate entire subtree
@@ -584,6 +596,20 @@ export class HAMT {
     key: string,
     path: number[]
   ): Promise<boolean> {
+    // Special case: if we have a single leaf at index 0, search in it
+    if (node.children.length === 1 && 
+        node.children[0].type === "leaf" && 
+        node.bitmap === 1) {
+      const leaf = node.children[0];
+      const entryIndex = leaf.entries.findIndex(([k, _]) => k === key);
+      if (entryIndex >= 0) {
+        path.push(0); // Child index
+        path.push(entryIndex); // Entry index
+        return true;
+      }
+      return false;
+    }
+
     const index = this.bitmapOps.getIndex(hash, depth);
 
     if (!this.bitmapOps.hasBit(node.bitmap, index)) {
