@@ -83,6 +83,107 @@ export class HAMT {
   }
 
   /**
+   * Delete a key-value pair from the HAMT
+   * @param key Key to delete
+   * @returns true if deleted, false if not found
+   */
+  async delete(key: string): Promise<boolean> {
+    await this.ensureInitialized();
+    
+    if (!this.rootNode) {
+      return false;
+    }
+
+    const hash = await this.hasher.hashKey(key, this.config.hashFunction);
+    const deleted = await this._deleteFromNode(this.rootNode, hash, 0, key);
+    
+    // If root becomes empty after deletion, reset it
+    if (this.rootNode.count === 0) {
+      this.rootNode = null;
+    }
+    
+    return deleted;
+  }
+
+  /**
+   * Delete from a specific node
+   */
+  private async _deleteFromNode(
+    node: HAMTNode,
+    hash: bigint,
+    depth: number,
+    key: string
+  ): Promise<boolean> {
+    // Special case: if we have a single leaf at index 0
+    if (node.children.length === 1 && 
+        node.children[0].type === "leaf" && 
+        node.bitmap === 1) {
+      const leaf = node.children[0];
+      const entryIndex = leaf.entries.findIndex(([k, _]) => k === key);
+      
+      if (entryIndex >= 0) {
+        leaf.entries.splice(entryIndex, 1);
+        node.count--;
+        
+        // If leaf becomes empty, remove it
+        if (leaf.entries.length === 0) {
+          node.children = [];
+          node.bitmap = 0;
+        }
+        
+        return true;
+      }
+      return false;
+    }
+
+    const index = this.bitmapOps.getIndex(hash, depth);
+
+    if (!this.bitmapOps.hasBit(node.bitmap, index)) {
+      return false; // No child at this position
+    }
+
+    const childIndex = this.bitmapOps.getChildIndex(node.bitmap, index);
+    const child = node.children[childIndex];
+
+    if (child.type === "leaf") {
+      const entryIndex = child.entries.findIndex(([k, _]) => k === key);
+      
+      if (entryIndex >= 0) {
+        child.entries.splice(entryIndex, 1);
+        node.count--;
+        
+        // If leaf becomes empty, remove it from parent
+        if (child.entries.length === 0) {
+          node.children.splice(childIndex, 1);
+          node.bitmap = this.bitmapOps.unsetBit(node.bitmap, index);
+        }
+        
+        return true;
+      }
+      return false;
+    } else {
+      // Navigate to child node
+      const childNode = await this._loadNode(child.cid);
+      const deleted = await this._deleteFromNode(childNode, hash, depth + 1, key);
+      
+      if (deleted) {
+        node.count--;
+        
+        // Update the stored node
+        if (childNode.count > 0) {
+          await this._storeNode(childNode, child.cid);
+        } else {
+          // Child node is empty, remove it
+          node.children.splice(childIndex, 1);
+          node.bitmap = this.bitmapOps.unsetBit(node.bitmap, index);
+        }
+      }
+      
+      return deleted;
+    }
+  }
+
+  /**
    * Insert at a specific node
    */
   private async _insertAtNode(

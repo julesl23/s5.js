@@ -34,6 +34,13 @@ export class HAMTBitmapOps {
   }
 
   /**
+   * Unset bit at index
+   */
+  unsetBit(bitmap: number, index: number): number {
+    return bitmap & ~(1 << index);
+  }
+
+  /**
    * Count bits set before index (popcount)
    * Used to find child position in sparse array
    */

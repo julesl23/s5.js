@@ -130,4 +130,5 @@ export interface CursorData {
   position: string; // Current position (name of last item)
   type: 'file' | 'directory'; // Type of last item
   timestamp?: number; // For stability checks
+  path?: number[]; // HAMT path for cursor positioning
 }

@@ -1,6 +1,3 @@
-## IMPLEMENTATION.md
-
-```markdown
 # Enhanced S5.js Implementation Progress
 
 ## Current Status
@@ -14,15 +11,15 @@
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure (Design Doc 1, Grant Month 2) ✅ 2025-01-16
+### Phase 1: Core Infrastructure (Design Doc 1, Grant Month 2) ✅ 2025-07-15
 
-- [x] **1.1 Add CBOR Dependencies** ✅ 2025-01-16
+- [x] **1.1 Add CBOR Dependencies** ✅ 2025-07-15
   - [x] Install cbor-x package
   - [ ] Install xxhash-wasm package (deferred to Phase 3)
   - [x] Install @noble/hashes package
   - [ ] Verify bundle size impact (deferred to later phase)
   - [ ] Create bundle size baseline measurement (deferred to later phase)
-- [x] **1.2 Create DirV1 Types Matching Rust** ✅ 2025-01-16
+- [x] **1.2 Create DirV1 Types Matching Rust** ✅ 2025-07-15
   - [x] Create src/fs/dirv1/types.ts
   - [x] Define DirV1 interface
   - [x] Define DirHeader interface (currently empty object)
@@ -30,11 +27,11 @@
   - [x] Define FileRef interface (with all optional fields)
   - [x] Define BlobLocation types
   - [x] Define DirLink types
-  - [ ] Define HAMTShardingConfig interface (deferred to Phase 3)
-  - [x] Define PutOptions interface (deferred to Phase 2) ✅ 2025-01-16
-  - [x] Define ListOptions interface (deferred to Phase 2) ✅ 2025-01-16
+  - [x] Define HAMTShardingConfig interface ✅ 2025-07-19
+  - [x] Define PutOptions interface ✅ 2025-07-15
+  - [x] Define ListOptions interface ✅ 2025-07-15
   - [x] Write comprehensive type tests
-- [x] **1.3 Create CBOR Configuration** ✅ 2025-01-16
+- [x] **1.3 Create CBOR Configuration** ✅ 2025-07-15
   - [x] Create src/fs/dirv1/cbor-config.ts
   - [x] Configure deterministic encoding
   - [x] Setup encoder with S5-required settings
@@ -42,7 +39,7 @@
   - [x] Create helper functions (encodeS5, decodeS5)
   - [x] Implement createOrderedMap for consistent ordering
   - [x] Test deterministic encoding
-- [x] **1.4 Implement CBOR Serialisation Matching Rust** ✅ 2025-01-16
+- [x] **1.4 Implement CBOR Serialisation Matching Rust** ✅ 2025-07-15
   - [x] Create src/fs/dirv1/serialisation.ts
   - [x] Define CBOR integer key mappings (matching Rust's #[n(X)])
   - [x] Implement DirV1Serialiser class
@@ -54,7 +51,7 @@
   - [x] Implement DirLink serialisation (33-byte format)
   - [x] Implement BlobLocation serialisation
   - [x] Cross-verify with Rust test vectors
-- [x] **1.5 Comprehensive Phase 1 Tests** ✅ 2025-01-16
+- [x] **1.5 Comprehensive Phase 1 Tests** ✅ 2025-07-15
   - [x] Create cbor-serialisation.test.ts
   - [x] Create edge-cases.test.ts
   - [x] Create deserialisation.test.ts
@@ -62,9 +59,9 @@
   - [x] Create integration.test.ts
   - [x] All 66 tests passing
 
-### Phase 2: Path-Based API Implementation (Design Doc 1, Grant Month 3) ✅ 2025-01-16
+### Phase 2: Path-Based API Implementation (Design Doc 1, Grant Month 3) ✅ 2025-07-15
 
-- [x] **2.1 Extend FS5 Class** ✅ 2025-01-16
+- [x] **2.1 Extend FS5 Class** ✅ 2025-07-15
   - [ ] Add nodeCache for directory caching (deferred to later phase)
   - [x] Implement get(path) method
   - [x] Implement put(path, data, options) method
@@ -72,41 +69,41 @@
   - [x] Implement list(path, options) async iterator
   - [x] Implement delete(path) method
   - [x] Add GetOptions interface for default file resolution
-- [x] **2.2 Cursor Implementation** ✅ 2025-01-16
+- [x] **2.2 Cursor Implementation** ✅ 2025-07-15
   - [x] Implement \_encodeCursor with deterministic CBOR
   - [x] Implement \_parseCursor with validation
   - [x] Add cursor support to list method
   - [x] Test cursor stability across operations
-- [x] **2.3 Internal Navigation Methods** ✅ 2025-01-16
+- [x] **2.3 Internal Navigation Methods** ✅ 2025-07-15
   - [ ] Implement \_resolvePath method (not needed - path handling integrated)
   - [x] Implement \_loadDirectory with caching
   - [x] Implement \_updateDirectory with LWW conflict resolution
   - [ ] Implement \_createEmptyDirectory (handled by existing createDirectory)
   - [ ] Implement \_getFileFromDirectory (integrated into get method)
-- [x] **2.4 Metadata Extraction** ✅ 2025-01-20
+- [x] **2.4 Metadata Extraction** ✅ 2025-07-19
   - [x] Implement \_getOldestTimestamp
   - [x] Implement \_getNewestTimestamp
   - [x] Implement \_extractFileMetadata (full version with locations, history)
   - [x] Implement \_extractDirMetadata (with timestamp ISO formatting)
   - [x] Enhanced getMetadata to include created/modified timestamps for directories
   - [x] Added comprehensive test suite (19 tests) for metadata extraction
-- [x] **2.5 Directory Operations** ✅ 2025-01-16
+- [x] **2.5 Directory Operations** ✅ 2025-07-15
   - [x] Update createDirectory to use new structure (existing method works)
   - [x] Update createFile to use FileRef (existing method works)
   - [ ] Implement automatic sharding trigger (>1000 entries) (deferred to Phase 3)
   - [ ] Add retry logic for concurrent updates (deferred to later phase)
-- [x] **2.6 Comprehensive Edge Case Handling** ✅ 2025-01-18
+- [x] **2.6 Comprehensive Edge Case Handling** ✅ 2025-07-17
   - [x] Unicode and special character support in paths
   - [x] Path normalization (multiple slashes, trailing slashes)
   - [x] Media type inference from file extensions
   - [x] Null/undefined data handling
   - [x] CBOR Map to object conversion
   - [x] Timestamp handling (seconds to milliseconds conversion)
-  - [x] Created comprehensive test suite (132/132 tests passing) ✅ 2025-01-18
+  - [x] Created comprehensive test suite (132/132 tests passing) ✅ 2025-07-17
 
 ### Phase 3: HAMT Integration (Design Doc 1, Grant Month 3)
 
-- [ ] **3.1 HAMT Implementation** (Week 1 Complete ✅ 2025-01-20, Week 2 Complete ✅ 2025-01-20)
+- [x] **3.1 HAMT Implementation** ✅ Week 1 Complete (2025-07-19), Week 2 Complete (2025-07-20)
   - [x] Create src/fs/hamt/hamt.ts
   - [x] Implement HAMTNode structure
   - [x] Implement insert method (with node splitting)
@@ -114,18 +111,22 @@
   - [x] Implement entries async iterator (full traversal)
   - [x] Implement entriesFrom for cursor support (Week 2 ✅)
   - [x] Implement getPathForKey for cursor generation (Week 2 ✅)
-- [ ] **3.2 HAMT Operations** (Week 2 Complete ✅ 2025-01-20)
+- [x] **3.2 HAMT Operations** ✅ Week 2 Complete (2025-07-20)
   - [x] Implement node splitting logic (Week 2 ✅)
   - [x] Implement hash functions (xxhash64/blake3)
   - [x] Implement bitmap operations (HAMTBitmapOps class)
   - [x] Implement node serialisation/deserialisation (with CBOR)
   - [x] Implement node caching (Week 2 ✅)
-  - [ ] Implement memory management (allocate/free) (Week 3)
-- [ ] **3.3 Directory Integration** (Week 3)
-  - [ ] Implement \_serialiseShardedDirectory
-  - [ ] Implement \_listWithHAMT
-  - [ ] Update \_getFileFromDirectory for HAMT
-  - [ ] Test automatic sharding activation
+  - [x] Implement delete method ✅ (2025-07-20)
+  - [ ] Implement memory management (allocate/free) (deferred)
+- [x] **3.3 Directory Integration** ✅ Week 3 Complete (2025-07-20)
+  - [x] Implement \_serialiseShardedDirectory
+  - [x] Implement \_listWithHAMT
+  - [x] Update \_getFileFromDirectory for HAMT
+  - [x] Add \_getDirectoryFromDirectory for HAMT
+  - [x] Implement \_checkAndConvertToSharded
+  - [x] Test automatic sharding activation at 1000 entries
+  - [x] Update all FS5 operations for HAMT support
 - [ ] **3.4 Performance Verification** (Week 4)
   - [ ] Benchmark 10K entries
   - [ ] Benchmark 100K entries
@@ -258,4 +259,3 @@
 - Follow existing code conventions
 - Commit regularly with clear messages
 - Create feature branches for each phase
-```

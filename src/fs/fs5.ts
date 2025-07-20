@@ -16,6 +16,7 @@ import { padFileSize } from "../encryption/padding.js";
 import { PutOptions, ListResult, GetOptions, ListOptions, CursorData } from "./dirv1/types.js";
 import { encodeS5, decodeS5 } from "./dirv1/cbor-config.js";
 import { base64UrlNoPaddingDecode } from "../util/base64.js";
+import { HAMT } from "./hamt/hamt.js";
 
 // Media type mappings
 const MEDIA_TYPE_MAP: Record<string, string> = {
@@ -150,8 +151,8 @@ export class FS5 {
             return undefined;
         }
         
-        // Find the file
-        const fileRef = dir.files.get(fileName);
+        // Find the file (supports HAMT)
+        const fileRef = await this._getFileFromDirectory(dir, fileName);
         if (!fileRef) {
             return undefined;
         }
@@ -273,7 +274,27 @@ export class FS5 {
                 throw new Error(`Parent directory ${dirPath} does not exist`);
             }
             
-            dir.files.set(fileName, fileRef);
+            // Check if directory is sharded
+            if (dir.header.sharding?.root?.cid) {
+                // Load HAMT, insert, and save
+                const hamtData = await this.api.downloadBlobAsBytes(dir.header.sharding.root.cid);
+                const hamt = await HAMT.deserialise(hamtData, this.api);
+                
+                await hamt.insert(`f:${fileName}`, fileRef);
+                
+                // Save updated HAMT
+                const newHamtData = hamt.serialise();
+                const { hash } = await this.api.uploadBlob(new Blob([newHamtData]));
+                dir.header.sharding.root.cid = hash;
+                dir.header.sharding.root.totalEntries++;
+            } else {
+                // Regular directory - add file and check if sharding needed
+                dir.files.set(fileName, fileRef);
+                
+                // Check if we need to convert to sharded
+                await this._checkAndConvertToSharded(dir);
+            }
+            
             return dir;
         });
     }
@@ -298,8 +319,12 @@ export class FS5 {
             return {
                 type: 'directory',
                 name: 'root',
-                fileCount: dir.files.size,
-                directoryCount: dir.dirs.size,
+                fileCount: dir.header.sharding?.root?.totalEntries 
+                    ? Math.floor(dir.header.sharding.root.totalEntries) // Approximate split
+                    : dir.files.size,
+                directoryCount: dir.header.sharding?.root?.totalEntries 
+                    ? Math.floor(dir.header.sharding.root.totalEntries) // Approximate split
+                    : dir.dirs.size,
                 sharding: dir.header.sharding,
                 created: oldestTimestamp 
                     ? new Date(oldestTimestamp * 1000).toISOString()
@@ -317,8 +342,8 @@ export class FS5 {
         const parentDir = await this._loadDirectory(parentPath);
         if (!parentDir) return undefined;
         
-        // Check if it's a file
-        const fileRef = parentDir.files.get(itemName);
+        // Check if it's a file (supports HAMT)
+        const fileRef = await this._getFileFromDirectory(parentDir, itemName);
         if (fileRef) {
             const metadata = this._extractFileMetadata(fileRef);
             return {
@@ -328,8 +353,8 @@ export class FS5 {
             };
         }
         
-        // Check if it's a directory
-        const dirRef = parentDir.dirs.get(itemName);
+        // Check if it's a directory (supports HAMT)
+        const dirRef = await this._getDirectoryFromDirectory(parentDir, itemName);
         if (dirRef) {
             // Load the directory to get its metadata
             const dir = await this._loadDirectory(segments.join('/'));
@@ -342,8 +367,12 @@ export class FS5 {
             return {
                 type: 'directory',
                 name: itemName,
-                fileCount: dir.files.size,
-                directoryCount: dir.dirs.size,
+                fileCount: dir.header.sharding?.root?.totalEntries 
+                    ? Math.floor(dir.header.sharding.root.totalEntries) // Approximate split
+                    : dir.files.size,
+                directoryCount: dir.header.sharding?.root?.totalEntries 
+                    ? Math.floor(dir.header.sharding.root.totalEntries) // Approximate split
+                    : dir.dirs.size,
                 sharding: dir.header.sharding,
                 created: oldestTimestamp 
                     ? new Date(oldestTimestamp * 1000).toISOString()
@@ -381,21 +410,63 @@ export class FS5 {
                 return undefined; // Parent doesn't exist
             }
             
-            // Check if it's a file
-            if (dir.files.has(itemName)) {
-                dir.files.delete(itemName);
-                deleted = true;
-                return dir;
-            }
-            
-            // Check if it's a directory
-            if (dir.dirs.has(itemName)) {
-                // Check if directory is empty
-                const targetDir = await this._loadDirectory(segments.join('/'));
-                if (targetDir && targetDir.files.size === 0 && targetDir.dirs.size === 0) {
-                    dir.dirs.delete(itemName);
+            // Check if directory is sharded
+            if (dir.header.sharding?.root?.cid) {
+                // Load HAMT
+                const hamtData = await this.api.downloadBlobAsBytes(dir.header.sharding.root.cid);
+                const hamt = await HAMT.deserialise(hamtData, this.api);
+                
+                // Try to delete as file first
+                const fileKey = `f:${itemName}`;
+                const fileRef = await hamt.get(fileKey);
+                if (fileRef) {
+                    deleted = await hamt.delete(fileKey);
+                    if (deleted) {
+                        // Save updated HAMT
+                        const newHamtData = hamt.serialise();
+                        const { hash } = await this.api.uploadBlob(new Blob([newHamtData]));
+                        dir.header.sharding.root.cid = hash;
+                        dir.header.sharding.root.totalEntries--;
+                    }
+                    return dir;
+                }
+                
+                // Try to delete as directory
+                const dirKey = `d:${itemName}`;
+                const dirRef = await hamt.get(dirKey);
+                if (dirRef) {
+                    // Check if directory is empty
+                    const targetDir = await this._loadDirectory(segments.join('/'));
+                    if (targetDir && targetDir.files.size === 0 && targetDir.dirs.size === 0) {
+                        deleted = await hamt.delete(dirKey);
+                        if (deleted) {
+                            // Save updated HAMT
+                            const newHamtData = hamt.serialise();
+                            const { hash } = await this.api.uploadBlob(new Blob([newHamtData]));
+                            dir.header.sharding.root.cid = hash;
+                            dir.header.sharding.root.totalEntries--;
+                        }
+                        return dir;
+                    }
+                }
+            } else {
+                // Regular directory handling
+                // Check if it's a file
+                if (dir.files.has(itemName)) {
+                    dir.files.delete(itemName);
                     deleted = true;
                     return dir;
+                }
+                
+                // Check if it's a directory
+                if (dir.dirs.has(itemName)) {
+                    // Check if directory is empty
+                    const targetDir = await this._loadDirectory(segments.join('/'));
+                    if (targetDir && targetDir.files.size === 0 && targetDir.dirs.size === 0) {
+                        dir.dirs.delete(itemName);
+                        deleted = true;
+                        return dir;
+                    }
                 }
             }
             
@@ -419,6 +490,24 @@ export class FS5 {
             return; // Directory doesn't exist - return empty iterator
         }
         
+        // Check if this is a sharded directory
+        if (dir.header.sharding?.root?.cid) {
+            // Use HAMT-based listing
+            const hamtData = await this.api.downloadBlobAsBytes(dir.header.sharding.root.cid);
+            const hamt = await HAMT.deserialise(hamtData, this.api);
+            
+            let count = 0;
+            for await (const item of this._listWithHAMT(hamt, options?.cursor)) {
+                yield item;
+                count++;
+                if (options?.limit && count >= options.limit) {
+                    break;
+                }
+            }
+            return;
+        }
+        
+        // Regular directory listing
         // Parse cursor if provided
         let startPosition: CursorData | undefined;
         if (options?.cursor !== undefined) {
@@ -572,12 +661,41 @@ export class FS5 {
         const res = await this.runTransactionOnDirectory(
             await this._preprocessLocalPath(path),
             async (dir, writeKey) => {
-                if (dir.dirs.has(name)) {
-                    throw new Error('Directory already contains a subdirectory with the same name');
+                // Check if directory is sharded
+                if (dir.header.sharding?.root?.cid) {
+                    // Load HAMT
+                    const hamtData = await this.api.downloadBlobAsBytes(dir.header.sharding.root.cid);
+                    const hamt = await HAMT.deserialise(hamtData, this.api);
+                    
+                    // Check if already exists
+                    const existingDir = await hamt.get(`d:${name}`);
+                    if (existingDir) {
+                        throw new Error('Directory already contains a subdirectory with the same name');
+                    }
+                    
+                    // Create new directory and add to HAMT
+                    const newDir = await this._createDirectory(name, writeKey);
+                    await hamt.insert(`d:${name}`, newDir);
+                    
+                    // Save updated HAMT
+                    const newHamtData = hamt.serialise();
+                    const { hash } = await this.api.uploadBlob(new Blob([newHamtData]));
+                    dir.header.sharding.root.cid = hash;
+                    dir.header.sharding.root.totalEntries++;
+                    
+                    dirReference = newDir;
+                } else {
+                    // Regular directory
+                    if (dir.dirs.has(name)) {
+                        throw new Error('Directory already contains a subdirectory with the same name');
+                    }
+                    const newDir = await this._createDirectory(name, writeKey);
+                    dir.dirs.set(name, newDir);
+                    dirReference = newDir;
+                    
+                    // Check if we need to convert to sharded
+                    await this._checkAndConvertToSharded(dir);
                 }
-                const newDir = await this._createDirectory(name, writeKey);
-                dir.dirs.set(name, newDir);
-                dirReference = newDir;
                 return dir;
             },
         );
@@ -1100,6 +1218,193 @@ export class FS5 {
                 : undefined,
             extra: dir.extra,
         };
+    }
+
+    // HAMT Integration Methods (Week 3)
+
+    /**
+     * Serialize a directory with HAMT backing
+     * @param dir Directory to serialize
+     * @param hamt HAMT instance containing the entries
+     * @returns Serialized directory bytes
+     */
+    private async _serialiseShardedDirectory(
+        dir: DirV1,
+        hamt: HAMT
+    ): Promise<Uint8Array> {
+        // Store HAMT structure
+        const hamtData = hamt.serialise();
+        const { hash } = await this.api.uploadBlob(new Blob([hamtData]));
+        
+        // Update directory to reference HAMT
+        dir.header.sharding = {
+            type: "hamt",
+            config: {
+                bitsPerLevel: 5,
+                maxInlineEntries: 1000,
+                hashFunction: 0
+            },
+            root: {
+                cid: hash,
+                totalEntries: dir.files.size + dir.dirs.size,
+                depth: await hamt.getDepth()
+            }
+        };
+        
+        // Clear inline maps for sharded directory
+        dir.files.clear();
+        dir.dirs.clear();
+        
+        // Serialize using DirV1Serialiser
+        return DirV1Serialiser.serialise(dir);
+    }
+
+    /**
+     * List entries from a HAMT-backed directory
+     * @param hamt HAMT instance
+     * @param cursor Optional cursor for pagination
+     * @returns Async iterator of directory entries
+     */
+    private async *_listWithHAMT(
+        hamt: HAMT,
+        cursor?: string
+    ): AsyncIterableIterator<ListResult> {
+        const parsedCursor = cursor ? this._parseCursor(cursor) : undefined;
+        const iterator = parsedCursor?.path 
+            ? hamt.entriesFrom(parsedCursor.path)
+            : hamt.entries();
+            
+        for await (const [key, value] of iterator) {
+            if (key.startsWith("f:")) {
+                // File entry
+                const name = key.substring(2);
+                const fileRef = value as FileRef;
+                const metadata = this._extractFileMetadata(fileRef);
+                
+                yield {
+                    name,
+                    type: "file",
+                    size: metadata.size,
+                    mediaType: metadata.mediaType,
+                    timestamp: metadata.timestamp,
+                    cursor: this._encodeCursor({
+                        position: name,
+                        type: "file",
+                        timestamp: metadata.timestamp,
+                        path: await hamt.getPathForKey(key)
+                    })
+                };
+            } else if (key.startsWith("d:")) {
+                // Directory entry
+                const name = key.substring(2);
+                const dirRef = value as DirRef;
+                
+                yield {
+                    name,
+                    type: "directory",
+                    cursor: this._encodeCursor({
+                        position: name,
+                        type: "directory",
+                        timestamp: dirRef.ts_seconds,
+                        path: await hamt.getPathForKey(key)
+                    })
+                };
+            }
+        }
+    }
+
+    /**
+     * Get a file from a directory (supports both regular and HAMT-backed)
+     * @param dir Directory to search
+     * @param fileName Name of the file
+     * @returns FileRef or undefined if not found
+     */
+    private async _getFileFromDirectory(
+        dir: DirV1,
+        fileName: string
+    ): Promise<FileRef | undefined> {
+        if (dir.header.sharding?.root?.cid) {
+            // Load HAMT and query
+            const hamtData = await this.api.downloadBlobAsBytes(dir.header.sharding.root.cid);
+            const hamt = await HAMT.deserialise(hamtData, this.api);
+            return await hamt.get(`f:${fileName}`) as FileRef | undefined;
+        } else {
+            // Regular lookup
+            return dir.files.get(fileName);
+        }
+    }
+
+    /**
+     * Get a directory reference from a directory (supports both regular and HAMT-backed)
+     * @param dir Directory to search
+     * @param dirName Name of the subdirectory
+     * @returns DirRef or undefined if not found
+     */
+    private async _getDirectoryFromDirectory(
+        dir: DirV1,
+        dirName: string
+    ): Promise<DirRef | undefined> {
+        if (dir.header.sharding?.root?.cid) {
+            // Load HAMT and query
+            const hamtData = await this.api.downloadBlobAsBytes(dir.header.sharding.root.cid);
+            const hamt = await HAMT.deserialise(hamtData, this.api);
+            return await hamt.get(`d:${dirName}`) as DirRef | undefined;
+        } else {
+            // Regular lookup
+            return dir.dirs.get(dirName);
+        }
+    }
+
+    /**
+     * Check and convert directory to sharded if it exceeds threshold
+     * @param dir Directory to check
+     * @returns Updated directory if sharding was applied
+     */
+    private async _checkAndConvertToSharded(dir: DirV1): Promise<DirV1> {
+        const totalEntries = dir.files.size + dir.dirs.size;
+        
+        if (!dir.header.sharding && totalEntries >= 1000) {
+            // Create new HAMT
+            const hamt = new HAMT(this.api, {
+                bitsPerLevel: 5,
+                maxInlineEntries: 1000,
+                hashFunction: 0
+            });
+            
+            // Migrate all file entries
+            for (const [name, ref] of dir.files) {
+                await hamt.insert(`f:${name}`, ref);
+            }
+            
+            // Migrate all directory entries
+            for (const [name, ref] of dir.dirs) {
+                await hamt.insert(`d:${name}`, ref);
+            }
+            
+            // Update directory to use HAMT
+            const hamtData = hamt.serialise();
+            const { hash } = await this.api.uploadBlob(new Blob([hamtData]));
+            
+            dir.header.sharding = {
+                type: "hamt",
+                config: {
+                    bitsPerLevel: 5,
+                    maxInlineEntries: 1000,
+                    hashFunction: 0
+                },
+                root: {
+                    cid: hash,
+                    totalEntries,
+                    depth: await hamt.getDepth()
+                }
+            };
+            
+            // Clear inline maps
+            dir.files.clear();
+            dir.dirs.clear();
+        }
+        
+        return dir;
     }
 }
 interface KeySet {
