@@ -52,6 +52,15 @@
   - [Integration with FS5 Class Methods](#integration-with-fs5-class-methods)
   - [Best Practices](#best-practices)
   - [Limitations](#limitations)
+  - [HAMT (Hash Array Mapped Trie) Support](#hamt-hash-array-mapped-trie-support)
+    - [How HAMT Works](#how-hamt-works)
+    - [HAMT Behavior](#hamt-behavior)
+    - [Working with Large Directories](#working-with-large-directories)
+    - [HAMT Implementation Details](#hamt-implementation-details)
+  - [Directory Utilities (Phase 4)](#directory-utilities-phase-4)
+    - [DirectoryWalker](#directorywalker)
+    - [BatchOperations](#batchoperations)
+    - [Directory Utility Examples](#directory-utility-examples)
   - [Performance Considerations](#performance-considerations)
   - [Next Steps](#next-steps)
 
@@ -595,6 +604,331 @@ await s5.fs.put("home/newfolder/data.json", { created: Date.now() });
 - Path segments cannot contain forward slashes
 - Root directories ("home", "archive") are immutable
 
+## HAMT (Hash Array Mapped Trie) Support
+
+The Enhanced S5.js implementation includes automatic HAMT sharding for efficient handling of large directories. This feature activates transparently when directories exceed 1000 entries.
+
+### How HAMT Works
+
+- **Automatic Activation**: Directories automatically convert to HAMT structure at 1000+ entries
+- **Transparent Operation**: All existing API methods work seamlessly with sharded directories
+- **Performance**: O(log n) access time for directories with millions of entries
+- **Lazy Loading**: HAMT nodes are loaded on-demand for memory efficiency
+- **Deterministic**: Uses xxhash64 for consistent sharding across implementations
+
+### HAMT Behavior
+
+When a directory reaches the sharding threshold:
+
+1. The directory structure automatically converts to HAMT format
+2. Entries are distributed across multiple nodes based on hash values
+3. All operations continue to work without code changes
+4. Performance remains consistent even with millions of entries
+
+### Working with Large Directories
+
+```typescript
+// Adding many files - HAMT activates automatically
+for (let i = 0; i < 10000; i++) {
+  await s5.fs.put(`home/large-dir/file${i}.txt`, `Content ${i}`);
+}
+
+// Listing still works normally with cursor pagination
+for await (const item of s5.fs.list("home/large-dir", { limit: 100 })) {
+  console.log(item.name); // Efficiently iterates through sharded structure
+}
+
+// Direct access remains fast even with millions of entries
+const file = await s5.fs.get("home/large-dir/file9999.txt");
+console.log(file); // O(log n) lookup time
+```
+
+### HAMT Implementation Details
+
+- **Branching Factor**: 32-way branching using 5-bit chunks
+- **Hash Function**: xxhash64 for key distribution
+- **Node Types**: Internal nodes (pointers) and leaf nodes (entries)
+- **Serialization**: CBOR format matching Rust S5 implementation
+- **Memory Efficient**: Nodes loaded only when accessed
+
+## Directory Utilities (Phase 4)
+
+Phase 4 adds powerful utility classes for recursive directory operations and batch processing.
+
+### DirectoryWalker
+
+The `DirectoryWalker` class provides efficient recursive directory traversal with cursor support for resumable operations.
+
+#### Constructor
+
+```typescript
+import { DirectoryWalker } from "@/fs/utils/walker";
+
+const walker = new DirectoryWalker(s5.fs);
+```
+
+#### walk(path, options?)
+
+Recursively traverse a directory tree, yielding entries as they are discovered.
+
+```typescript
+interface WalkOptions {
+  recursive?: boolean;      // Whether to recurse into subdirectories (default: true)
+  maxDepth?: number;        // Maximum depth to traverse
+  filter?: (entry: WalkResult) => boolean | Promise<boolean>;  // Filter entries
+  cursor?: Uint8Array;      // Resume from cursor position
+}
+
+interface WalkResult {
+  path: string;             // Full path to the entry
+  name: string;             // Entry name
+  entry: FileRef | DirRef;  // The actual entry
+  depth: number;            // Depth from starting directory
+  cursor?: Uint8Array;      // Cursor for resuming
+}
+
+// Basic usage
+for await (const result of walker.walk("home/projects")) {
+  console.log(`${result.path} (depth: ${result.depth})`);
+}
+
+// With options
+for await (const result of walker.walk("home", {
+  maxDepth: 2,
+  filter: async (r) => !r.name.startsWith(".")  // Skip hidden files
+})) {
+  if ('hash' in result.entry) {
+    console.log(`File: ${result.path} (${result.entry.size} bytes)`);
+  } else {
+    console.log(`Dir: ${result.path}`);
+  }
+}
+
+// Resumable walk with cursor
+let lastCursor: Uint8Array | undefined;
+try {
+  for await (const result of walker.walk("home/large-dir", { cursor: savedCursor })) {
+    lastCursor = result.cursor;
+    // Process entry...
+  }
+} catch (error) {
+  // Can resume from lastCursor
+  await saveResumePoint(lastCursor);
+}
+```
+
+#### count(path, options?)
+
+Count entries in a directory tree without loading all data.
+
+```typescript
+interface WalkStats {
+  files: number;
+  directories: number;
+  totalSize: number;
+}
+
+const stats = await walker.count("home/projects", { recursive: true });
+console.log(`Files: ${stats.files}, Dirs: ${stats.directories}, Size: ${stats.totalSize}`);
+```
+
+### BatchOperations
+
+The `BatchOperations` class provides high-level operations for copying and deleting entire directory trees with progress tracking and error handling.
+
+#### Constructor
+
+```typescript
+import { BatchOperations } from "@/fs/utils/batch";
+
+const batch = new BatchOperations(s5.fs);
+```
+
+#### copyDirectory(sourcePath, destPath, options?)
+
+Copy an entire directory tree to a new location.
+
+```typescript
+interface BatchOptions {
+  recursive?: boolean;       // Copy subdirectories (default: true)
+  onProgress?: (progress: BatchProgress) => void;  // Progress callback
+  onError?: "stop" | "continue" | ((error: Error, path: string) => "stop" | "continue");
+  cursor?: Uint8Array;       // Resume from cursor
+  preserveMetadata?: boolean; // Preserve file metadata (default: true)
+}
+
+interface BatchProgress {
+  operation: "copy" | "delete";
+  total?: number;
+  processed: number;
+  currentPath: string;
+  cursor?: Uint8Array;
+}
+
+interface BatchResult {
+  success: number;
+  failed: number;
+  errors: Array<{ path: string; error: Error }>;
+  cursor?: Uint8Array;      // For resuming if interrupted
+}
+
+// Basic copy
+const result = await batch.copyDirectory("home/source", "home/backup");
+console.log(`Copied ${result.success} items`);
+
+// With progress tracking
+const result = await batch.copyDirectory("home/photos", "archive/photos-2024", {
+  onProgress: (progress) => {
+    console.log(`Copying ${progress.currentPath} (${progress.processed} done)`);
+  },
+  onError: "continue"  // Continue on errors
+});
+
+if (result.failed > 0) {
+  console.log(`Failed to copy ${result.failed} items:`);
+  result.errors.forEach(e => console.log(`  ${e.path}: ${e.error.message}`));
+}
+
+// Resumable copy
+let resumeCursor = savedCursor; // From previous interrupted operation
+const result = await batch.copyDirectory("home/large-project", "backup/project", {
+  cursor: resumeCursor,
+  onProgress: (progress) => {
+    // Save cursor periodically for resume capability
+    if (progress.processed % 100 === 0) {
+      saveCursor(progress.cursor);
+    }
+  }
+});
+```
+
+#### deleteDirectory(path, options?)
+
+Delete a directory and optionally all its contents.
+
+```typescript
+// Delete empty directory only
+await batch.deleteDirectory("home/temp", { recursive: false });
+
+// Delete directory tree
+const result = await batch.deleteDirectory("home/old-project", {
+  recursive: true,
+  onProgress: (progress) => {
+    console.log(`Deleting ${progress.currentPath} (${progress.processed}/${progress.total})`);
+  }
+});
+
+// With error handling
+const result = await batch.deleteDirectory("home/cache", {
+  recursive: true,
+  onError: (error, path) => {
+    if (error.message.includes("permission")) {
+      console.log(`Skipping protected file: ${path}`);
+      return "continue";
+    }
+    return "stop";
+  }
+});
+```
+
+### Directory Utility Examples
+
+#### Backup with Progress
+
+```typescript
+async function backupDirectory(source: string, dest: string) {
+  const batch = new BatchOperations(s5.fs);
+  const startTime = Date.now();
+  
+  console.log(`Starting backup of ${source}...`);
+  
+  const result = await batch.copyDirectory(source, dest, {
+    onProgress: (progress) => {
+      process.stdout.write(`\rProcessed: ${progress.processed} items`);
+    },
+    onError: "continue"
+  });
+  
+  const duration = (Date.now() - startTime) / 1000;
+  console.log(`\nBackup complete in ${duration}s`);
+  console.log(`Success: ${result.success}, Failed: ${result.failed}`);
+  
+  if (result.failed > 0) {
+    const logPath = `${dest}-errors.log`;
+    const errorLog = result.errors.map(e => 
+      `${e.path}: ${e.error.message}`
+    ).join('\n');
+    await s5.fs.put(logPath, errorLog);
+    console.log(`Error log saved to ${logPath}`);
+  }
+}
+```
+
+#### Find Large Files
+
+```typescript
+async function findLargeFiles(path: string, minSize: number) {
+  const walker = new DirectoryWalker(s5.fs);
+  const largeFiles: Array<{ path: string; size: number }> = [];
+  
+  for await (const result of walker.walk(path)) {
+    if ('hash' in result.entry && result.entry.size > minSize) {
+      largeFiles.push({
+        path: result.path,
+        size: result.entry.size
+      });
+    }
+  }
+  
+  // Sort by size descending
+  largeFiles.sort((a, b) => b.size - a.size);
+  
+  return largeFiles;
+}
+
+// Find files larger than 100MB
+const largeFiles = await findLargeFiles("home", 100 * 1024 * 1024);
+largeFiles.forEach(f => {
+  console.log(`${f.path}: ${(f.size / 1024 / 1024).toFixed(2)} MB`);
+});
+```
+
+#### Directory Synchronization
+
+```typescript
+async function syncDirectories(source: string, dest: string) {
+  const walker = new DirectoryWalker(s5.fs);
+  const batch = new BatchOperations(s5.fs);
+  
+  // First, copy new and updated files
+  const copyResult = await batch.copyDirectory(source, dest, {
+    preserveMetadata: true,
+    onError: "continue"
+  });
+  
+  // Then, remove files that exist in dest but not in source
+  const sourceFiles = new Set<string>();
+  for await (const result of walker.walk(source)) {
+    sourceFiles.add(result.path.substring(source.length));
+  }
+  
+  const toDelete: string[] = [];
+  for await (const result of walker.walk(dest)) {
+    const relativePath = result.path.substring(dest.length);
+    if (!sourceFiles.has(relativePath)) {
+      toDelete.push(result.path);
+    }
+  }
+  
+  // Delete orphaned files
+  for (const path of toDelete) {
+    await s5.fs.delete(path);
+  }
+  
+  console.log(`Sync complete: ${copyResult.success} copied, ${toDelete.length} deleted`);
+}
+```
+
 ## Performance Considerations
 
 - **Directory Caching**: Directory metadata is cached during path traversal
@@ -602,6 +936,10 @@ await s5.fs.put("home/newfolder/data.json", { created: Date.now() });
 - **Batch Registry Updates**: Multiple operations in succession are optimised
 - **Network Latency**: Operations require network round-trips to S5 portals
 - **CBOR Efficiency**: Object data is stored efficiently using CBOR encoding
+- **HAMT Performance**: Automatic sharding maintains O(log n) performance for large directories
+- **Walker Efficiency**: DirectoryWalker uses depth-first traversal with lazy loading
+- **Batch Operations**: Progress callbacks allow for UI updates without blocking
+- **Resumable Operations**: Cursor support enables efficient resume after interruption
 
 ## Next Steps
 
@@ -612,4 +950,4 @@ await s5.fs.put("home/newfolder/data.json", { created: Date.now() });
 
 ---
 
-_This documentation covers Phase 2 of the Enhanced S5.js grant project. Future phases will add HAMT support, recursive operations, and additional convenience methods._
+_This documentation covers Phase 2, Phase 3, and Phase 4 of the Enhanced S5.js grant project. Phase 3 added automatic HAMT sharding for efficient handling of large directories. Phase 4 added the DirectoryWalker and BatchOperations utilities for recursive directory operations. Future phases will add media processing capabilities including thumbnail generation and progressive image loading._
