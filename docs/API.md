@@ -52,6 +52,11 @@
   - [Integration with FS5 Class Methods](#integration-with-fs5-class-methods)
   - [Best Practices](#best-practices)
   - [Limitations](#limitations)
+  - [HAMT (Hash Array Mapped Trie) Support](#hamt-hash-array-mapped-trie-support)
+    - [How HAMT Works](#how-hamt-works)
+    - [HAMT Behavior](#hamt-behavior)
+    - [Working with Large Directories](#working-with-large-directories)
+    - [HAMT Implementation Details](#hamt-implementation-details)
   - [Performance Considerations](#performance-considerations)
   - [Next Steps](#next-steps)
 
@@ -595,6 +600,53 @@ await s5.fs.put("home/newfolder/data.json", { created: Date.now() });
 - Path segments cannot contain forward slashes
 - Root directories ("home", "archive") are immutable
 
+## HAMT (Hash Array Mapped Trie) Support
+
+The Enhanced S5.js implementation includes automatic HAMT sharding for efficient handling of large directories. This feature activates transparently when directories exceed 1000 entries.
+
+### How HAMT Works
+
+- **Automatic Activation**: Directories automatically convert to HAMT structure at 1000+ entries
+- **Transparent Operation**: All existing API methods work seamlessly with sharded directories
+- **Performance**: O(log n) access time for directories with millions of entries
+- **Lazy Loading**: HAMT nodes are loaded on-demand for memory efficiency
+- **Deterministic**: Uses xxhash64 for consistent sharding across implementations
+
+### HAMT Behavior
+
+When a directory reaches the sharding threshold:
+
+1. The directory structure automatically converts to HAMT format
+2. Entries are distributed across multiple nodes based on hash values
+3. All operations continue to work without code changes
+4. Performance remains consistent even with millions of entries
+
+### Working with Large Directories
+
+```typescript
+// Adding many files - HAMT activates automatically
+for (let i = 0; i < 10000; i++) {
+  await s5.fs.put(`home/large-dir/file${i}.txt`, `Content ${i}`);
+}
+
+// Listing still works normally with cursor pagination
+for await (const item of s5.fs.list("home/large-dir", { limit: 100 })) {
+  console.log(item.name); // Efficiently iterates through sharded structure
+}
+
+// Direct access remains fast even with millions of entries
+const file = await s5.fs.get("home/large-dir/file9999.txt");
+console.log(file); // O(log n) lookup time
+```
+
+### HAMT Implementation Details
+
+- **Branching Factor**: 32-way branching using 5-bit chunks
+- **Hash Function**: xxhash64 for key distribution
+- **Node Types**: Internal nodes (pointers) and leaf nodes (entries)
+- **Serialization**: CBOR format matching Rust S5 implementation
+- **Memory Efficient**: Nodes loaded only when accessed
+
 ## Performance Considerations
 
 - **Directory Caching**: Directory metadata is cached during path traversal
@@ -602,6 +654,7 @@ await s5.fs.put("home/newfolder/data.json", { created: Date.now() });
 - **Batch Registry Updates**: Multiple operations in succession are optimised
 - **Network Latency**: Operations require network round-trips to S5 portals
 - **CBOR Efficiency**: Object data is stored efficiently using CBOR encoding
+- **HAMT Performance**: Automatic sharding maintains O(log n) performance for large directories
 
 ## Next Steps
 
@@ -612,4 +665,4 @@ await s5.fs.put("home/newfolder/data.json", { created: Date.now() });
 
 ---
 
-_This documentation covers Phase 2 of the Enhanced S5.js grant project. Future phases will add HAMT support, recursive operations, and additional convenience methods._
+_This documentation covers Phase 2 and Phase 3 of the Enhanced S5.js grant project. Phase 3 added automatic HAMT sharding for efficient handling of large directories. Future phases will add recursive directory operations, batch utilities, and media processing capabilities._
