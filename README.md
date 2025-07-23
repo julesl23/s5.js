@@ -10,6 +10,7 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - 🔐 **Built-in Encryption**: Automatic encryption for private data
 - 📦 **CBOR Serialization**: Deterministic encoding for cross-platform compatibility
 - 🌐 **Browser & Node.js**: Works in both environments
+- 🗂️ **HAMT Sharding**: Automatic directory sharding for millions of entries
 
 ## Installation
 
@@ -53,6 +54,12 @@ console.log(content); // "Hello, S5!"
 for await (const item of s5.fs.list("home/documents")) {
   console.log(`${item.type}: ${item.name}`);
 }
+
+// Large directories automatically use HAMT sharding
+for (let i = 0; i < 5000; i++) {
+  await s5.fs.put(`home/photos/image${i}.jpg`, imageData);
+}
+// Directory automatically shards at 1000+ entries for O(log n) performance
 ```
 
 ## Documentation
@@ -67,8 +74,8 @@ This is an enhanced version of s5.js being developed under an 8-month grant from
 
 - **New Format**: CBOR serialization with DirV1 specification (replaces MessagePack)
 - **Path-based API**: Simple file operations with familiar syntax
+- **HAMT sharding**: Automatic directory sharding for efficient large directory support
 - **Media processing**: Thumbnail generation and metadata extraction (coming soon)
-- **HAMT sharding**: Efficient large directory support (coming soon)
 
 **Note**: This is a clean implementation that does NOT maintain backward compatibility with old S5 data formats.
 
@@ -84,8 +91,9 @@ npm run test      # Run tests
 
 - ✅ Month 1: Project Setup - Complete
 - ✅ Month 2: Path Helpers v0.1 - Complete
-- 🚧 Month 3: Path-cascade Optimization - In Progress
-- ⏳ Months 4-8: Advanced features pending
+- ✅ Month 3: Path-cascade Optimization & HAMT - Complete
+- 🚧 Month 4: Directory Utilities - In Progress
+- ⏳ Months 5-8: Advanced features pending
 
 See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 
