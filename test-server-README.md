@@ -5,9 +5,10 @@ A minimal HTTP wrapper for enhanced S5.js to enable integration testing with ext
 ## Features
 
 - Minimal Express server exposing S5.js filesystem operations via HTTP
-- Mock storage backend (no S5 portal required)
+- Simple key-value storage backend (no S5 portal or directory structure required)
 - Binary data support (CBOR, etc.)
 - Simple REST API for path-based operations
+- No parent directory requirements - stores any path directly
 
 ## Setup
 
@@ -112,8 +113,9 @@ let data = client
 
 ## Notes
 
-- This server uses mock storage (in-memory) and is intended for testing only
+- This server uses simple in-memory key-value storage and is intended for testing only
 - All data is lost when the server restarts
 - No authentication is implemented
 - Maximum request size is 50MB (configurable in the code)
-- The server automatically handles HAMT sharding for directories with 1000+ entries
+- Paths are stored directly without requiring parent directories to exist
+- The server bypasses S5.js filesystem structure for simplicity

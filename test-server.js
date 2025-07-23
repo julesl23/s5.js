@@ -100,10 +100,61 @@ class MockIdentity {
   }
 }
 
-// Initialize S5 with mock storage
-const api = new MockS5API();
-const identity = new MockIdentity();
-const fs = new FS5(api, identity);
+// Simple key-value storage that bypasses FS5 directory requirements
+class SimpleKVStorage {
+  constructor() {
+    this.store = new Map(); // Simple in-memory storage
+    this.metadata = new Map(); // Store metadata separately
+  }
+
+  async put(path, data, options = {}) {
+    // Store data directly without any directory structure
+    this.store.set(path, data);
+    
+    // Store metadata if provided
+    if (options.metadata) {
+      this.metadata.set(path, options.metadata);
+    }
+    
+    return { path, size: data.length };
+  }
+
+  async get(path) {
+    return this.store.get(path) || null;
+  }
+
+  async delete(path) {
+    const existed = this.store.has(path);
+    this.store.delete(path);
+    this.metadata.delete(path);
+    return existed;
+  }
+
+  async *list(prefix) {
+    // List all keys that start with the prefix
+    for (const [key, value] of this.store.entries()) {
+      if (key.startsWith(prefix)) {
+        const name = key.substring(prefix.length).replace(/^\//, '');
+        
+        // Only return direct children (no nested paths)
+        if (!name.includes('/') || prefix === '') {
+          const meta = this.metadata.get(key) || {};
+          yield {
+            name: name || key,
+            path: key,
+            type: 'file',
+            size: value.length,
+            created: meta.timestamp || Date.now(),
+            modified: meta.timestamp || Date.now()
+          };
+        }
+      }
+    }
+  }
+}
+
+// Initialize simple storage
+const storage = new SimpleKVStorage();
 
 // Create Express app
 const app = express();
@@ -151,8 +202,8 @@ app.put(/^\/s5\/fs\/(.*)$/, async (req, res) => {
     // Get content type from header or default to application/octet-stream
     const contentType = req.get('content-type') || 'application/octet-stream';
     
-    // Store the data
-    await fs.put(path, data, {
+    // Store the data using storage wrapper
+    await storage.put(path, data, {
       metadata: {
         contentType: contentType,
         timestamp: Date.now()
@@ -177,9 +228,9 @@ app.get(/^\/s5\/fs\/(.*)$/, async (req, res) => {
     
     // Check if this is a list operation (ends with /)
     if (req.path.endsWith('/')) {
-      // List directory
+      // List directory using storage wrapper
       const results = [];
-      for await (const item of fs.list(path)) {
+      for await (const item of storage.list(path)) {
         results.push({
           name: item.name,
           type: item.type,
@@ -194,8 +245,8 @@ app.get(/^\/s5\/fs\/(.*)$/, async (req, res) => {
         entries: results
       });
     } else {
-      // Get file
-      const data = await fs.get(path);
+      // Get file using storage wrapper
+      const data = await storage.get(path);
       
       if (data === null) {
         return res.status(404).json({ error: 'File not found' });
@@ -238,7 +289,7 @@ app.delete(/^\/s5\/fs\/(.*)$/, async (req, res) => {
       return res.status(400).json({ error: 'Invalid path' });
     }
 
-    await fs.delete(path);
+    await storage.delete(path);
     
     res.json({ 
       success: true, 
