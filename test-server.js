@@ -1,6 +1,6 @@
 // Minimal HTTP wrapper for testing vector database integration
 import express from 'express';
-import { webcrypto } from 'crypto';
+import crypto, { webcrypto } from 'crypto';
 import { FS5 } from './dist/src/fs/fs5.js';
 import { JSCryptoImplementation } from './dist/src/api/crypto/js.js';
 
@@ -210,10 +210,13 @@ app.put(/^\/s5\/fs\/(.*)$/, async (req, res) => {
       }
     });
 
+    // Generate a mock CID using SHA256 hash
+    const hash = crypto.createHash('sha256').update(data).digest('hex');
+    const cid = `s5://mock_${hash.substring(0, 32)}`;
+
     res.status(201).json({ 
-      success: true, 
-      path: path,
-      size: data.length
+      cid: cid,
+      path: path
     });
   } catch (error) {
     console.error('PUT error:', error);
