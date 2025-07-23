@@ -116,6 +116,10 @@ npm run test      # Run tests
 
 See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 
+## Testing & Integration
+
+For integration testing with external services, see [test-server-README.md](./test-server-README.md).
+
 ## License
 
 MIT
