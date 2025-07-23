@@ -135,7 +135,7 @@ function extractPath(url) {
 }
 
 // PUT /s5/fs/* - Store data at path
-app.put('/s5/fs/*', async (req, res) => {
+app.put(/^\/s5\/fs\/(.*)$/, async (req, res) => {
   try {
     const path = extractPath(req.path);
     if (!path) {
@@ -171,7 +171,7 @@ app.put('/s5/fs/*', async (req, res) => {
 });
 
 // GET /s5/fs/* - Retrieve data or list directory
-app.get('/s5/fs/*', async (req, res) => {
+app.get(/^\/s5\/fs\/(.*)$/, async (req, res) => {
   try {
     const path = extractPath(req.path);
     
@@ -231,7 +231,7 @@ app.get('/s5/fs/*', async (req, res) => {
 });
 
 // DELETE /s5/fs/* - Delete path
-app.delete('/s5/fs/*', async (req, res) => {
+app.delete(/^\/s5\/fs\/(.*)$/, async (req, res) => {
   try {
     const path = extractPath(req.path);
     if (!path) {
