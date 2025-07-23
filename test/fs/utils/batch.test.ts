@@ -187,11 +187,11 @@ describe('BatchOperations', () => {
     it('should stop on error when stopOnError is true', async () => {
       // This test would need a way to simulate errors
       // For now, just test the option exists
-      const options: CopyOptions = {
+      const options: BatchOptions = {
         onError: "stop"
       };
       
-      expect(options.stopOnError).toBe(true);
+      expect(options.onError).toBe("stop");
     });
 
     it('should support resumable copy with cursor', async () => {
@@ -298,8 +298,8 @@ describe('BatchOperations', () => {
       
       await batch.deleteDirectory('home/source', {
         recursive: true,
-        onProgress: (deleted, total) => {
-          progress.push({ deleted, total });
+        onProgress: (progressData) => {
+          progress.push({ deleted: progressData.processed, total: progressData.total });
         }
       });
       
@@ -318,12 +318,12 @@ describe('BatchOperations', () => {
 
     it('should stop on error when stopOnError is true', async () => {
       // This test would need a way to simulate errors
-      const options: DeleteOptions = {
+      const options: BatchOptions = {
         recursive: true,
         onError: "stop"
       };
       
-      expect(options.stopOnError).toBe(true);
+      expect(options.onError).toBe("stop");
     });
 
     it('should handle non-existent directory gracefully', async () => {

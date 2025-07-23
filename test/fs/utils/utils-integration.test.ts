@@ -47,8 +47,7 @@ describe('Utility Functions Integration', () => {
       const metadata = await fs.getMetadata(sourcePath);
       
       await fs.put(destPath, content!, {
-        mediaType: metadata?.mediaType,
-        metadata: metadata?.custom
+        mediaType: metadata?.mediaType
       });
     }
 
@@ -127,13 +126,13 @@ describe('Utility Functions Integration', () => {
     const batch = new BatchOperations(fs);
     try {
       await batch.copyDirectory('source', 'dest', {
-        onProgress: (copied, total) => {
+        onProgress: (progress) => {
           // Simulate failure on temp files during copy
-          if (copied > 1) {
+          if (progress.processed > 1) {
             throw new Error('Simulated failure');
           }
         },
-        stopOnError: true
+        onError: "stop"
       });
     } catch (error) {
       // Expected error

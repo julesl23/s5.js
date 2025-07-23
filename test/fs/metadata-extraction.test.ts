@@ -44,10 +44,10 @@ describe("Metadata Extraction", () => {
                 magic: "S5.pro",
                 header: {},
                 dirs: new Map(),
-                files: new Map([
-                    ["file1.txt", { size: 100n, timestamp: now - 3600 }],
-                    ["file2.txt", { size: 200n, timestamp: now - 7200 }], // oldest
-                    ["file3.txt", { size: 300n, timestamp: now - 1800 }]
+                files: new Map<string, FileRef>([
+                    ["file1.txt", { hash: new Uint8Array(32).fill(1), size: 100n, timestamp: now - 3600 }],
+                    ["file2.txt", { hash: new Uint8Array(32).fill(1), size: 200n, timestamp: now - 7200 }], // oldest
+                    ["file3.txt", { hash: new Uint8Array(32).fill(1), size: 300n, timestamp: now - 1800 }]
                 ])
             };
 
@@ -78,8 +78,8 @@ describe("Metadata Extraction", () => {
                 dirs: new Map([
                     ["dir1", { link: { type: 'fixed_hash_blake3', hash: new Uint8Array(32) }, ts_seconds: now - 3000 }]
                 ]),
-                files: new Map([
-                    ["file1.txt", { size: 100n, timestamp: now - 4000 }] // oldest
+                files: new Map<string, FileRef>([
+                    ["file1.txt", { hash: new Uint8Array(32).fill(1), size: 100n, timestamp: now - 4000 }] // oldest
                 ])
             };
 
@@ -106,9 +106,9 @@ describe("Metadata Extraction", () => {
                 dirs: new Map([
                     ["dir1", { link: { type: 'fixed_hash_blake3', hash: new Uint8Array(32) } }] // no timestamp
                 ]),
-                files: new Map([
-                    ["file1.txt", { size: 100n }], // no timestamp
-                    ["file2.txt", { size: 200n, timestamp: now - 1000 }]
+                files: new Map<string, FileRef>([
+                    ["file1.txt", { hash: new Uint8Array(32).fill(1), size: 100n }], // no timestamp
+                    ["file2.txt", { hash: new Uint8Array(32).fill(1), size: 200n, timestamp: now - 1000 }]
                 ])
             };
 
@@ -123,10 +123,10 @@ describe("Metadata Extraction", () => {
                 magic: "S5.pro",
                 header: {},
                 dirs: new Map(),
-                files: new Map([
-                    ["file1.txt", { size: 100n, timestamp: now - 3600 }],
-                    ["file2.txt", { size: 200n, timestamp: now - 600 }], // newest
-                    ["file3.txt", { size: 300n, timestamp: now - 1800 }]
+                files: new Map<string, FileRef>([
+                    ["file1.txt", { hash: new Uint8Array(32).fill(1), size: 100n, timestamp: now - 3600 }],
+                    ["file2.txt", { hash: new Uint8Array(32).fill(1), size: 200n, timestamp: now - 600 }], // newest
+                    ["file3.txt", { hash: new Uint8Array(32).fill(1), size: 300n, timestamp: now - 1800 }]
                 ])
             };
 
@@ -157,8 +157,8 @@ describe("Metadata Extraction", () => {
                 dirs: new Map([
                     ["dir1", { link: { type: 'fixed_hash_blake3', hash: new Uint8Array(32) } }]
                 ]),
-                files: new Map([
-                    ["file1.txt", { size: 100n }]
+                files: new Map<string, FileRef>([
+                    ["file1.txt", { hash: new Uint8Array(32).fill(1), size: 100n }]
                 ])
             };
 
@@ -170,6 +170,7 @@ describe("Metadata Extraction", () => {
     describe("_extractFileMetadata", () => {
         test("should extract basic file metadata", () => {
             const file: FileRef = {
+                hash: new Uint8Array(32).fill(1),
                 size: 12345n,
                 media_type: "text/plain",
                 timestamp: now
@@ -186,6 +187,7 @@ describe("Metadata Extraction", () => {
 
         test("should handle missing media type", () => {
             const file: FileRef = {
+                hash: new Uint8Array(32).fill(1),
                 size: 12345n
             };
 
@@ -195,9 +197,10 @@ describe("Metadata Extraction", () => {
 
         test("should extract location data", () => {
             const file: FileRef = {
+                hash: new Uint8Array(32).fill(1),
                 size: 12345n,
                 locations: [
-                    { type: 'blob_hash_hash_blake3', parts: [{ hash: new Uint8Array(32), size: 12345n }] }
+                    { type: 'multihash_blake3', hash: new Uint8Array(32) }
                 ]
             };
 
@@ -208,10 +211,13 @@ describe("Metadata Extraction", () => {
 
         test("should detect history", () => {
             const file: FileRef = {
+                hash: new Uint8Array(32).fill(1),
                 size: 12345n,
-                prev: [
-                    { link: { type: 'fixed_hash_blake3', hash: new Uint8Array(32) }, timestamp: now - 3600 }
-                ]
+                prev: {
+                    hash: new Uint8Array(32).fill(2),
+                    size: 10000n,
+                    timestamp: now - 3600
+                }
             };
 
             const metadata = fs5.testExtractFileMetadata(file);
@@ -220,6 +226,7 @@ describe("Metadata Extraction", () => {
 
         test("should extract custom metadata", () => {
             const file: FileRef = {
+                hash: new Uint8Array(32).fill(1),
                 size: 12345n,
                 extra: new Map([
                     ["author", "John Doe"],
@@ -236,6 +243,7 @@ describe("Metadata Extraction", () => {
 
         test("should handle file without timestamp", () => {
             const file: FileRef = {
+                hash: new Uint8Array(32).fill(1),
                 size: 12345n
             };
 
@@ -271,17 +279,16 @@ describe("Metadata Extraction", () => {
             const dir: DirRef = {
                 link: { type: 'fixed_hash_blake3', hash: new Uint8Array(32) },
                 ts_seconds: now,
-                extra: {
-                    description: "Test directory",
-                    tags: ["important", "backup"]
-                }
+                extra: new Map<string, any>([
+                    ["description", "Test directory"],
+                    ["tags", ["important", "backup"]]
+                ])
             };
 
             const metadata = fs5.testExtractDirMetadata(dir);
-            expect(metadata.extra).toEqual({
-                description: "Test directory",
-                tags: ["important", "backup"]
-            });
+            expect(metadata.extra).toBeInstanceOf(Map);
+            expect(metadata.extra.get("description")).toBe("Test directory");
+            expect(metadata.extra.get("tags")).toEqual(["important", "backup"]);
         });
     });
 

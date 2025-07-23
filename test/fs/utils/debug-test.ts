@@ -21,7 +21,7 @@ async function testSetup() {
     // Try creating it manually
     console.log("3. Creating home directory manually...");
     try {
-      await fs.createDirectory('home');
+      await fs.createDirectory('/', 'home');
       console.log("Home directory created successfully");
     } catch (err) {
       console.error("Error creating home directory:", err);

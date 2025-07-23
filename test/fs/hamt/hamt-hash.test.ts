@@ -142,36 +142,3 @@ describe("HAMT Hash Functions", () => {
   });
 });
 
-// Minimal hasher implementation for tests to verify
-export class HAMTHasher {
-  private xxhash: any;
-
-  async initialize() {
-    // In real implementation, this would load xxhash-wasm
-    // For testing, we'll use a simple mock
-    this.xxhash = {
-      h64: (input: string) => {
-        // Simple hash for testing
-        let hash = 0x811c9dc5n; // FNV offset basis
-        const bytes = new TextEncoder().encode(input);
-        for (let i = 0; i < bytes.length; i++) {
-          hash ^= BigInt(bytes[i]);
-          hash = (hash * 0x01000193n) & 0xFFFFFFFFFFFFFFFFn; // FNV prime
-        }
-        return hash || 1n; // Ensure non-zero
-      }
-    };
-  }
-
-  async hashKey(key: string, hashFunction: number): Promise<bigint> {
-    if (hashFunction === 0) {
-      // xxhash64
-      return this.xxhash.h64(key);
-    } else {
-      // blake3
-      const hash = blake3(new TextEncoder().encode(key));
-      const view = new DataView(hash.buffer);
-      return view.getBigUint64(0, false);
-    }
-  }
-}

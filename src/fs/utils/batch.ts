@@ -14,7 +14,7 @@ export interface BatchOptions {
   /** Error handling mode */
   onError?: "stop" | "continue" | ((error: Error, path: string) => "stop" | "continue");
   /** Resume from cursor */
-  cursor?: Uint8Array;
+  cursor?: string;
   /** Whether to preserve metadata (timestamps, etc) */
   preserveMetadata?: boolean;
 }
@@ -32,7 +32,7 @@ export interface BatchProgress {
   /** Current item being processed */
   currentPath: string;
   /** Cursor for resuming */
-  cursor?: Uint8Array;
+  cursor?: string;
 }
 
 /**
@@ -46,7 +46,7 @@ export interface BatchResult {
   /** Errors encountered (if onError was "continue") */
   errors: Array<{ path: string; error: Error }>;
   /** Cursor for resuming (if operation was interrupted) */
-  cursor?: Uint8Array;
+  cursor?: string;
 }
 
 /**
@@ -56,7 +56,7 @@ interface BatchState {
   success: number;
   failed: number;
   errors: Array<{ path: string; error: Error }>;
-  lastCursor?: Uint8Array;
+  lastCursor?: string;
 }
 
 /**
@@ -66,7 +66,7 @@ export class BatchOperations {
   private walker: DirectoryWalker;
 
   constructor(private fs: FS5) {
-    this.walker = new DirectoryWalker(fs);
+    this.walker = new DirectoryWalker(fs, '/');
   }
 
   /**
@@ -104,23 +104,28 @@ export class BatchOperations {
         cursor
       };
 
-      for await (const { path, entry, depth, cursor: walkCursor } of this.walker.walk(sourcePath, walkOptions) as any) {
+      // Create walker for source path
+      const sourceWalker = new DirectoryWalker(this.fs, sourcePath);
+      for await (const { path, name, type, size, depth, cursor: walkCursor } of sourceWalker.walk(walkOptions)) {
         const relativePath = path.substring(sourcePath.length);
         const targetPath = destPath + relativePath;
 
         state.lastCursor = walkCursor;
 
         try {
-          if ('link' in entry) {
+          if (type === 'directory') {
             // It's a directory - create it
             await this._ensureDirectory(targetPath);
           } else {
             // It's a file - copy it
-            const fileData = await this.fs.api.downloadBlobAsBytes(entry.hash);
+            const fileMetadata = await this.fs.getMetadata(path);
+            if (!fileMetadata || fileMetadata.type !== 'file') continue;
+            
+            const fileData = await this.fs.api.downloadBlobAsBytes(fileMetadata.hash);
             
             const putOptions: PutOptions = {};
-            if (preserveMetadata && entry.media_type) {
-              putOptions.media_type = entry.media_type;
+            if (preserveMetadata && fileMetadata.mediaType) {
+              putOptions.mediaType = fileMetadata.mediaType;
             }
             
             await this.fs.put(targetPath, fileData, putOptions);
@@ -197,11 +202,13 @@ export class BatchOperations {
           cursor
         };
 
-        for await (const { path: entryPath, entry, cursor: walkCursor } of this.walker.walk(path, walkOptions) as any) {
+        // Create walker for path to delete
+        const deleteWalker = new DirectoryWalker(this.fs, path);
+        for await (const { path: entryPath, type, cursor: walkCursor } of deleteWalker.walk(walkOptions)) {
           state.lastCursor = walkCursor;
           pathsToDelete.push({
             path: entryPath,
-            isDir: 'link' in entry
+            isDir: type === 'directory'
           });
         }
 
@@ -323,7 +330,9 @@ export class BatchOperations {
 
     // Create this directory
     try {
-      await this.fs.createDirectory(path);
+      const parentPath = path.substring(0, path.lastIndexOf('/')) || '/';
+      const dirName = path.substring(path.lastIndexOf('/') + 1);
+      await this.fs.createDirectory(parentPath, dirName);
     } catch (error) {
       // Might have been created concurrently, check again
       const metadata = await this.fs.getMetadata(path);

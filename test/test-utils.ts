@@ -1,5 +1,6 @@
 import { JSCryptoImplementation } from "../src/api/crypto/js.js";
 import { S5APIInterface } from "../src/api/s5.js";
+import { BlobIdentifier } from "../src/identifier/blob.js";
 import { webcrypto } from "crypto";
 
 // Mock S5 API interface for testing
@@ -53,12 +54,12 @@ class MockS5API implements Partial<S5APIInterface> {
     };
   }
 
-  async uploadBlob(blob: Blob): Promise<{ hash: Uint8Array; size: number }> {
+  async uploadBlob(blob: Blob): Promise<BlobIdentifier> {
     const data = new Uint8Array(await blob.arrayBuffer());
     const hash = this.crypto.hashBlake3Sync(data);
     const key = Buffer.from(hash).toString('hex');
     this.storage.set(key, data);
-    return { hash: new Uint8Array([0x1e, ...hash]), size: blob.size };
+    return new BlobIdentifier(new Uint8Array([0x1e, ...hash]), blob.size);
   }
 
   async downloadBlobAsBytes(hash: Uint8Array): Promise<Uint8Array> {

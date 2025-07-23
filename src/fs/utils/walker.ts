@@ -59,7 +59,7 @@ interface WalkCursor {
   /** Depth in the tree */
   depth: number;
   /** Directory listing cursor */
-  dirCursor?: Uint8Array;
+  dirCursor?: string;
   /** Stack of pending directories to process */
   pendingStack: Array<{ path: string; depth: number }>;
 }
@@ -131,10 +131,10 @@ export class DirectoryWalker {
         }
 
         let hasMore = false;
-        for await (const { name, value, cursor: nextCursor } of this.fs.list(state.path, listOptions)) {
+        for await (const result of this.fs.list(state.path, listOptions)) {
+          const { name, type, cursor: nextCursor } = result;
           const entryPath = state.path === "/" ? `/${name}` : `${state.path}/${name}`;
-          const isDirectory = 'link' in value;
-          const type: 'file' | 'directory' = isDirectory ? 'directory' : 'file';
+          const isDirectory = type === 'directory';
           
           // Check if we should yield this entry
           let shouldYield = true;
@@ -158,7 +158,7 @@ export class DirectoryWalker {
               path: entryPath,
               name: name,
               type: type,
-              size: !isDirectory ? (value as FileRef).size : undefined,
+              size: result.size ? Number(result.size) : undefined,
               depth: state.depth,
               cursor: currentCursor
             };

@@ -151,36 +151,3 @@ describe("HAMT Bitmap Operations", () => {
   });
 });
 
-// Helper class that tests will verify exists
-export class HAMTBitmapOps {
-  constructor(private bitsPerLevel: number) {}
-
-  getIndex(hash: bigint, depth: number): number {
-    const shift = BigInt(depth * this.bitsPerLevel);
-    const mask = BigInt((1 << this.bitsPerLevel) - 1);
-    return Number((hash >> shift) & mask);
-  }
-
-  hasBit(bitmap: number, index: number): boolean {
-    return (bitmap & (1 << index)) !== 0;
-  }
-
-  setBit(bitmap: number, index: number): number {
-    return bitmap | (1 << index);
-  }
-
-  popcount(bitmap: number, index: number): number {
-    const mask = (1 << index) - 1;
-    return this.countBits(bitmap & mask);
-  }
-
-  countBits(n: number): number {
-    n = n - ((n >>> 1) & 0x55555555);
-    n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
-    return (((n + (n >>> 4)) & 0xf0f0f0f) * 0x1010101) >>> 24;
-  }
-
-  getChildIndex(bitmap: number, index: number): number {
-    return this.popcount(bitmap, index);
-  }
-}

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach } from "vitest";
 import { HAMT } from "../../../src/fs/hamt/hamt.js";
 import { FileRef, DirRef } from "../../../src/fs/dirv1/types.js";
 import { encodeS5, decodeS5 } from "../../../src/fs/dirv1/cbor-config.js";
-import { base64UrlNoPaddingEncode } from "../../../src/util/encoding.js";
+import { base64UrlNoPaddingEncode } from "../../../src/util/base64.js";
 import type { S5APIInterface } from "../../../src/api/s5.js";
 import type { HAMTNode } from "../../../src/fs/hamt/types.js";
 
@@ -293,7 +293,8 @@ describe("HAMT Serialisation", () => {
       // Access a specific entry (should trigger lazy loading)
       const retrieved = await hamt2.get("f:lazy50.txt");
       expect(retrieved).toBeDefined();
-      expect(retrieved?.size).toBe(1000);
+      expect('size' in retrieved!).toBe(true);
+      expect((retrieved as FileRef).size).toBe(1000);
     });
 
     test("should maintain round-trip fidelity", async () => {

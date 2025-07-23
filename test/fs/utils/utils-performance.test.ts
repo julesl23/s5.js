@@ -47,15 +47,15 @@ describe('Utility Functions Performance', () => {
     
     console.time('Copy 100 files');
     const result = await batch.copyDirectory('source', 'destination', {
-      onProgress: (copied) => {
-        progressUpdates.push(copied);
+      onProgress: (progress) => {
+        progressUpdates.push(progress.processed);
       }
     });
     console.timeEnd('Copy 100 files');
 
-    expect(result.copied).toBeGreaterThanOrEqual(100);
+    expect(result.success).toBeGreaterThanOrEqual(100);
     expect(progressUpdates.length).toBeGreaterThan(0);
-    expect(progressUpdates[progressUpdates.length - 1]).toBe(result.copied);
+    expect(progressUpdates[progressUpdates.length - 1]).toBe(result.success);
   });
 
   it('should handle cursor pagination for large listings', async () => {
@@ -117,8 +117,8 @@ describe('Utility Functions Performance', () => {
     });
     console.timeEnd('Delete complex structure');
 
-    expect(result.deleted).toBe(beforeStats.files + beforeStats.directories);
-    expect(result.errors).toBe(0);
+    expect(result.success).toBe(beforeStats.files + beforeStats.directories);
+    expect(result.errors.length).toBe(0);
 
     // Verify deletion
     const afterStats = await walker.count();

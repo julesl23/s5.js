@@ -115,6 +115,13 @@ describe("FS5 HAMT Integration", () => {
     await fs.ensureIdentityInitialized();
   });
 
+  // Helper to create a sharded directory
+  async function createShardedDirectory(path: string, numFiles: number = 1100) {
+    for (let i = 0; i < numFiles; i++) {
+      await fs.put(`${path}/file${i}.txt`, `content ${i}`);
+    }
+  }
+
   describe("Automatic sharding trigger", () => {
     test("should not shard directory with less than 1000 entries", async () => {
       // Add 999 files
@@ -177,12 +184,6 @@ describe("FS5 HAMT Integration", () => {
   });
 
   describe("Operations on sharded directories", () => {
-    // Helper to create a sharded directory
-    async function createShardedDirectory(path: string, numFiles: number = 1100) {
-      for (let i = 0; i < numFiles; i++) {
-        await fs.put(`${path}/file${i}.txt`, `content ${i}`);
-      }
-    }
 
     test("should get files from sharded directory", async () => {
       await createShardedDirectory("home/sharded");
@@ -267,8 +268,8 @@ describe("FS5 HAMT Integration", () => {
 
       const meta = await fs.getMetadata("home/metatest/file100.txt");
       expect(meta).toBeDefined();
-      expect(meta.type).toBe("file");
-      expect(meta.size).toBeGreaterThan(0);
+      expect(meta!.type).toBe("file");
+      expect(meta!.size).toBeGreaterThan(0);
     });
   });
 

@@ -22,6 +22,7 @@ export interface DirRef {
   link: DirLink;
   ts_seconds?: number;
   ts_nanos?: number;
+  extra?: Map<string, any>;
 }
 
 /**

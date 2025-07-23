@@ -78,7 +78,7 @@ class MockFS5 {
     let startIndex = 0;
     if (options?.cursor) {
       // Simple cursor implementation - just store index
-      startIndex = parseInt(new TextDecoder().decode(options.cursor)) + 1;
+      startIndex = parseInt(options.cursor) + 1;
     }
     
     // Yield entries
