@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  s5js-dev:
+    build: .
+    container_name: s5js-dev-container
+    volumes:
+      # Mount the current directory (enhanced s5.js project)
+      - .:/home/developer/s5.js
+      # Create a named volume for npm cache to persist between restarts
+      - npm-cache:/home/developer/.npm
+      # Create a named volume for claude config if needed
+      - claude-config:/home/developer/.config
+    ports:
+      - "5523:5523" # External access port only
+    environment:
+      - NODE_ENV=development
+    stdin_open: true
+    tty: true
+    networks:
+      - s5js-network
+
+volumes:
+  npm-cache:
+  claude-config:
+
+networks:
+  s5js-network:
+    driver: bridge

@@ -45,25 +45,65 @@ async function testRealS5() {
     await s5.recoverIdentityFromSeedPhrase(seedPhrase);
     console.log("✅ Identity recovered successfully\n");
 
-    // Try to register on portal
-    console.log("🌐 Registering on s5.ninja portal...");
-    try {
-      await s5.registerOnNewPortal("https://s5.ninja");
-      console.log("✅ Portal registration successful!\n");
-    } catch (error) {
-      console.log("⚠️  Portal registration failed:", error.message);
-      console.log("   Full error:", error);
-      console.log("   Stack:", error.stack);
-      
-      // Try a different portal
-      console.log("\n🌐 Trying alternative portal (s5.cx)...");
+    // Log S5 state before registration
+    console.log("🔍 S5 Instance State Before Registration:");
+    console.log("   Has Identity:", s5.hasIdentity);
+    
+    // Log identity details safely
+    if (s5.identity) {
+      console.log("   Identity exists:", true);
       try {
-        await s5.registerOnNewPortal("https://s5.cx");
-        console.log("✅ Portal registration successful on s5.cx!\n");
-      } catch (error2) {
-        console.log("⚠️  Alternative portal also failed:", error2.message);
-        console.log("   Continuing with local operations...\n");
+        // Check what properties exist on identity
+        console.log("   Identity properties:", Object.keys(s5.identity));
+        if (s5.identity.keypair) {
+          console.log("   Identity has keypair:", true);
+          if (s5.identity.keypair.publicKey) {
+            console.log("   Public key length:", s5.identity.keypair.publicKey.length);
+          }
+        }
+      } catch (e) {
+        console.log("   Error accessing identity properties:", e.message);
       }
+    }
+    
+    // Log API state
+    if (s5.apiWithIdentity) {
+      console.log("   API with identity exists:", true);
+      try {
+        console.log("   Account pins:", s5.apiWithIdentity.accountPins || "none");
+        console.log("   Storage services:", s5.apiWithIdentity.storageServices || "none");
+      } catch (e) {
+        console.log("   Error accessing API properties:", e.message);
+      }
+    }
+    
+    // Log node state
+    try {
+      console.log("   Node exists:", !!s5.node);
+      if (s5.node && s5.node.p2p && s5.node.p2p.peers) {
+        console.log("   Connected peers:", s5.node.p2p.peers.size);
+      }
+    } catch (e) {
+      console.log("   Error accessing node properties:", e.message);
+    }
+    console.log("");
+
+    // Try to register on portal
+    console.log("🌐 Registering on s5.vup.cx portal...");
+    try {
+      await s5.registerOnNewPortal("https://s5.vup.cx");
+      console.log("✅ Portal registration successful!\n");
+      
+      // Log S5 state after successful registration
+      console.log("🔍 S5 State After Registration:");
+      if (s5.apiWithIdentity) {
+        console.log("   Account pins:", s5.apiWithIdentity.accountPins);
+        console.log("   Storage services:", s5.apiWithIdentity.storageServices);
+      }
+      console.log("");
+    } catch (error) {
+      console.log("❌ Portal registration failed:", error.message);
+      console.log("   Continuing without portal...\n");
     }
 
     // Test FS5
@@ -73,7 +113,7 @@ async function testRealS5() {
     // Test write
     console.log("  Writing test file...");
     try {
-      await fs.put("test/hello.txt", "Hello from Enhanced S5.js!");
+      await fs.put("home/test/hello.txt", "Hello from Enhanced S5.js!");
       console.log("  ✅ Write successful");
     } catch (error) {
       console.log("  ❌ Write failed:", error.message);
@@ -82,7 +122,7 @@ async function testRealS5() {
     // Test read
     console.log("  Reading test file...");
     try {
-      const content = await fs.get("test/hello.txt");
+      const content = await fs.get("home/test/hello.txt");
       console.log("  ✅ Read successful:", content);
     } catch (error) {
       console.log("  ❌ Read failed:", error.message);
@@ -91,7 +131,7 @@ async function testRealS5() {
     // Test list
     console.log("  Listing directory...");
     try {
-      for await (const item of fs.list("test")) {
+      for await (const item of fs.list("home/test")) {
         console.log("  📄", item.name);
       }
     } catch (error) {

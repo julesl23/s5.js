@@ -14,6 +14,7 @@ import { HiddenJSONResponse, TrustedHiddenDBProvider } from "./hidden_db.js";
 import { S5UserIdentity } from "./identity.js";
 import { MULTIHASH_BLAKE3 } from "../constants.js";
 import { concatBytes } from "@noble/hashes/utils";
+import { FormData as UndiciFormData, fetch as undiciFetch } from "undici";
 
 const portalUploadEndpoint = 'upload';
 
@@ -65,7 +66,7 @@ export class S5APIWithIdentity implements S5APIInterface {
 
         const authTokenKey = this.getAuthTokenKey(id);
 
-        if (!this.authStore.contains(authTokenKey)) {
+        if (!(await this.authStore.contains(authTokenKey))) {
             // TODO Check if the auth token is valid/expired
             try {
                 const portal: S5Portal = new S5Portal(
@@ -84,7 +85,7 @@ export class S5APIWithIdentity implements S5APIInterface {
                     's5.js',
                     this.node.crypto,
                 );
-                this.authStore.put(authTokenKey, utf8ToBytes(authToken));
+                await this.authStore.put(authTokenKey, utf8ToBytes(authToken));
             } catch (e) {
                 console.error(e);
             }
@@ -95,7 +96,7 @@ export class S5APIWithIdentity implements S5APIInterface {
         const portalConfig = new S5Portal(uri.protocol.replace(':', ''),
             uri.hostname + (uri.port ? `:${uri.port}` : ''),
             {
-                'authorization': `Bearer ${authToken}`,
+                'Authorization': `Bearer ${authToken}`,
             },);
 
         this.accountConfigs[id] = portalConfig;
@@ -151,11 +152,12 @@ export class S5APIWithIdentity implements S5APIInterface {
         this.accounts['uploadOrder']['default'].push(id);
 
 
-        this.authStore.put(
+        await this.authStore.put(
             this.getAuthTokenKey(id),
             new TextEncoder().encode(authToken)
         );
         await this.setupAccount(id);
+        
         await this.saveStorageServices();
 
         // TODO updateQuota();
@@ -176,23 +178,38 @@ export class S5APIWithIdentity implements S5APIInterface {
         const portals = Object.values(this.accountConfigs);
         for (const portal of portals.concat(portals, portals)) {
             try {
-                const formData = new FormData();
-                formData.append('file', blob);
-                const res = await fetch(portal.apiURL(portalUploadEndpoint), {
+                // Simplified approach - use File directly from blob data
+                const arrayBuffer = await blob.arrayBuffer();
+                const file = new File([arrayBuffer], 'file', { type: 'application/octet-stream' });
+                
+                // Use undici's FormData explicitly
+                const formData = new UndiciFormData();
+                formData.append('file', file);
+                
+                const uploadUrl = portal.apiURL(portalUploadEndpoint);
+                const authHeader = portal.headers['Authorization'] || portal.headers['authorization'] || '';
+                
+                // Use undici's fetch explicitly
+                const res = await undiciFetch(uploadUrl, {
                     method: 'POST',
-                    headers: portal.headers,
-                    body: formData,
+                    headers: {
+                        'Authorization': authHeader
+                    },
+                    body: formData as any,
                 });
                 if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}: ${res.body}`);
+                    const errorText = await res.text();
+                    console.log(`[upload] Failed with status ${res.status}, response: ${errorText}`);
+                    throw new Error(`HTTP ${res.status}: ${errorText}`);
                 }
-                const bid = BlobIdentifier.decode((await res.json()).cid);
+                const responseData = await res.json() as any;
+                const bid = BlobIdentifier.decode(responseData.cid);
                 if (bid.toHex() !== expectedBlobIdentifier.toHex()) {
                     throw `Integrity check for blob upload to ${portal.host} failed (got ${bid}, expected ${expectedBlobIdentifier})`;
                 }
                 return expectedBlobIdentifier;
             } catch (e) {
-                console.debug(`Failed to upload blob to ${portal.host}`, e);
+                console.error(`Failed to upload blob to ${portal.host}`, e);
             }
         }
         throw new Error("Failed to upload blob with 3 tries for each available portal");

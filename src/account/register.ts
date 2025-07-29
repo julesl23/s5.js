@@ -61,5 +61,27 @@ export async function portalAccountRegister(
     if (!registerResponse.ok) {
         throw new Error(`HTTP ${registerResponse.status}: ${registerResponse.body}`);
     }
-    return (await registerResponse.json()).authToken;
+    
+    // Try to get auth token from cookie header first (new portal behavior)
+    const setCookieHeader = registerResponse.headers.get('set-cookie');
+    if (setCookieHeader) {
+        const match = setCookieHeader.match(/s5-auth-token=([^;]+)/);
+        if (match) {
+            return match[1];
+        }
+    }
+    
+    // Fall back to JSON body (old portal behavior)
+    try {
+        const responseText = await registerResponse.text();
+        if (responseText) {
+            const result = JSON.parse(responseText);
+            return result.authToken;
+        }
+    } catch (e) {
+        // If no JSON body and no cookie, throw error
+        throw new Error('No auth token found in response (neither in cookie nor JSON body)');
+    }
+    
+    throw new Error('No auth token found in response');
 }
