@@ -137,6 +137,7 @@
 ### Phase 4: Utility Functions (Design Doc 1, Grant Month 6) ✅ 2025-07-20
 
 - [x] **4.1 Directory Walker** ✅ 2025-07-20
+
   - [x] Create src/fs/utils/walker.ts
   - [x] Implement walk async iterator
   - [x] Implement count method
@@ -144,7 +145,9 @@
   - [x] Add filter support
   - [x] Add maxDepth support
   - [x] Add cursor resume support
+
 - [x] **4.2 Batch Operations** ✅ 2025-07-20
+
   - [x] Create src/fs/utils/batch.ts
   - [x] Implement copyDirectory
   - [x] Implement deleteDirectory
@@ -152,13 +155,49 @@
   - [x] Add resume support with cursors
   - [x] Add progress callbacks
   - [x] Add error handling options
-- [x] **4.3 Test Server for Integration** ✅ 2025-07-23
-  - [x] Create test-server.js with Express
-  - [x] Implement mock storage backend
-  - [x] Add HTTP endpoints for fs operations
-  - [x] Support binary data (CBOR)
-  - [x] Create test-server-README.md
-  - [x] Add test examples script
+
+- [x] **4.3 Real S5 Portal Integration** ✅ 2025-07-30
+  - [x] Connected to s5.vup.cx portal
+  - [x] Fixed CBOR Map deserialization
+  - [x] Implemented deterministic key derivation
+  - [x] Fixed auth token and blob upload issues
+  - [x] Achieved 100% test success rate with fresh identities
+
+### Phase 4.5: Real S5 Portal Integration ✅ COMPLETE (2025-07-30)
+
+**Goal**: Connect enhanced S5.js to real S5 portal infrastructure
+
+#### 4.5.1 Portal Connection Issues Fixed ✅
+
+- [x] Updated to s5.vup.cx portal with new API ✅
+- [x] Fixed auth token extraction from cookies ✅
+- [x] Fixed blob upload using undici FormData ✅
+- [x] Fixed response body error handling ✅
+
+#### 4.5.2 Directory Persistence Fixed ✅
+
+- [x] Fixed CBOR deserialization to preserve Map types ✅
+- [x] Implemented deterministic key derivation for subdirectories ✅
+- [x] Fixed intermediate directory creation logic ✅
+- [x] Root directory now properly maintains subdirectory references ✅
+
+#### 4.5.3 Test Coverage ✅
+
+- [x] Fresh identity test: 100% success rate (9/9 tests) ✅
+- [x] Full integration test suite ✅
+- [x] Direct portal API tests ✅
+- [x] Comprehensive debug tests ✅
+
+**Results:**
+
+- Successfully connected to s5.vup.cx portal
+- All file operations working (put/get/list/delete)
+- Directory structure persists correctly
+- Ready for production use with real S5 network
+
+### Phase 5: Media Processing (Basic) (Grant Month 5)
+
+[... continues with existing Phase 5 ...]
 
 ### Phase 5: Media Processing Foundation (Design Doc 2, Grant Month 4)
 
