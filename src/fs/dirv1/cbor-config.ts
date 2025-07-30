@@ -51,14 +51,16 @@ export function encodeS5(value: any): Uint8Array {
   return new Uint8Array(result);
 }
 
-// Helper to postprocess decoded values (convert Maps back to objects)
+// Helper to postprocess decoded values
 function postprocessValue(value: any): any {
+  // Keep Maps as Maps - don't convert to objects
   if (value instanceof Map) {
-    const obj: any = {};
+    // Process Map values recursively but keep the Map structure
+    const processedMap = new Map();
     for (const [k, v] of value) {
-      obj[k] = postprocessValue(v);
+      processedMap.set(k, postprocessValue(v));
     }
-    return obj;
+    return processedMap;
   }
   
   if (Array.isArray(value)) {
@@ -71,7 +73,7 @@ function postprocessValue(value: any): any {
 // Main decoding function
 export function decodeS5(data: Uint8Array): any {
   const decoded = encoder.decode(data);
-  return postprocessValue(decoded);
+  return decoded; // Return decoded value directly without postprocessing
 }
 
 // Helper to create ordered map from object

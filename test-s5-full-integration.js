@@ -71,11 +71,37 @@ async function runFullIntegrationTest() {
     }
     console.log();
 
+    // Test 3.5: Initialize filesystem directories (home, archive)
+    console.log("Test 3.5: Initializing filesystem directories...");
+    try {
+      await s5.fs.ensureIdentityInitialized();
+      console.log("✅ Filesystem directories initialized successfully");
+      testsPassed++;
+      
+      // Small delay to ensure registry propagation
+      console.log("   Waiting for registry propagation...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error) {
+      console.log("❌ Filesystem initialization failed:", error.message);
+      testsFailed++;
+    }
+    console.log();
+
     // Test 4: FS5 Write Operation (with correct path)
     console.log("Test 4: Writing file to FS5...");
     const testContent =
       "Hello from Enhanced S5.js! Time: " + new Date().toISOString();
     try {
+      // First try to create the test directory explicitly
+      try {
+        await s5.fs.createDirectory("home", "test");
+        console.log("   📁 Created test directory");
+      } catch (error) {
+        if (!error.message.includes("already contains")) {
+          console.log("   ⚠️  Could not create test directory:", error.message);
+        }
+      }
+      
       await s5.fs.put("home/test/hello.txt", testContent);
       console.log("✅ File written successfully");
       testsPassed++;
