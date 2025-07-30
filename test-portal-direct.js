@@ -26,57 +26,71 @@ if (!global.WebSocket) global.WebSocket = WebSocket;
 
 async function testPortalDirect() {
   console.log("🚀 Testing Direct Portal API...\n");
-  
+
   try {
     // Step 1: Create S5 instance and recover identity
     const s5 = await S5.create({
-      initialPeers: ['wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p']
+      initialPeers: [
+        "wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p",
+      ],
     });
-    
-    const seedPhrase = "obtain safety dawn victim unknown soon have they life habit lecture nurse almost vote crazy";
+
+    const seedPhrase =
+      "physics observe friend coin name kick walk buck poor blood library spy affect care copy";
     await s5.recoverIdentityFromSeedPhrase(seedPhrase);
     console.log("✅ Identity recovered\n");
-    
+
     // Step 2: Register on the new portal
     console.log("🌐 Registering on s5.vup.cx portal...");
-    await s5.registerOnNewPortal("https://s5.vup.cx");
-    console.log("✅ Portal registration successful!\n");
-    
+    try {
+      await s5.registerOnNewPortal("https://s5.vup.cx");
+      console.log("✅ Portal registration successful!\n");
+    } catch (error) {
+      if (error.message.includes("already has an account")) {
+        console.log(
+          "ℹ️  Account already exists, continuing with existing account\n"
+        );
+      } else {
+        throw error;
+      }
+    }
+
     // Step 3: Get the auth token
     // We need to access the internal API to get the auth token
     if (s5.apiWithIdentity && s5.apiWithIdentity.accountConfigs) {
       const portalConfigs = Object.values(s5.apiWithIdentity.accountConfigs);
       if (portalConfigs.length > 0) {
         const portal = portalConfigs[0];
-        const authHeader = portal.headers['Authorization'] || portal.headers['authorization'];
-        
+        const authHeader =
+          portal.headers["Authorization"] || portal.headers["authorization"];
+
         if (authHeader) {
           console.log("🔑 Auth token found\n");
-          
+
           // Step 4: Test direct blob upload
           console.log("📤 Testing direct blob upload...");
           const testData = "Hello from direct portal test!";
           const blob = new Blob([testData]);
-          const file = new File([blob], 'test.txt', { type: 'text/plain' });
-          
+          const file = new File([blob], "test.txt", { type: "text/plain" });
+
           const formData = new FormData();
-          formData.append('file', file);
-          
+          formData.append("file", file);
+
           const uploadUrl = `https://s5.vup.cx/s5/upload`;
           console.log(`Uploading to: ${uploadUrl}`);
-          
+
           const response = await fetch(uploadUrl, {
-            method: 'POST',
+            method: "POST",
             headers: {
-              'Authorization': authHeader
+              Authorization: authHeader,
             },
-            body: formData
+            body: formData,
           });
-          
+
           console.log(`Response status: ${response.status}`);
           const responseText = await response.text();
           console.log(`Response body: ${responseText}`);
-          
+
           if (response.ok) {
             const result = JSON.parse(responseText);
             console.log("✅ Direct upload successful!");
@@ -89,7 +103,6 @@ async function testPortalDirect() {
         }
       }
     }
-    
   } catch (error) {
     console.error("❌ Error:", error.message);
     console.error("Stack:", error.stack);

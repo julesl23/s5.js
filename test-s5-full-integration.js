@@ -26,6 +26,37 @@ if (!global.fetch) global.fetch = fetch;
 if (!global.FormData) global.FormData = FormData;
 if (!global.WebSocket) global.WebSocket = WebSocket;
 
+// Deep equality check for objects
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== typeof b) return false;
+  
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  
+  if (typeof a === 'object') {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    
+    if (keysA.length !== keysB.length) return false;
+    
+    for (const key of keysA) {
+      if (!keysB.includes(key)) return false;
+      if (!deepEqual(a[key], b[key])) return false;
+    }
+    
+    return true;
+  }
+  
+  return false;
+}
+
 async function runFullIntegrationTest() {
   console.log("🚀 Enhanced S5.js Full Integration Test with Real Portal\n");
   console.log("═".repeat(60) + "\n");
@@ -48,7 +79,7 @@ async function runFullIntegrationTest() {
     // Test 2: Identity Recovery
     console.log("Test 2: Recovering identity from seed phrase...");
     const seedPhrase =
-      "obtain safety dawn victim unknown soon have they life habit lecture nurse almost vote crazy";
+      "physics observe friend coin name kick walk buck poor blood library spy affect care copy";
     await s5.recoverIdentityFromSeedPhrase(seedPhrase);
     console.log("✅ Identity recovered successfully");
     testsPassed++;
@@ -62,7 +93,9 @@ async function runFullIntegrationTest() {
       testsPassed++;
     } catch (error) {
       if (error.message.includes("already has an account")) {
-        console.log("ℹ️  Account already exists, continuing with existing account");
+        console.log(
+          "ℹ️  Account already exists, continuing with existing account"
+        );
         testsPassed++;
       } else {
         console.log("❌ Portal registration failed:", error.message);
@@ -77,10 +110,10 @@ async function runFullIntegrationTest() {
       await s5.fs.ensureIdentityInitialized();
       console.log("✅ Filesystem directories initialized successfully");
       testsPassed++;
-      
+
       // Small delay to ensure registry propagation
       console.log("   Waiting for registry propagation...");
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     } catch (error) {
       console.log("❌ Filesystem initialization failed:", error.message);
       testsFailed++;
@@ -101,7 +134,7 @@ async function runFullIntegrationTest() {
           console.log("   ⚠️  Could not create test directory:", error.message);
         }
       }
-      
+
       await s5.fs.put("home/test/hello.txt", testContent);
       console.log("✅ File written successfully");
       testsPassed++;
@@ -173,11 +206,16 @@ async function runFullIntegrationTest() {
       };
       await s5.fs.put("home/test/data.json", jsonData);
       const retrieved = await s5.fs.get("home/test/data.json");
-      if (JSON.stringify(retrieved) === JSON.stringify(jsonData)) {
+      // Use deep equality check instead of string comparison
+      // CBOR serialization may change property order
+      if (deepEqual(retrieved, jsonData)) {
         console.log("✅ JSON data stored and retrieved successfully");
+        console.log("   (Property order may differ due to CBOR serialization)");
         testsPassed++;
       } else {
         console.log("❌ JSON data mismatch");
+        console.log("   Original:", JSON.stringify(jsonData));
+        console.log("   Retrieved:", JSON.stringify(retrieved));
         testsFailed++;
       }
     } catch (error) {
