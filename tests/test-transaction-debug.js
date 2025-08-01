@@ -1,8 +1,8 @@
 // test-transaction-debug.js - Debug the transaction error
-import { S5 } from "./dist/src/index.js";
-import { generatePhrase } from "./dist/src/identity/seed_phrase/seed_phrase.js";
-import { DirV1Serialiser } from "./dist/src/fs/dirv1/serialisation.js";
-import { createRegistryEntry } from "./dist/src/registry/entry.js";
+import { S5 } from "../dist/src/index.js";
+import { generatePhrase } from "../dist/src/identity/seed_phrase/seed_phrase.js";
+import { DirV1Serialiser } from "../dist/src/fs/dirv1/serialisation.js";
+import { createRegistryEntry } from "../dist/src/registry/entry.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";

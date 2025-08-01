@@ -1,6 +1,6 @@
 // test-fresh-s5.js - Test with fresh identity to avoid old key issues
-import { S5 } from "./dist/src/index.js";
-import { generatePhrase } from "./dist/src/identity/seed_phrase/seed_phrase.js";
+import { S5 } from "../dist/src/index.js";
+import { generatePhrase } from "../dist/src/identity/seed_phrase/seed_phrase.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";

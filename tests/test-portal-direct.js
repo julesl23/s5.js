@@ -1,5 +1,5 @@
 // test-portal-direct.js
-import { S5 } from "./dist/src/index.js";
+import { S5 } from "../dist/src/index.js";
 import { webcrypto } from "crypto";
 import { TextEncoder, TextDecoder } from "util";
 import { ReadableStream, WritableStream, TransformStream } from "stream/web";

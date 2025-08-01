@@ -1,5 +1,5 @@
 // test-s5-full-integration.js
-import { S5 } from "./dist/src/index.js";
+import { S5 } from "../dist/src/index.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";

@@ -19,7 +19,7 @@ npm run build
 
 2. Start the test server:
 ```bash
-node test-server.js
+node tests/test-server.js
 ```
 
 The server will start on port 5522 (configurable via PORT environment variable).
@@ -82,7 +82,7 @@ curl -X DELETE http://localhost:5522/s5/fs/test.txt
 
 Run the included test script:
 ```bash
-./test-server-examples.sh
+./tests/test-server-examples.sh
 ```
 
 ## Integration with Rust Vector Database

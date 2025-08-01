@@ -6,7 +6,7 @@ import { performance } from "perf_hooks";
 if (!global.crypto) global.crypto = webcrypto;
 
 // Import HAMT and dependencies
-import { HAMT } from "./dist/src/fs/hamt/hamt.js";
+import { HAMT } from "../dist/src/fs/hamt/hamt.js";
 
 // Mock S5 API for local testing
 class MockS5API {
