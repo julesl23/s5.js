@@ -1,6 +1,6 @@
 // test-hamt-mock-comprehensive.js - Comprehensive HAMT Demo with Mock S5
-import { HAMT } from "../dist/src/fs/hamt/hamt.js";
-import { FS5 } from "../dist/src/fs/fs5.js";
+import { HAMT } from "../../dist/src/fs/hamt/hamt.js";
+import { FS5 } from "../../dist/src/fs/fs5.js";
 import { performance } from "perf_hooks";
 
 // Node.js polyfills

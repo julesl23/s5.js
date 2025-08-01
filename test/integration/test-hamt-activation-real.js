@@ -1,7 +1,7 @@
 // test-hamt-activation-real.js - Real S5 Portal HAMT Activation Test
-import { S5 } from "../dist/src/index.js";
+import { S5 } from "../../dist/src/index.js";
 import { performance } from "perf_hooks";
-import { generatePhrase } from "../dist/src/identity/seed_phrase/seed_phrase.js";
+import { generatePhrase } from "../../dist/src/identity/seed_phrase/seed_phrase.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";

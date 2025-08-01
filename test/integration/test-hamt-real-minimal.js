@@ -1,6 +1,6 @@
 // test-hamt-real-minimal.js - Minimal Real S5 Portal HAMT Test
-import { S5 } from "../dist/src/index.js";
-import { generatePhrase } from "../dist/src/identity/seed_phrase/seed_phrase.js";
+import { S5 } from "../../dist/src/index.js";
+import { generatePhrase } from "../../dist/src/identity/seed_phrase/seed_phrase.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";

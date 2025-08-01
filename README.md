@@ -94,7 +94,7 @@ The enhanced S5.js has been successfully integrated with real S5 portal infrastr
 This test creates a new identity and verifies all functionality:
 
 ```bash
-node tests/test-fresh-s5.js
+node test/integration/test-fresh-s5.js
 ```
 
 Expected output: 100% success rate (9/9 tests passing)
@@ -104,7 +104,7 @@ Expected output: 100% success rate (9/9 tests passing)
 Comprehensive test of all features:
 
 ```bash
-node tests/test-s5-full-integration.js
+node test/integration/test-s5-full-integration.js
 ```
 
 ### 3. Direct Portal API Test
@@ -112,7 +112,7 @@ node tests/test-s5-full-integration.js
 Tests direct portal communication:
 
 ```bash
-node tests/test-portal-direct.js
+node test/integration/test-portal-direct.js
 ```
 
 ### Important Notes
@@ -133,10 +133,10 @@ Test HAMT performance with mock S5 API:
 
 ```bash
 # Basic HAMT verification
-node tests/test-hamt-local-simple.js
+node test/integration/test-hamt-local-simple.js
 
 # Comprehensive scaling test (up to 100K entries)
-node tests/test-hamt-mock-comprehensive.js
+node test/integration/test-hamt-mock-comprehensive.js
 ```
 
 #### Real Portal Benchmarks (Network)
@@ -145,13 +145,13 @@ Test with actual S5 portal (requires internet connection):
 
 ```bash
 # Minimal real portal test
-node tests/test-hamt-real-minimal.js
+node test/integration/test-hamt-real-minimal.js
 
 # HAMT activation threshold test
-node tests/test-hamt-activation-real.js
+node test/integration/test-hamt-activation-real.js
 
 # Full portal performance analysis
-node tests/test-hamt-real-portal.js
+node test/integration/test-hamt-real-portal.js
 ```
 
 ### Benchmark Results
@@ -206,7 +206,7 @@ See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 ## Testing & Integration
 
 - For S5 portal testing, see the test files mentioned above
-- For integration testing with external services, see [test-server-README.md](./tests/test-server-README.md)
+- For integration testing with external services, see [test-server-README.md](./test/integration/test-server-README.md)
 
 ## Troubleshooting
 
