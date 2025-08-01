@@ -7,6 +7,10 @@ export { S5APIInterface } from './api/s5.js';
 export { CryptoImplementation } from './api/crypto.js';
 export { JSCryptoImplementation } from './api/crypto/js.js';
 
+// Export utility classes
+export { DirectoryWalker } from './fs/utils/walker.js';
+export { BatchOperations } from './fs/utils/batch.js';
+
 // Export types
 export type { 
   DirV1, 
@@ -19,3 +23,16 @@ export type {
   ListResult,
   CursorData 
 } from './fs/dirv1/types.js';
+
+// Export utility types
+export type {
+  WalkOptions,
+  WalkResult,
+  WalkStats
+} from './fs/utils/walker.js';
+
+export type {
+  BatchOptions,
+  BatchProgress,
+  BatchResult
+} from './fs/utils/batch.js';

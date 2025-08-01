@@ -9,8 +9,6 @@ services:
       - .:/home/developer/s5.js
       # Create a named volume for npm cache to persist between restarts
       - npm-cache:/home/developer/.npm
-      # Create a named volume for claude config if needed
-      - claude-config:/home/developer/.config
     ports:
       - "5523:5523" # External access port only
     environment:
@@ -22,7 +20,6 @@ services:
 
 volumes:
   npm-cache:
-  claude-config:
 
 networks:
   s5js-network:

@@ -20,6 +20,19 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - 📋 **Batch Operations**: High-level copy/delete operations with progress tracking
 - ✅ **Real S5 Portal Integration**: Fully tested with s5.vup.cx portal
 
+## Key Components
+
+### Core API
+- **S5**: Main client class for connection and identity management
+- **FS5**: File system operations with path-based API
+- **S5UserIdentity**: User identity and authentication
+
+### Utility Classes
+- **DirectoryWalker**: Recursive directory traversal with cursor support
+- **BatchOperations**: High-level copy/delete operations with progress tracking
+
+See the [API Documentation](./docs/API.md) for detailed usage examples.
+
 ## Installation
 
 The enhanced path-based API features are currently in development as part of a Sia Foundation grant project.
@@ -62,8 +75,13 @@ const s5 = await S5.create({
   ],
 });
 
-// Generate or use a seed phrase
-const seedPhrase = "your twelve word seed phrase goes here";
+// Generate a new seed phrase (save this securely!)
+const seedPhrase = s5.generateSeedPhrase();
+console.log("Your seed phrase:", seedPhrase);
+
+// Or recover from existing seed phrase
+// const seedPhrase = "your saved twelve word seed phrase here";
+
 await s5.recoverIdentityFromSeedPhrase(seedPhrase);
 
 // Register on S5 portal (s5.vup.cx supports the new API)
@@ -83,6 +101,27 @@ console.log(content); // "Hello, S5!"
 for await (const item of s5.fs.list("home/documents")) {
   console.log(`${item.type}: ${item.name}`);
 }
+```
+
+### Advanced Usage
+
+```typescript
+import { DirectoryWalker, BatchOperations } from "./dist/src/index.js";
+
+// Recursive directory traversal
+const walker = new DirectoryWalker(s5.fs, '/');
+for await (const entry of walker.walk("home", { maxDepth: 3 })) {
+  console.log(`${entry.path} (${entry.type})`);
+}
+
+// Batch operations with progress
+const batch = new BatchOperations(s5.fs);
+const result = await batch.copyDirectory("home/source", "home/backup", {
+  onProgress: (progress) => {
+    console.log(`Copied ${progress.processed} items...`);
+  }
+});
+console.log(`Completed: ${result.success} success, ${result.failed} failed`);
 ```
 
 ## Testing with Real S5 Portal

@@ -94,16 +94,26 @@ npm install @s5-dev/s5js
 ## Quick Start
 
 ```typescript
-import { S5Client } from "@s5-dev/s5js";
+import { S5 } from "@s5-dev/s5js";
 
-// Initialize S5 client with portal connection
-const s5 = new S5Client("https://s5.cx"); // or another S5 portal
-
-// Optional: Set up with authentication
-const s5 = await S5Client.create({
-  portal: "https://s5.cx",
-  seed: "your-seed-phrase-here", // For authenticated operations
+// Create S5 instance and connect to peers
+const s5 = await S5.create({
+  initialPeers: [
+    "wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p"
+  ]
 });
+
+// Generate a new seed phrase
+const seedPhrase = s5.generateSeedPhrase();
+
+// Or recover from existing seed phrase
+await s5.recoverIdentityFromSeedPhrase(seedPhrase);
+
+// Register on S5 portal (s5.vup.cx supports the new API)
+await s5.registerOnNewPortal("https://s5.vup.cx");
+
+// Initialize filesystem (creates home and archive directories)
+await s5.fs.ensureIdentityInitialized();
 
 // Store data
 await s5.fs.put("home/documents/hello.txt", "Hello, S5!");
@@ -662,9 +672,9 @@ The `DirectoryWalker` class provides efficient recursive directory traversal wit
 #### Constructor
 
 ```typescript
-import { DirectoryWalker } from "@/fs/utils/walker";
+import { DirectoryWalker } from "@s5-dev/s5js";
 
-const walker = new DirectoryWalker(s5.fs);
+const walker = new DirectoryWalker(s5.fs, '/');
 ```
 
 #### walk(path, options?)
@@ -675,16 +685,19 @@ Recursively traverse a directory tree, yielding entries as they are discovered.
 interface WalkOptions {
   recursive?: boolean;      // Whether to recurse into subdirectories (default: true)
   maxDepth?: number;        // Maximum depth to traverse
-  filter?: (entry: WalkResult) => boolean | Promise<boolean>;  // Filter entries
-  cursor?: Uint8Array;      // Resume from cursor position
+  includeFiles?: boolean;   // Whether to include files in results (default: true)
+  includeDirectories?: boolean; // Whether to include directories in results (default: true)
+  filter?: (name: string, type: 'file' | 'directory') => boolean;  // Filter entries
+  cursor?: string;          // Resume from cursor position
 }
 
 interface WalkResult {
   path: string;             // Full path to the entry
   name: string;             // Entry name
-  entry: FileRef | DirRef;  // The actual entry
+  type: 'file' | 'directory'; // Type of entry
+  size?: number;            // Size in bytes (for files)
   depth: number;            // Depth from starting directory
-  cursor?: Uint8Array;      // Cursor for resuming
+  cursor?: string;          // Cursor for resuming
 }
 
 // Basic usage
@@ -695,17 +708,17 @@ for await (const result of walker.walk("home/projects")) {
 // With options
 for await (const result of walker.walk("home", {
   maxDepth: 2,
-  filter: async (r) => !r.name.startsWith(".")  // Skip hidden files
+  filter: (name, type) => !name.startsWith(".")  // Skip hidden files
 })) {
-  if ('hash' in result.entry) {
-    console.log(`File: ${result.path} (${result.entry.size} bytes)`);
+  if (result.type === 'file') {
+    console.log(`File: ${result.path} (${result.size} bytes)`);
   } else {
     console.log(`Dir: ${result.path}`);
   }
 }
 
 // Resumable walk with cursor
-let lastCursor: Uint8Array | undefined;
+let lastCursor: string | undefined;
 try {
   for await (const result of walker.walk("home/large-dir", { cursor: savedCursor })) {
     lastCursor = result.cursor;
@@ -739,7 +752,7 @@ The `BatchOperations` class provides high-level operations for copying and delet
 #### Constructor
 
 ```typescript
-import { BatchOperations } from "@/fs/utils/batch";
+import { BatchOperations } from "@s5-dev/s5js";
 
 const batch = new BatchOperations(s5.fs);
 ```
@@ -753,7 +766,7 @@ interface BatchOptions {
   recursive?: boolean;       // Copy subdirectories (default: true)
   onProgress?: (progress: BatchProgress) => void;  // Progress callback
   onError?: "stop" | "continue" | ((error: Error, path: string) => "stop" | "continue");
-  cursor?: Uint8Array;       // Resume from cursor
+  cursor?: string;           // Resume from cursor
   preserveMetadata?: boolean; // Preserve file metadata (default: true)
 }
 
@@ -762,14 +775,14 @@ interface BatchProgress {
   total?: number;
   processed: number;
   currentPath: string;
-  cursor?: Uint8Array;
+  cursor?: string;
 }
 
 interface BatchResult {
   success: number;
   failed: number;
   errors: Array<{ path: string; error: Error }>;
-  cursor?: Uint8Array;      // For resuming if interrupted
+  cursor?: string;          // For resuming if interrupted
 }
 
 // Basic copy
@@ -940,6 +953,35 @@ async function syncDirectories(source: string, dest: string) {
 - **Walker Efficiency**: DirectoryWalker uses depth-first traversal with lazy loading
 - **Batch Operations**: Progress callbacks allow for UI updates without blocking
 - **Resumable Operations**: Cursor support enables efficient resume after interruption
+
+## Performance Testing
+
+To run performance benchmarks and verify HAMT efficiency:
+
+### Local Mock Benchmarks (Fast)
+
+```bash
+# Basic HAMT verification
+node test/integration/test-hamt-local-simple.js
+
+# Comprehensive scaling test (up to 100K entries)  
+node test/integration/test-hamt-mock-comprehensive.js
+```
+
+### Real Portal Benchmarks (Network)
+
+```bash
+# Minimal real portal test
+node test/integration/test-hamt-real-minimal.js
+
+# HAMT activation threshold test
+node test/integration/test-hamt-activation-real.js
+
+# Full portal performance analysis
+node test/integration/test-hamt-real-portal.js
+```
+
+See [BENCHMARKS.md](./BENCHMARKS.md) for detailed performance results.
 
 ## Next Steps
 

@@ -1,6 +1,6 @@
 # Enhanced S5.js Implementation Progress
 
-## Current Status
+## Current Status (As of August 1, 2025)
 
 - ✅ Development environment setup
 - ✅ Test framework (Vitest) configured
@@ -8,6 +8,13 @@
 - ✅ Base crypto functionality verified (21/21 tests passing)
 - ✅ Git repository with GitHub backup
 - ✅ Grant Month 1 completed
+- ✅ Grant Month 2 completed (Path Helpers v0.1)
+- ✅ Grant Month 3 completed (Path-cascade Optimization & HAMT)
+- ✅ Grant Month 6 completed early (Directory Utilities)
+- ✅ Grant Month 7 completed early (HAMT Sharding)
+- ✅ Real S5 Portal Integration working (s5.vup.cx)
+- ✅ Performance benchmarks completed
+- ✅ API documentation updated
 
 ## Implementation Phases
 
@@ -101,7 +108,7 @@
   - [x] Timestamp handling (seconds to milliseconds conversion)
   - [x] Created comprehensive test suite (132/132 tests passing) ✅ 2025-07-17
 
-### Phase 3: HAMT Integration (Design Doc 1, Grant Month 3)
+### Phase 3: HAMT Integration (Design Doc 1, Grant Month 3) ✅ 2025-08-01
 
 - [x] **3.1 HAMT Implementation** ✅ Week 1 Complete (2025-07-19), Week 2 Complete (2025-07-20)
   - [x] Create src/fs/hamt/hamt.ts
@@ -134,6 +141,8 @@
   - [x] Verify O(log n) access times ✅ (confirmed)
   - [x] Test memory usage ✅ (~650 bytes/entry)
   - [x] Real portal performance measured ✅ (800ms/operation)
+  - [x] Created comprehensive BENCHMARKS.md documentation ✅
+  - [x] Exported DirectoryWalker and BatchOperations from main package ✅
 
 ### Phase 4: Utility Functions (Design Doc 1, Grant Month 6) ✅ 2025-07-20
 
@@ -195,6 +204,37 @@
 - All file operations working (put/get/list/delete)
 - Directory structure persists correctly
 - Ready for production use with real S5 network
+
+### Phase 4.6: Documentation & Export Updates ✅ COMPLETE (2025-08-01)
+
+**Goal**: Update documentation and ensure all new features are properly exported
+
+#### 4.6.1 API Documentation Updates ✅
+
+- [x] Updated API.md with correct S5 class initialization ✅
+- [x] Fixed import examples for DirectoryWalker and BatchOperations ✅
+- [x] Updated interface definitions to match implementation ✅
+- [x] Added performance testing section ✅
+
+#### 4.6.2 Export Updates ✅
+
+- [x] Added DirectoryWalker export to src/index.ts ✅
+- [x] Added BatchOperations export to src/index.ts ✅
+- [x] Added utility type exports (WalkOptions, BatchOptions, etc.) ✅
+
+#### 4.6.3 README Updates ✅
+
+- [x] Updated README.md Quick Start with seed phrase generation ✅
+- [x] Added Advanced Usage section with utility examples ✅
+- [x] Updated all test file paths to test/integration/ ✅
+- [x] Added Key Components section ✅
+
+#### 4.6.4 Milestone Documentation ✅
+
+- [x] Updated MILESTONES.md to show Month 3 complete ✅
+- [x] Marked performance benchmarks as complete ✅
+- [x] Updated Month 7 (HAMT) status to complete ✅
+- [x] Added Week 4 completion details ✅
 
 ### Phase 5: Media Processing (Basic) (Grant Month 5)
 
@@ -291,13 +331,38 @@
 
 ## Code Quality Checklist
 
-- [ ] All new code has tests
-- [ ] TypeScript strict mode compliance
-- [ ] No linting errors
-- [ ] Bundle size within limits
-- [ ] Performance benchmarks pass
-- [ ] Documentation complete
-- [ ] Cross-browser compatibility verified
+- [x] All new code has tests ✅
+- [x] TypeScript strict mode compliance ✅
+- [x] No linting errors ✅
+- [ ] Bundle size within limits (pending Phase 5)
+- [x] Performance benchmarks pass ✅
+- [x] Documentation complete ✅
+- [ ] Cross-browser compatibility verified (pending Phase 5)
+
+## Summary of Completed Work (As of August 1, 2025)
+
+### Phases Completed
+
+1. **Phase 1**: Core Infrastructure (CBOR, DirV1 types) ✅
+2. **Phase 2**: Path-Based API Implementation ✅
+3. **Phase 3**: HAMT Integration with Performance Verification ✅
+4. **Phase 4**: Utility Functions (DirectoryWalker, BatchOperations) ✅
+5. **Phase 4.5**: Real S5 Portal Integration ✅
+6. **Phase 4.6**: Documentation & Export Updates ✅
+
+### Key Achievements
+
+- Complete path-based API (get, put, delete, list, getMetadata)
+- Automatic HAMT sharding at 1000+ entries
+- O(log n) performance verified up to 100K+ entries
+- Real S5 portal integration working (s5.vup.cx)
+- Comprehensive test suite (200+ tests)
+- Full API documentation
+- Performance benchmarks documented
+
+### Next Phase
+
+**Phase 5**: Media Processing Foundation (WASM setup, basic metadata extraction)
 
 ## Notes
 
