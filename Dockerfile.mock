@@ -1,0 +1,9 @@
+FROM node:20-slim
+WORKDIR /app
+COPY package*.json ./
+COPY test/integration/test-server.js ./test/integration/
+COPY dist ./dist
+RUN npm install express
+EXPOSE 5524
+ENV PORT=5524
+CMD ["node", "test/integration/test-server.js"]
