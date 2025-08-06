@@ -17,6 +17,7 @@
   "scripts": {
     "build": "tsc && node scripts/fix-esm-imports.js",
     "dev": "tsc --watch",
+    "start": "node dist/src/server.js",
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
@@ -58,7 +59,9 @@
     "xxhash-wasm": "^1.1.0"
   },
   "devDependencies": {
-    "@types/node": "^24.0.13",
+    "@types/express": "^4.17.21",
+    "@types/node": "^24.2.0",
+    "@types/ws": "^8.18.1",
     "@vitest/ui": "^3.2.4",
     "vitest": "^3.2.4"
   }
