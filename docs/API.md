@@ -332,10 +332,12 @@ async *list(path: string, options?: ListOptions): AsyncIterableIterator<ListResu
 
 ```typescript
 interface ListResult {
-  type: "file" | "directory";
   name: string;
-  metadata: Record<string, any>;
-  cursor?: string; // Pagination cursor
+  type: "file" | "directory";
+  size?: number;         // File size in bytes (for files)
+  mediaType?: string;    // MIME type (for files)
+  timestamp?: number;    // Milliseconds since epoch
+  cursor?: string;       // Pagination cursor
 }
 ```
 
@@ -402,10 +404,12 @@ interface ListOptions {
 
 ```typescript
 interface ListResult {
-  type: "file" | "directory";
   name: string;
-  metadata: Record<string, any>;
-  cursor?: string; // Opaque cursor for pagination
+  type: "file" | "directory";
+  size?: number;         // File size in bytes (for files)
+  mediaType?: string;    // MIME type (for files)
+  timestamp?: number;    // Milliseconds since epoch
+  cursor?: string;       // Opaque cursor for pagination
 }
 ```
 
@@ -674,10 +678,10 @@ The `DirectoryWalker` class provides efficient recursive directory traversal wit
 ```typescript
 import { DirectoryWalker } from "@s5-dev/s5js";
 
-const walker = new DirectoryWalker(s5.fs, '/');
+const walker = new DirectoryWalker(s5.fs, '/home/projects');
 ```
 
-#### walk(path, options?)
+#### walk(options?)
 
 Recursively traverse a directory tree, yielding entries as they are discovered.
 
@@ -701,12 +705,14 @@ interface WalkResult {
 }
 
 // Basic usage
-for await (const result of walker.walk("home/projects")) {
+const walker = new DirectoryWalker(s5.fs, "home/projects");
+for await (const result of walker.walk()) {
   console.log(`${result.path} (depth: ${result.depth})`);
 }
 
 // With options
-for await (const result of walker.walk("home", {
+const walker2 = new DirectoryWalker(s5.fs, "home");
+for await (const result of walker2.walk({
   maxDepth: 2,
   filter: (name, type) => !name.startsWith(".")  // Skip hidden files
 })) {
@@ -718,9 +724,10 @@ for await (const result of walker.walk("home", {
 }
 
 // Resumable walk with cursor
+const walker3 = new DirectoryWalker(s5.fs, "home/large-dir");
 let lastCursor: string | undefined;
 try {
-  for await (const result of walker.walk("home/large-dir", { cursor: savedCursor })) {
+  for await (const result of walker3.walk({ cursor: savedCursor })) {
     lastCursor = result.cursor;
     // Process entry...
   }
@@ -730,7 +737,7 @@ try {
 }
 ```
 
-#### count(path, options?)
+#### count(options?)
 
 Count entries in a directory tree without loading all data.
 
@@ -741,7 +748,8 @@ interface WalkStats {
   totalSize: number;
 }
 
-const stats = await walker.count("home/projects", { recursive: true });
+const walker = new DirectoryWalker(s5.fs, "home/projects");
+const stats = await walker.count({ recursive: true });
 console.log(`Files: ${stats.files}, Dirs: ${stats.directories}, Size: ${stats.totalSize}`);
 ```
 
@@ -881,14 +889,14 @@ async function backupDirectory(source: string, dest: string) {
 
 ```typescript
 async function findLargeFiles(path: string, minSize: number) {
-  const walker = new DirectoryWalker(s5.fs);
+  const walker = new DirectoryWalker(s5.fs, path);
   const largeFiles: Array<{ path: string; size: number }> = [];
   
   for await (const result of walker.walk(path)) {
-    if ('hash' in result.entry && result.entry.size > minSize) {
+    if (result.type === 'file' && result.size && result.size > minSize) {
       largeFiles.push({
         path: result.path,
-        size: result.entry.size
+        size: result.size
       });
     }
   }
@@ -910,7 +918,6 @@ largeFiles.forEach(f => {
 
 ```typescript
 async function syncDirectories(source: string, dest: string) {
-  const walker = new DirectoryWalker(s5.fs);
   const batch = new BatchOperations(s5.fs);
   
   // First, copy new and updated files
@@ -920,13 +927,15 @@ async function syncDirectories(source: string, dest: string) {
   });
   
   // Then, remove files that exist in dest but not in source
+  const sourceWalker = new DirectoryWalker(s5.fs, source);
   const sourceFiles = new Set<string>();
-  for await (const result of walker.walk(source)) {
+  for await (const result of sourceWalker.walk()) {
     sourceFiles.add(result.path.substring(source.length));
   }
   
+  const destWalker = new DirectoryWalker(s5.fs, dest);
   const toDelete: string[] = [];
-  for await (const result of walker.walk(dest)) {
+  for await (const result of destWalker.walk()) {
     const relativePath = result.path.substring(dest.length);
     if (!sourceFiles.has(relativePath)) {
       toDelete.push(result.path);
