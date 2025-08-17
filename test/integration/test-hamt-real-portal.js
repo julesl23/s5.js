@@ -67,33 +67,47 @@ class NetworkStats {
 
 // Monkey-patch to count network operations
 function instrumentS5(s5, stats) {
-  // Intercept registry operations
-  const originalGet = s5.node.registry.get.bind(s5.node.registry);
-  const originalSet = s5.node.registry.set.bind(s5.node.registry);
-  
-  s5.node.registry.get = async (...args) => {
-    stats.recordRegistryGet();
-    return originalGet(...args);
-  };
-  
-  s5.node.registry.set = async (...args) => {
-    stats.recordRegistrySet();
-    return originalSet(...args);
-  };
+  // Check if we have access to the API
+  if (!s5.api) {
+    console.log('Note: s5.api not accessible, network stats disabled');
+    return;
+  }
+
+  // Intercept registry operations through the API
+  if (s5.api.registryGet && s5.api.registrySet) {
+    const originalGet = s5.api.registryGet.bind(s5.api);
+    const originalSet = s5.api.registrySet.bind(s5.api);
+    
+    s5.api.registryGet = async (...args) => {
+      stats.recordRegistryGet();
+      return originalGet(...args);
+    };
+    
+    s5.api.registrySet = async (...args) => {
+      stats.recordRegistrySet();
+      return originalSet(...args);
+    };
+  } else {
+    console.log('Note: Registry methods not found, registry stats disabled');
+  }
 
   // Intercept blob operations
-  const originalUpload = s5.api.uploadBlob.bind(s5.api);
-  const originalDownload = s5.api.downloadBlobAsBytes.bind(s5.api);
-  
-  s5.api.uploadBlob = async (...args) => {
-    stats.recordBlobUpload();
-    return originalUpload(...args);
-  };
-  
-  s5.api.downloadBlobAsBytes = async (...args) => {
-    stats.recordBlobDownload();
-    return originalDownload(...args);
-  };
+  if (s5.api.uploadBlob && s5.api.downloadBlobAsBytes) {
+    const originalUpload = s5.api.uploadBlob.bind(s5.api);
+    const originalDownload = s5.api.downloadBlobAsBytes.bind(s5.api);
+    
+    s5.api.uploadBlob = async (...args) => {
+      stats.recordBlobUpload();
+      return originalUpload(...args);
+    };
+    
+    s5.api.downloadBlobAsBytes = async (...args) => {
+      stats.recordBlobDownload();
+      return originalDownload(...args);
+    };
+  } else {
+    console.log('Note: Blob methods not found, blob stats disabled');
+  }
 }
 
 // Helper to format time
