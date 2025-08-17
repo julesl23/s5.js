@@ -235,8 +235,8 @@ app.put(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
         let dataToStore;
         
         if (Buffer.isBuffer(req.body)) {
-            // Convert buffer to string (preserves text data)
-            dataToStore = req.body.toString('utf8');
+            // Keep as Buffer - DO NOT convert to string (preserves binary data)
+            dataToStore = req.body;
         } else if (req.body && typeof req.body === 'object') {
             // JSON object
             dataToStore = JSON.stringify(req.body);
@@ -278,13 +278,22 @@ app.get(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
         const content = global.memoryStorage.get(storageKey);
         
         if (content !== undefined) {
-            // Try to parse as JSON for proper response
-            try {
-                const parsed = JSON.parse(content);
-                res.json(parsed);
-            } catch {
-                // Send as raw data if not JSON
-                res.set('Content-Type', 'text/plain');
+            if (Buffer.isBuffer(content)) {
+                // Send binary data as-is
+                res.set('Content-Type', 'application/octet-stream');
+                res.send(content);
+            } else if (typeof content === 'string') {
+                // Try to parse as JSON for proper response
+                try {
+                    const parsed = JSON.parse(content);
+                    res.json(parsed);
+                } catch {
+                    // Send as plain text
+                    res.set('Content-Type', 'text/plain');
+                    res.send(content);
+                }
+            } else {
+                // Fallback
                 res.send(content);
             }
             console.log(`✅ [S5 FS] Retrieved from memory: ${fsPath}`);
