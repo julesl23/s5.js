@@ -40,7 +40,7 @@ app.use(express.json({ type: 'application/json', limit: '100mb' }));
 
 let s5Instance = null;
 const uploadedFiles = new Map(); // Track uploaded files by CID -> path mapping
-global.memoryStorage = new Map(); // Memory storage for simple key-value operations
+// NOTE: Real S5 network storage is used instead of memory storage
 
 async function initS5() {
     console.log('🚀 Initializing Real S5 Server...');
@@ -129,15 +129,15 @@ app.put('/s5/blob/:cid', async (req, res) => {
             dataToStore = req.body || '';
         }
         
-        // Store in S5 using CID as path component
-        const path = `blobs/${cid}`;
+        // Store in S5 using same pattern as fs endpoints
+        const s5Path = `archive/blobs/${cid}`;
         console.log(`[S5 Blob PUT] Storing blob: ${cid}`);
-        await s5Instance.fs.put(path, dataToStore);
+        await s5Instance.fs.put(s5Path, dataToStore);
         
         // Track the mapping
-        uploadedFiles.set(cid, path);
+        uploadedFiles.set(cid, s5Path);
         
-        console.log(`✅ [S5 Blob] Stored: ${cid}`);
+        console.log(`✅ [S5 Blob] Stored on S5 network: ${cid}`);
         res.status(201).json({ cid, stored: true });
         
     } catch (error) {
@@ -154,26 +154,37 @@ app.get('/s5/blob/:cid', async (req, res) => {
         }
         
         const { cid } = req.params;
-        const path = uploadedFiles.get(cid) || `blobs/${cid}`;
+        const s5Path = uploadedFiles.get(cid) || `archive/blobs/${cid}`;
         
-        console.log(`[S5 Blob GET] Retrieving blob: ${cid}`);
+        console.log(`[S5 Blob GET] Retrieving from S5 network: ${cid}`);
         
         try {
-            const content = await s5Instance.fs.get(path);
+            const content = await s5Instance.fs.get(s5Path);
             
-            // Set appropriate content type
-            res.set('Content-Type', 'application/octet-stream');
-            
-            // Try to parse as JSON for proper response
-            try {
-                const parsed = JSON.parse(content);
-                res.json(parsed);
-            } catch {
-                // Send as raw data if not JSON
-                res.send(content);
+            if (content !== undefined) {
+                if (Buffer.isBuffer(content)) {
+                    // Send binary data as-is
+                    res.set('Content-Type', 'application/octet-stream');
+                    res.send(content);
+                } else if (typeof content === 'string') {
+                    // Try to parse as JSON for proper response
+                    try {
+                        const parsed = JSON.parse(content);
+                        res.json(parsed);
+                    } catch {
+                        // Send as plain text
+                        res.set('Content-Type', 'text/plain');
+                        res.send(content);
+                    }
+                } else {
+                    // Fallback
+                    res.send(content);
+                }
+                console.log(`✅ [S5 Blob] Retrieved from S5 network: ${cid}`);
+            } else {
+                console.log(`[S5 Blob GET] Not found: ${cid}`);
+                return res.status(404).json({ error: 'Blob not found' });
             }
-            
-            console.log(`✅ [S5 Blob] Retrieved: ${cid}`);
         } catch (fetchError) {
             console.log(`[S5 Blob GET] Not found: ${cid}`);
             return res.status(404).json({ error: 'Blob not found' });
@@ -193,15 +204,15 @@ app.head('/s5/blob/:cid', async (req, res) => {
         }
         
         const { cid } = req.params;
-        const path = uploadedFiles.get(cid) || `blobs/${cid}`;
+        const s5Path = uploadedFiles.get(cid) || `archive/blobs/${cid}`;
         
-        console.log(`[S5 Blob HEAD] Checking blob: ${cid}`);
+        console.log(`[S5 Blob HEAD] Checking blob on S5 network: ${cid}`);
         
         try {
-            // Try to get metadata to check existence
-            await s5Instance.fs.getMetadata(path);
+            // Try to get the blob to check existence (same as fs endpoints)
+            await s5Instance.fs.get(s5Path);
             res.status(200).send();
-            console.log(`✅ [S5 Blob HEAD] Exists: ${cid}`);
+            console.log(`✅ [S5 Blob HEAD] Exists on S5 network: ${cid}`);
         } catch {
             res.status(404).send();
             console.log(`[S5 Blob HEAD] Not found: ${cid}`);
@@ -224,7 +235,7 @@ async function pathToCid(path) {
     return 'b' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
 }
 
-// PUT /s5/fs/:path - Store data at a path (using memory storage for simplicity)
+// PUT /s5/fs/:path - Store data at a path (using real S5 network storage)
 app.put(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
     try {
         // Get the full path from the URL (everything after /s5/fs/)
@@ -247,15 +258,37 @@ app.put(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
             dataToStore = req.body || '';
         }
         
-        // Store in memory (simple key-value storage)
-        const storageKey = `fs:${fsPath}`;
-        global.memoryStorage.set(storageKey, dataToStore);
+        // Store in real S5 network with retry logic for concurrent operations
+        // Add prefix to organize filesystem data
+        const s5Path = `archive/${fsPath}`;
         
-        // Generate CID from path for consistency
+        // Retry logic with exponential backoff to handle concurrent conflicts
+        let retries = 10;
+        let lastError;
+        while (retries > 0) {
+            try {
+                await s5Instance.fs.put(s5Path, dataToStore);
+                break; // Success!
+            } catch (error) {
+                lastError = error;
+                retries--;
+                if (retries > 0) {
+                    // Exponential backoff with jitter: 100-200ms, 200-400ms, 400-800ms, etc
+                    const baseDelay = Math.pow(2, 5 - retries) * 100;
+                    const jitter = Math.random() * baseDelay;
+                    await new Promise(r => setTimeout(r, baseDelay + jitter));
+                }
+            }
+        }
+        if (retries === 0) {
+            throw lastError;
+        }
+        
+        // Track the path mapping for consistency
         const cid = await pathToCid(fsPath);
-        uploadedFiles.set(cid, storageKey);
+        uploadedFiles.set(cid, s5Path);
         
-        console.log(`✅ [S5 FS] Stored in memory: ${fsPath}`);
+        console.log(`✅ [S5 FS] Stored on S5 network: ${fsPath}`);
         res.status(201).json({ path: fsPath, stored: true });
         
     } catch (error) {
@@ -270,12 +303,12 @@ app.get(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
         // Get the full path from the URL
         const fullPath = req.path.replace(/^\/s5\/fs\/?/, '');
         const fsPath = fullPath || '';
-        const storageKey = `fs:${fsPath}`;
         
-        console.log(`[S5 FS GET] Retrieving from memory: ${fsPath}`);
+        console.log(`[S5 FS GET] Retrieving from S5 network: ${fsPath}`);
         
-        // Try to get from memory storage
-        const content = global.memoryStorage.get(storageKey);
+        // Try to get from real S5 network storage
+        const s5Path = `archive/${fsPath}`;
+        const content = await s5Instance.fs.get(s5Path);
         
         if (content !== undefined) {
             if (Buffer.isBuffer(content)) {
@@ -296,7 +329,7 @@ app.get(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
                 // Fallback
                 res.send(content);
             }
-            console.log(`✅ [S5 FS] Retrieved from memory: ${fsPath}`);
+            console.log(`✅ [S5 FS] Retrieved from S5 network: ${fsPath}`);
         } else {
             console.log(`[S5 FS GET] Not found: ${fsPath}`);
             return res.status(404).json({ error: 'Path not found' });
@@ -314,21 +347,25 @@ app.delete(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
         // Get the full path from the URL
         const fullPath = req.path.replace(/^\/s5\/fs\/?/, '');
         const fsPath = fullPath || '';
-        const storageKey = `fs:${fsPath}`;
         
-        console.log(`[S5 FS DELETE] Deleting: ${fsPath}`);
+        console.log(`[S5 FS DELETE] Deleting from S5 network: ${fsPath}`);
         
-        if (global.memoryStorage.has(storageKey)) {
-            global.memoryStorage.delete(storageKey);
+        try {
+            // Delete from real S5 network storage
+            const s5Path = `archive/${fsPath}`;
+            await s5Instance.fs.delete(s5Path);
             
             // Remove from tracking
             const cid = await pathToCid(fsPath);
             uploadedFiles.delete(cid);
             
-            console.log(`✅ [S5 FS] Deleted from memory: ${fsPath}`);
+            console.log(`✅ [S5 FS] Deleted from S5 network: ${fsPath}`);
             res.status(200).json({ path: fsPath, deleted: true });
-        } else {
-            return res.status(404).json({ error: 'Path not found' });
+        } catch (deleteError) {
+            if (deleteError.message?.includes('not found')) {
+                return res.status(404).json({ error: 'Path not found' });
+            }
+            throw deleteError;
         }
         
     } catch (error) {
