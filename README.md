@@ -13,18 +13,32 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - 🗂️ **HAMT Sharding**: Automatic directory sharding for millions of entries
 - 🚶 **Directory Walker**: Recursive traversal with filters and resumable cursors
 - 📋 **Batch Operations**: High-level copy/delete operations with progress tracking
+- ✅ **Real S5 Portal Integration**: Fully tested with s5.vup.cx portal
+
+## Key Components
+
+### Core API
+- **S5**: Main client class for connection and identity management
+- **FS5**: File system operations with path-based API
+- **S5UserIdentity**: User identity and authentication
+
+### Utility Classes
+- **DirectoryWalker**: Recursive directory traversal with cursor support
+- **BatchOperations**: High-level copy/delete operations with progress tracking
+
+See the [API Documentation](./docs/API.md) for detailed usage examples.
 
 ## Installation
 
-This enhanced version is currently in development as part of a Sia Foundation grant project.
+The enhanced path-based API features are currently in development as part of a Sia Foundation grant project.
 
-### For Production Use
+**For production use:**
 
 ```bash
 npm install @s5-dev/s5js
 ```
 
-### For Development/Testing
+**To try the enhanced features:**
 
 ```bash
 # Clone the repository
@@ -37,26 +51,31 @@ npm install
 # Build the project
 npm run build
 
-# Run tests
-npm run test
+# Run tests with real S5 portal
+npm test
 ```
+
+**Status**: These features are pending review and have not been merged into the main S5.js repository.
 
 ## Quick Start
 
 ```typescript
-import { S5 } from "@s5-dev/s5js";
+import { S5 } from "./dist/src/index.js";
 
-// Create S5 instance and connect to peers
+// Create S5 instance and connect to real S5 portal
 const s5 = await S5.create({
   initialPeers: [
-    "wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p"
-  ]
+    "wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p",
+  ],
 });
 
-// Generate a new seed phrase
+// Generate a new seed phrase (save this securely!)
 const seedPhrase = s5.generateSeedPhrase();
+console.log("Your seed phrase:", seedPhrase);
 
 // Or recover from existing seed phrase
+// const seedPhrase = "your saved twelve word seed phrase here";
+
 await s5.recoverIdentityFromSeedPhrase(seedPhrase);
 
 // Register on S5 portal (s5.vup.cx supports the new API)
@@ -78,40 +97,14 @@ for await (const item of s5.fs.list("home/documents")) {
 }
 ```
 
-## Core API
-
-### Path-based Operations
+### Advanced Usage
 
 ```typescript
-// Store files with automatic directory creation
-await s5.fs.put("home/photos/vacation.jpg", imageData, {
-  mediaType: "image/jpeg"
-});
-
-// Retrieve files with automatic decoding
-const data = await s5.fs.get("home/config.json");
-
-// Delete files or empty directories
-await s5.fs.delete("home/temp/cache.txt");
-
-// Get metadata without downloading content
-const meta = await s5.fs.getMetadata("home/video.mp4");
-console.log(`Size: ${meta.size} bytes`);
-
-// List with pagination
-for await (const item of s5.fs.list("home", { limit: 100 })) {
-  console.log(`${item.name} (${item.type})`);
-}
-```
-
-### Directory Utilities
-
-```typescript
-import { DirectoryWalker, BatchOperations } from "@s5-dev/s5js";
+import { DirectoryWalker, BatchOperations } from "./dist/src/index.js";
 
 // Recursive directory traversal
-const walker = new DirectoryWalker(s5.fs, "home");
-for await (const entry of walker.walk({ maxDepth: 3 })) {
+const walker = new DirectoryWalker(s5.fs, '/');
+for await (const entry of walker.walk("home", { maxDepth: 3 })) {
   console.log(`${entry.path} (${entry.type})`);
 }
 
@@ -122,7 +115,87 @@ const result = await batch.copyDirectory("home/source", "home/backup", {
     console.log(`Copied ${progress.processed} items...`);
   }
 });
+console.log(`Completed: ${result.success} success, ${result.failed} failed`);
 ```
+
+## Testing with Real S5 Portal
+
+The enhanced S5.js has been successfully integrated with real S5 portal infrastructure. To test:
+
+### 1. Fresh Identity Test (Recommended)
+
+This test creates a new identity and verifies all functionality:
+
+```bash
+node test/integration/test-fresh-s5.js
+```
+
+Expected output: 100% success rate (9/9 tests passing)
+
+### 2. Full Integration Test
+
+Comprehensive test of all features:
+
+```bash
+node test/integration/test-s5-full-integration.js
+```
+
+### 3. Direct Portal API Test
+
+Tests direct portal communication:
+
+```bash
+node test/integration/test-portal-direct.js
+```
+
+### Important Notes
+
+- **Use Fresh Identities**: The new deterministic key derivation system requires fresh identities. Old accounts created with the previous system won't work.
+- **Portal URL**: Use `https://s5.vup.cx` which has the updated API. Other portals may not have the required updates.
+- **Path Requirements**: All paths must start with either `home/` or `archive/`
+
+## Performance Benchmarks
+
+The enhanced S5.js includes comprehensive performance benchmarks to verify HAMT efficiency and scaling behaviour.
+
+### Running Benchmarks
+
+#### Local Mock Benchmarks (Fast)
+
+Test HAMT performance with mock S5 API:
+
+```bash
+# Basic HAMT verification
+node test/integration/test-hamt-local-simple.js
+
+# Comprehensive scaling test (up to 100K entries)
+node test/integration/test-hamt-mock-comprehensive.js
+```
+
+#### Real Portal Benchmarks (Network)
+
+Test with actual S5 portal (requires internet connection):
+
+```bash
+# Minimal real portal test
+node test/integration/test-hamt-real-minimal.js
+
+# HAMT activation threshold test
+node test/integration/test-hamt-activation-real.js
+
+# Full portal performance analysis
+node test/integration/test-hamt-real-portal.js
+```
+
+### Benchmark Results
+
+See [BENCHMARKS.md](./docs/BENCHMARKS.md) for detailed performance analysis showing:
+- HAMT activation at exactly 1000 entries
+- O(log n) scaling verified up to 100K+ entries
+- ~800ms per operation on real S5 network
+- Memory usage of ~650 bytes per entry
+
+For production deployments, these benchmarks confirm the implementation is ready for large-scale directory operations.
 
 ## Documentation
 
@@ -133,7 +206,26 @@ const result = await batch.copyDirectory("home/source", "home/backup", {
 
 ## Development
 
-### Build Commands
+This is an enhanced version of s5.js being developed under an 8-month grant from the Sia Foundation. The project implements a new format using:
+
+- **New Format**: CBOR serialization with DirV1 specification (replaces MessagePack)
+- **Path-based API**: Simple file operations with familiar syntax
+- **HAMT sharding**: Automatic directory sharding for efficient large directory support
+- **Directory utilities**: Recursive operations with progress tracking and error handling
+- **Deterministic Key Derivation**: Subdirectory keys derived from parent keys
+- **Real Portal Integration**: Successfully tested with s5.vup.cx
+
+**Note**: This is a clean implementation that does NOT maintain backward compatibility with old S5 data formats.
+
+### Building
+
+```bash
+npm run build     # Compile TypeScript
+npm run dev       # Watch mode
+npm run test      # Run tests
+```
+
+### Development Commands
 
 ```bash
 npm run build       # Compile TypeScript to JavaScript
@@ -186,7 +278,17 @@ See [test-server-README.md](./test-server-README.md) for details.
 - `src/identifier/` - Content identifiers and multibase encoding
 - `src/util/` - Utility functions
 
-## Implementation Status
+## Project Status
+
+- ✅ Month 1: Project Setup - Complete
+- ✅ Month 2: Path Helpers v0.1 - Complete
+- ✅ Month 3: Path-cascade Optimization & HAMT - Complete
+- ✅ Month 4: Directory Utilities - Complete
+- ✅ **S5 Portal Integration** - Complete (100% test success rate)
+- 🚧 Month 5: Media Processing (Part 1) - In Progress
+- ⏳ Months 6-8: Advanced features pending
+
+See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 
 ### Completed Phases ✅
 
@@ -215,6 +317,27 @@ The implementation has been benchmarked to ensure efficient operation:
 - **Network latency**: ~800ms per operation on real S5 network
 
 See [BENCHMARKS.md](./docs/BENCHMARKS.md) for detailed results.
+
+## Testing & Integration
+
+- For S5 portal testing, see the test files mentioned above
+- For integration testing with external services, see [test-server-README.md](./test/integration/test-server-README.md)
+
+## Troubleshooting
+
+### "Invalid base length" errors
+
+- Solution: Use a fresh seed phrase. Old accounts have incompatible key structures.
+
+### Directory not found errors
+
+- Solution: Ensure you call `ensureIdentityInitialized()` after portal registration
+- All paths must start with `home/` or `archive/`
+
+### Portal connection issues
+
+- Use `https://s5.vup.cx` which has the updated API
+- Ensure you have Node.js v20+ for proper crypto support
 
 ## Important Notes
 
