@@ -33,14 +33,14 @@ if (!global.WebSocket) global.WebSocket = WebSocket;
 
 const app = express();
 app.use(cors());
-// Parse text body by default for curl commands
-app.use(express.text({ limit: '100mb' }));
-app.use(express.json({ limit: '100mb' }));
-app.use(express.raw({ type: 'application/octet-stream', limit: '100mb' }));
+// CRITICAL FIX: Parse all content as raw first, then specific types
+app.use(express.raw({ type: '*/*', limit: '100mb' }));
+app.use(express.text({ type: 'text/plain', limit: '100mb' }));
+app.use(express.json({ type: 'application/json', limit: '100mb' }));
 
 let s5Instance = null;
 const uploadedFiles = new Map(); // Track uploaded files by CID -> path mapping
-const memoryStorage = new Map(); // Memory storage for simple key-value operations
+global.memoryStorage = new Map(); // Memory storage for simple key-value operations
 
 async function initS5() {
     console.log('🚀 Initializing Real S5 Server...');
@@ -234,17 +234,22 @@ app.put(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
         // Get the raw data from request body
         let dataToStore;
         
-        if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+        if (Buffer.isBuffer(req.body)) {
+            // Convert buffer to string (preserves text data)
+            dataToStore = req.body.toString('utf8');
+        } else if (req.body && typeof req.body === 'object') {
+            // JSON object
             dataToStore = JSON.stringify(req.body);
-        } else if (Buffer.isBuffer(req.body)) {
-            dataToStore = req.body.toString();
+        } else if (typeof req.body === 'string') {
+            // Plain text
+            dataToStore = req.body;
         } else {
             dataToStore = req.body || '';
         }
         
         // Store in memory (simple key-value storage)
         const storageKey = `fs:${fsPath}`;
-        memoryStorage.set(storageKey, dataToStore);
+        global.memoryStorage.set(storageKey, dataToStore);
         
         // Generate CID from path for consistency
         const cid = await pathToCid(fsPath);
@@ -270,7 +275,7 @@ app.get(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
         console.log(`[S5 FS GET] Retrieving from memory: ${fsPath}`);
         
         // Try to get from memory storage
-        const content = memoryStorage.get(storageKey);
+        const content = global.memoryStorage.get(storageKey);
         
         if (content !== undefined) {
             // Try to parse as JSON for proper response
@@ -304,8 +309,8 @@ app.delete(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
         
         console.log(`[S5 FS DELETE] Deleting: ${fsPath}`);
         
-        if (memoryStorage.has(storageKey)) {
-            memoryStorage.delete(storageKey);
+        if (global.memoryStorage.has(storageKey)) {
+            global.memoryStorage.delete(storageKey);
             
             // Remove from tracking
             const cid = await pathToCid(fsPath);
