@@ -33,11 +33,14 @@ if (!global.WebSocket) global.WebSocket = WebSocket;
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Parse text body by default for curl commands
+app.use(express.text({ limit: '100mb' }));
+app.use(express.json({ limit: '100mb' }));
 app.use(express.raw({ type: 'application/octet-stream', limit: '100mb' }));
 
 let s5Instance = null;
 const uploadedFiles = new Map(); // Track uploaded files by CID -> path mapping
+const memoryStorage = new Map(); // Memory storage for simple key-value operations
 
 async function initS5() {
     console.log('🚀 Initializing Real S5 Server...');
@@ -104,115 +107,360 @@ async function initS5() {
     }
 }
 
-// Upload endpoint - compatible with vector-db expectations
-app.post('/api/v0/upload', async (req, res) => {
-    try {
-        if (!s5Instance) {
-            return res.status(503).json({ error: 'S5 not initialized' });
-        }
-        
-        // Generate unique path and CID
-        const timestamp = Date.now();
-        const randomId = Math.random().toString(36).substring(7);
-        const filename = `upload_${timestamp}_${randomId}.json`;
-        const path = `home/uploads/${filename}`;
-        
-        // Determine what data to store
-        let dataToStore;
-        if (req.body && Object.keys(req.body).length > 0) {
-            dataToStore = JSON.stringify(req.body);
-        } else if (req.rawBody) {
-            dataToStore = req.rawBody;
-        } else {
-            dataToStore = JSON.stringify({ timestamp, empty: true });
-        }
-        
-        // Store data in S5
-        console.log(`Uploading to S5: ${path}`);
-        await s5Instance.fs.put(path, dataToStore);
-        
-        // Generate a CID (using path hash for consistency)
-        const encoder = new TextEncoder();
-        const data = encoder.encode(path);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const cid = 'b' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
-        
-        // Store mapping
-        uploadedFiles.set(cid, path);
-        
-        console.log(`✅ Uploaded: ${cid} -> ${path}`);
-        res.json({ cid });
-        
-    } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+// ===== STANDARD S5 PROTOCOL ENDPOINTS =====
 
-// Download endpoint
-app.get('/api/v0/download/:cid', async (req, res) => {
+// Standard S5 Blob Storage Endpoints
+// PUT /s5/blob/:cid - Store a blob with its CID
+app.put('/s5/blob/:cid', async (req, res) => {
     try {
         if (!s5Instance) {
             return res.status(503).json({ error: 'S5 not initialized' });
         }
         
         const { cid } = req.params;
-        const path = uploadedFiles.get(cid);
         
-        if (!path) {
-            console.log(`CID not found: ${cid}`);
-            return res.status(404).json({ error: 'CID not found' });
+        // Get the raw data from request body
+        let dataToStore;
+        if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+            dataToStore = JSON.stringify(req.body);
+        } else if (Buffer.isBuffer(req.body)) {
+            dataToStore = req.body;
+        } else {
+            dataToStore = req.body || '';
         }
         
-        console.log(`Downloading from S5: ${cid} -> ${path}`);
-        const content = await s5Instance.fs.get(path);
+        // Store in S5 using CID as path component
+        const path = `blobs/${cid}`;
+        console.log(`[S5 Blob PUT] Storing blob: ${cid}`);
+        await s5Instance.fs.put(path, dataToStore);
         
-        // Try to parse as JSON, otherwise return as-is
-        try {
-            const data = JSON.parse(content);
-            res.json({ data });
-        } catch {
-            res.json({ data: content });
-        }
+        // Track the mapping
+        uploadedFiles.set(cid, path);
+        
+        console.log(`✅ [S5 Blob] Stored: ${cid}`);
+        res.status(201).json({ cid, stored: true });
         
     } catch (error) {
-        console.error('Download error:', error);
+        console.error('[S5 Blob PUT] Error:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Health check endpoint
+// GET /s5/blob/:cid - Retrieve a blob by CID
+app.get('/s5/blob/:cid', async (req, res) => {
+    try {
+        if (!s5Instance) {
+            return res.status(503).json({ error: 'S5 not initialized' });
+        }
+        
+        const { cid } = req.params;
+        const path = uploadedFiles.get(cid) || `blobs/${cid}`;
+        
+        console.log(`[S5 Blob GET] Retrieving blob: ${cid}`);
+        
+        try {
+            const content = await s5Instance.fs.get(path);
+            
+            // Set appropriate content type
+            res.set('Content-Type', 'application/octet-stream');
+            
+            // Try to parse as JSON for proper response
+            try {
+                const parsed = JSON.parse(content);
+                res.json(parsed);
+            } catch {
+                // Send as raw data if not JSON
+                res.send(content);
+            }
+            
+            console.log(`✅ [S5 Blob] Retrieved: ${cid}`);
+        } catch (fetchError) {
+            console.log(`[S5 Blob GET] Not found: ${cid}`);
+            return res.status(404).json({ error: 'Blob not found' });
+        }
+        
+    } catch (error) {
+        console.error('[S5 Blob GET] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// HEAD /s5/blob/:cid - Check if blob exists
+app.head('/s5/blob/:cid', async (req, res) => {
+    try {
+        if (!s5Instance) {
+            return res.status(503).send();
+        }
+        
+        const { cid } = req.params;
+        const path = uploadedFiles.get(cid) || `blobs/${cid}`;
+        
+        console.log(`[S5 Blob HEAD] Checking blob: ${cid}`);
+        
+        try {
+            // Try to get metadata to check existence
+            await s5Instance.fs.getMetadata(path);
+            res.status(200).send();
+            console.log(`✅ [S5 Blob HEAD] Exists: ${cid}`);
+        } catch {
+            res.status(404).send();
+            console.log(`[S5 Blob HEAD] Not found: ${cid}`);
+        }
+        
+    } catch (error) {
+        console.error('[S5 Blob HEAD] Error:', error);
+        res.status(500).send();
+    }
+});
+
+// ===== S5 FILESYSTEM COMPATIBILITY ENDPOINTS (for Vector DB) =====
+
+// Helper function to convert path to CID
+async function pathToCid(path) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(path);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return 'b' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
+}
+
+// PUT /s5/fs/:path - Store data at a path (using memory storage for simplicity)
+app.put(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
+    try {
+        // Get the full path from the URL (everything after /s5/fs/)
+        const fullPath = req.path.replace(/^\/s5\/fs\/?/, '');
+        const fsPath = fullPath || '';
+        
+        // Get the raw data from request body
+        let dataToStore;
+        
+        if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+            dataToStore = JSON.stringify(req.body);
+        } else if (Buffer.isBuffer(req.body)) {
+            dataToStore = req.body.toString();
+        } else {
+            dataToStore = req.body || '';
+        }
+        
+        // Store in memory (simple key-value storage)
+        const storageKey = `fs:${fsPath}`;
+        memoryStorage.set(storageKey, dataToStore);
+        
+        // Generate CID from path for consistency
+        const cid = await pathToCid(fsPath);
+        uploadedFiles.set(cid, storageKey);
+        
+        console.log(`✅ [S5 FS] Stored in memory: ${fsPath}`);
+        res.status(201).json({ path: fsPath, stored: true });
+        
+    } catch (error) {
+        console.error('[S5 FS PUT] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /s5/fs/:path - Retrieve data from a path
+app.get(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
+    try {
+        // Get the full path from the URL
+        const fullPath = req.path.replace(/^\/s5\/fs\/?/, '');
+        const fsPath = fullPath || '';
+        const storageKey = `fs:${fsPath}`;
+        
+        console.log(`[S5 FS GET] Retrieving from memory: ${fsPath}`);
+        
+        // Try to get from memory storage
+        const content = memoryStorage.get(storageKey);
+        
+        if (content !== undefined) {
+            // Try to parse as JSON for proper response
+            try {
+                const parsed = JSON.parse(content);
+                res.json(parsed);
+            } catch {
+                // Send as raw data if not JSON
+                res.set('Content-Type', 'text/plain');
+                res.send(content);
+            }
+            console.log(`✅ [S5 FS] Retrieved from memory: ${fsPath}`);
+        } else {
+            console.log(`[S5 FS GET] Not found: ${fsPath}`);
+            return res.status(404).json({ error: 'Path not found' });
+        }
+        
+    } catch (error) {
+        console.error('[S5 FS GET] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE /s5/fs/:path - Delete data at a path
+app.delete(/^\/s5\/fs(\/.*)?$/, async (req, res) => {
+    try {
+        // Get the full path from the URL
+        const fullPath = req.path.replace(/^\/s5\/fs\/?/, '');
+        const fsPath = fullPath || '';
+        const storageKey = `fs:${fsPath}`;
+        
+        console.log(`[S5 FS DELETE] Deleting: ${fsPath}`);
+        
+        if (memoryStorage.has(storageKey)) {
+            memoryStorage.delete(storageKey);
+            
+            // Remove from tracking
+            const cid = await pathToCid(fsPath);
+            uploadedFiles.delete(cid);
+            
+            console.log(`✅ [S5 FS] Deleted from memory: ${fsPath}`);
+            res.status(200).json({ path: fsPath, deleted: true });
+        } else {
+            return res.status(404).json({ error: 'Path not found' });
+        }
+        
+    } catch (error) {
+        console.error('[S5 FS DELETE] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ===== BACKWARD COMPATIBILITY ENDPOINTS (deprecated but kept for transition) =====
+
+// Legacy upload endpoint - redirect to new S5 standard
+app.post('/api/v0/upload', async (req, res) => {
+    try {
+        if (!s5Instance) {
+            return res.status(503).json({ error: 'S5 not initialized' });
+        }
+        
+        console.log('[LEGACY] Upload request - redirecting to S5 standard endpoint');
+        
+        // Generate a CID for this upload
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substring(7);
+        const cid = 'b' + timestamp.toString(16) + randomId;
+        
+        // Store using standard blob endpoint logic
+        let dataToStore;
+        if (req.body && Object.keys(req.body).length > 0) {
+            dataToStore = JSON.stringify(req.body);
+        } else {
+            dataToStore = JSON.stringify({ timestamp, empty: true });
+        }
+        
+        const path = `blobs/${cid}`;
+        await s5Instance.fs.put(path, dataToStore);
+        uploadedFiles.set(cid, path);
+        
+        console.log(`✅ [LEGACY] Uploaded: ${cid}`);
+        res.json({ cid, message: 'Please use PUT /s5/blob/:cid for future uploads' });
+        
+    } catch (error) {
+        console.error('[LEGACY] Upload error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Legacy download endpoint - redirect to new S5 standard
+app.get('/api/v0/download/:cid', async (req, res) => {
+    try {
+        if (!s5Instance) {
+            return res.status(503).json({ error: 'S5 not initialized' });
+        }
+        
+        console.log('[LEGACY] Download request - redirecting to S5 standard endpoint');
+        
+        const { cid } = req.params;
+        const path = uploadedFiles.get(cid) || `blobs/${cid}`;
+        
+        try {
+            const content = await s5Instance.fs.get(path);
+            
+            try {
+                const data = JSON.parse(content);
+                res.json({ data, message: 'Please use GET /s5/blob/:cid for future downloads' });
+            } catch {
+                res.json({ data: content, message: 'Please use GET /s5/blob/:cid for future downloads' });
+            }
+        } catch {
+            return res.status(404).json({ error: 'CID not found' });
+        }
+        
+    } catch (error) {
+        console.error('[LEGACY] Download error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Health check endpoint (keep as is)
 app.get('/health', (req, res) => {
     res.json({
         status: s5Instance ? 'healthy' : 'initializing',
         mode: 'real',
         portal: 's5.vup.cx',
         s5_connected: s5Instance !== null,
+        protocol: 'S5 Standard',
+        endpoints: {
+            blob: [
+                'PUT /s5/blob/:cid',
+                'GET /s5/blob/:cid',
+                'HEAD /s5/blob/:cid'
+            ],
+            filesystem: [
+                'PUT /s5/fs/:path',
+                'GET /s5/fs/:path',
+                'DELETE /s5/fs/:path'
+            ],
+            legacy: [
+                'POST /api/v0/upload (deprecated)',
+                'GET /api/v0/download/:cid (deprecated)'
+            ]
+        },
         uploads_tracked: uploadedFiles.size,
         timestamp: new Date().toISOString()
     });
 });
 
-// List uploaded files (useful for debugging)
+// List endpoint - enhanced to show both blob and fs storage
 app.get('/api/v0/list', async (req, res) => {
     try {
         if (!s5Instance) {
             return res.status(503).json({ error: 'S5 not initialized' });
         }
         
-        const uploads = [];
-        for await (const item of s5Instance.fs.list('home/uploads')) {
-            uploads.push({
-                name: item.name,
-                type: item.type,
-                size: item.size
-            });
+        const blobs = [];
+        const fsFiles = [];
+        
+        // List blobs
+        try {
+            for await (const item of s5Instance.fs.list('blobs')) {
+                blobs.push({
+                    name: item.name,
+                    type: item.type,
+                    size: item.size
+                });
+            }
+        } catch (e) {
+            console.log('No blobs directory yet');
+        }
+        
+        // List fs files
+        try {
+            for await (const item of s5Instance.fs.list('fs')) {
+                fsFiles.push({
+                    name: item.name,
+                    type: item.type,
+                    size: item.size
+                });
+            }
+        } catch (e) {
+            console.log('No fs directory yet');
         }
         
         res.json({
             tracked_cids: Array.from(uploadedFiles.entries()).map(([cid, path]) => ({ cid, path })),
-            s5_files: uploads
+            blobs,
+            fs_files: fsFiles,
+            message: 'Use S5 standard endpoints: /s5/blob/* and /s5/fs/*'
         });
         
     } catch (error) {
