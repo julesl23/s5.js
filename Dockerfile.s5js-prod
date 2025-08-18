@@ -1,0 +1,27 @@
+FROM node:20-alpine
+
+# Install minimal dependencies
+RUN apk add --no-cache curl
+
+# Create app directory
+WORKDIR /app
+
+# Copy necessary files
+COPY server-real-s5.js .
+COPY package.json .
+COPY package-lock.json .
+
+# Copy source directory (contains the actual S5 implementation)
+COPY src ./src
+
+# Copy node_modules
+COPY node_modules ./node_modules
+
+# Create directory for seed file
+RUN mkdir -p /app/config
+
+# Expose port
+EXPOSE 5522
+
+# Run server
+CMD ["node", "server-real-s5.js"]

@@ -59,6 +59,20 @@ async function initS5() {
         // Step 2: Handle seed phrase
         let seedPhrase = process.env.S5_SEED_PHRASE;
         
+        // Try to read from seed file if environment variable not set
+        if (!seedPhrase && process.env.S5_SEED_FILE) {
+            try {
+                const fs = await import('fs');
+                const seedContent = fs.readFileSync(process.env.S5_SEED_FILE, 'utf8').trim();
+                // Extract seed phrase from file (supports both plain text and S5_SEED_PHRASE="..." format)
+                const match = seedContent.match(/S5_SEED_PHRASE=["']?([^"'\n]+)["']?/);
+                seedPhrase = match ? match[1] : seedContent;
+                console.log('Using seed phrase from file:', process.env.S5_SEED_FILE);
+            } catch (error) {
+                console.log('Could not read seed file:', error.message);
+            }
+        }
+        
         if (!seedPhrase || seedPhrase === 'your-twelve-word-seed-phrase-here') {
             // Generate a new seed phrase if not provided
             console.log('No seed phrase provided, generating new one...');
@@ -66,7 +80,7 @@ async function initS5() {
             console.log('📝 Generated new seed phrase (save this!):');
             console.log(`   S5_SEED_PHRASE="${seedPhrase}"`);
         } else {
-            console.log('Using provided seed phrase from environment');
+            console.log('Using provided seed phrase');
         }
         
         // Step 3: Recover identity from seed phrase
