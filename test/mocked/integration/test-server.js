@@ -1,8 +1,8 @@
 // Minimal HTTP wrapper for testing vector database integration
 import express from 'express';
 import crypto, { webcrypto } from 'crypto';
-import { FS5 } from '../../dist/src/fs/fs5.js';
-import { JSCryptoImplementation } from '../../dist/src/api/crypto/js.js';
+import { FS5 } from '../../../dist/src/fs/fs5.js';
+import { JSCryptoImplementation } from '../../../dist/src/api/crypto/js.js';
 
 // Make webcrypto available globally for crypto operations
 if (!global.crypto) {

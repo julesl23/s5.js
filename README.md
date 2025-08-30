@@ -166,10 +166,10 @@ Test HAMT performance with mock S5 API:
 
 ```bash
 # Basic HAMT verification
-node test/integration/test-hamt-local-simple.js
+node test/mocked/integration/test-hamt-local-simple.js
 
 # Comprehensive scaling test (up to 100K entries)
-node test/integration/test-hamt-mock-comprehensive.js
+node test/mocked/integration/test-hamt-mock-comprehensive.js
 ```
 
 #### Real Portal Benchmarks (Network)
@@ -236,18 +236,35 @@ npm run type-check  # Run TypeScript type checking
 ### Testing
 
 ```bash
-npm run test        # Run tests in watch mode
+npm run test        # Run real implementation tests only
 npm run test:run    # Run tests once
+npm run test:mocked # Run mock-based tests
+npm run test:all    # Run all tests (real + mocked)
 npm run test:ui     # Run tests with UI
 npm run test:coverage # Generate coverage report
 ```
+
+### Test Organization
+
+- **`test/`** - Real implementation tests using actual S5.js functionality
+  - Run with `npm test` (14 test files, 128+ tests)
+  - Tests core functionality without mocks
+  
+- **`test/mocked/`** - Mock-based unit and performance tests
+  - Run with `npm run test:mocked` (15 test files)
+  - Includes HAMT performance benchmarks and isolated component tests
+  - `test/mocked/integration/` - Mock-based integration and performance tests
+  
+- **`test/integration/`** - Real S5 integration tests with actual network connections
+  - Tests that connect to real S5 portals (e.g., s5.vup.cx)
+  - Use real seed phrases and portal registration
 
 ### Test Server
 
 For integration testing with mock S5 services:
 
 ```bash
-node test-server.js  # Start mock server on port 3000
+node test/mocked/integration/test-server.js  # Start mock server on port 3000
 ```
 
 See [test-server-README.md](./test-server-README.md) for details.
