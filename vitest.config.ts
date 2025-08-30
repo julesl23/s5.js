@@ -5,5 +5,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/test/mocked/**'  // Exclude mock tests by default
+    ]
   },
 });

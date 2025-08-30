@@ -74,15 +74,32 @@ class MockS5API implements Partial<S5APIInterface> {
   async registryGet(publicKey: Uint8Array): Promise<any> {
     const key = Buffer.from(publicKey).toString('hex');
     const entry = this.registryEntries.get(key);
+    // Return proper registry entry structure
     if (!entry) {
-      return undefined;
+      return { exists: false, data: null, revision: 0 };
     }
-    return entry;
+    return { 
+      exists: true, 
+      data: entry.data,
+      revision: entry.revision || 1,
+      signature: entry.signature || new Uint8Array(64)
+    };
   }
 
   async registrySet(entry: any): Promise<void> {
     const key = Buffer.from(entry.pk).toString('hex');
-    this.registryEntries.set(key, entry);
+    this.registryEntries.set(key, {
+      data: entry.data,
+      revision: entry.revision || 1,
+      signature: entry.signature || new Uint8Array(64)
+    });
+  }
+  
+  registryListen(publicKey: Uint8Array): AsyncIterator<any> {
+    // Mock implementation - return empty async iterator
+    return (async function* () {
+      // Empty async generator
+    })();
   }
   
   async registryListenOnEntry(publicKey: Uint8Array, callback: (entry: any) => void): Promise<() => void> {
@@ -94,6 +111,21 @@ class MockS5API implements Partial<S5APIInterface> {
 // Mock identity for testing
 class MockIdentity {
   fsRootKey = new Uint8Array(32).fill(1);
+  
+  // Add required properties for proper identity initialization
+  get publicKey(): Uint8Array {
+    return new Uint8Array(32).fill(2);
+  }
+  
+  get privateKey(): Uint8Array {
+    return new Uint8Array(64).fill(3);
+  }
+  
+  // For registry operations
+  keyPair = {
+    publicKey: new Uint8Array(32).fill(2),
+    privateKey: new Uint8Array(64).fill(3)
+  };
 }
 
 export async function setupMockS5() {

@@ -20,6 +20,10 @@
     "start": "node dist/src/server.js",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:mocked": "vitest --config vitest.config.mocked.ts",
+    "test:mocked:run": "vitest run --config vitest.config.mocked.ts",
+    "test:all": "vitest --exclude=[]",
+    "test:all:run": "vitest run --exclude=[]",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "type-check": "tsc --noEmit"

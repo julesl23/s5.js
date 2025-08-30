@@ -397,22 +397,47 @@ export class HAMT {
   /**
    * Reconstruct a HAMTNode from decoded data
    */
-  private _reconstructNode(data: any): HAMTNode {
-    const children: HAMTChild[] = data.children.map((child: any) => {
-      if (child.type === "node") {
+  private _reconstructNode(data: Map<string, any> | any): HAMTNode {
+    // Handle both Map and plain object for compatibility
+    const isMap = data instanceof Map;
+    const getField = (field: string) => isMap ? data.get(field) : data[field];
+    
+    const childrenData = getField('children') as Array<any>;
+    const children: HAMTChild[] = childrenData.map((child: any) => {
+      const childIsMap = child instanceof Map;
+      const getChildField = (field: string) => childIsMap ? child.get(field) : child[field];
+      
+      if (getChildField('type') === "node") {
         return {
           type: "node",
-          cid: child.cid
+          cid: getChildField('cid')
         };
       } else {
         // Reconstruct leaf entries
-        const entries = child.entries.map(([k, v]: [string, any]) => {
+        const entriesData = getChildField('entries') as Array<[string, any]>;
+        const entries: [string, FileRef | DirRef][] = entriesData.map(([k, v]: [string, any]) => {
+          const vIsMap = v instanceof Map;
+          const getVField = (field: string) => vIsMap ? v.get(field) : v[field];
+          
           if (k.startsWith("f:")) {
             // FileRef
-            return [k, { hash: v.hash, size: v.size, media_type: v.media_type }];
+            const fileRef: FileRef = { 
+              hash: getVField('hash'), 
+              size: getVField('size')
+            };
+            const mediaType = getVField('media_type');
+            if (mediaType) fileRef.media_type = mediaType;
+            return [k, fileRef] as [string, FileRef];
           } else {
             // DirRef
-            return [k, { link: v.link }];
+            const linkData = getVField('link');
+            const linkIsMap = linkData instanceof Map;
+            const link = linkIsMap ? {
+              type: linkData.get('type'),
+              hash: linkData.get('hash')
+            } : linkData;
+            const dirRef: DirRef = { link };
+            return [k, dirRef] as [string, DirRef];
           }
         });
         
@@ -424,10 +449,10 @@ export class HAMT {
     });
     
     return {
-      bitmap: data.bitmap,
+      bitmap: getField('bitmap'),
       children,
-      count: data.count,
-      depth: data.depth
+      count: getField('count'),
+      depth: getField('depth')
     };
   }
 
@@ -562,13 +587,23 @@ export class HAMT {
     data: Uint8Array,
     api: S5APIInterface
   ): Promise<HAMT> {
-    const decoded = decodeS5(data);
-    const hamt = new HAMT(api, decoded.config);
+    const decoded = decodeS5(data) as Map<string, any>;
+    
+    // Extract config from Map
+    const configMap = decoded.get('config') as Map<string, any>;
+    const config = configMap ? {
+      bitsPerLevel: configMap.get('bitsPerLevel'),
+      maxInlineEntries: configMap.get('maxInlineEntries'),
+      hashFunction: configMap.get('hashFunction')
+    } : undefined;
+    
+    const hamt = new HAMT(api, config);
     await hamt.ensureInitialized();
     
     // Reconstruct the root node if it exists
-    if (decoded.root && decoded.root.children) {
-      hamt.rootNode = hamt._reconstructNode(decoded.root);
+    const root = decoded.get('root') as Map<string, any>;
+    if (root && root.get('children')) {
+      hamt.rootNode = hamt._reconstructNode(root);
     }
     
     return hamt;

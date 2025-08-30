@@ -9,8 +9,8 @@ describe('Utility Functions Performance', () => {
   let fs: FS5;
 
   beforeEach(async () => {
-    const { s5 } = await setupMockS5();
-    fs = new FS5(s5);
+    const { s5, identity } = await setupMockS5();
+    fs = new FS5(s5, identity as any);
   });
 
   it('should handle walking 1000+ files efficiently', async () => {
