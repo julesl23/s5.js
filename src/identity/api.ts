@@ -14,7 +14,6 @@ import { HiddenJSONResponse, TrustedHiddenDBProvider } from "./hidden_db.js";
 import { S5UserIdentity } from "./identity.js";
 import { MULTIHASH_BLAKE3 } from "../constants.js";
 import { concatBytes } from "@noble/hashes/utils";
-import { FormData as UndiciFormData, fetch as undiciFetch } from "undici";
 
 const portalUploadEndpoint = 'upload';
 
@@ -30,12 +29,37 @@ export class S5APIWithIdentity implements S5APIInterface {
     private accountConfigs: { [key: string]: S5Portal } = {};
 
     private readonly hiddenDB: TrustedHiddenDBProvider;
+    private httpClientCache: { fetch: any, FormData: any } | null = null;
 
     constructor(node: S5Node, identity: S5UserIdentity, authStore: KeyValueStore) {
         this.node = node;
         this.identity = identity;
         this.authStore = authStore;
         this.hiddenDB = new TrustedHiddenDBProvider(identity.hiddenDBKey, this);
+    }
+
+    /**
+     * Get HTTP client with environment-specific fetch and FormData.
+     * Uses undici in Node.js (proven to work) and native APIs in browser.
+     */
+    private async getHttpClient() {
+        if (this.httpClientCache) return this.httpClientCache;
+        
+        if (typeof window === 'undefined') {
+            // Node.js environment - use undici for compatibility with S5 portals
+            const undici = await import('undici');
+            this.httpClientCache = { 
+                fetch: undici.fetch, 
+                FormData: undici.FormData 
+            };
+        } else {
+            // Browser environment - use native web APIs
+            this.httpClientCache = { 
+                fetch: globalThis.fetch, 
+                FormData: globalThis.FormData 
+            };
+        }
+        return this.httpClientCache;
     }
 
     async ensureInitialized(): Promise<void> {
@@ -178,24 +202,27 @@ export class S5APIWithIdentity implements S5APIInterface {
         const portals = Object.values(this.accountConfigs);
         for (const portal of portals.concat(portals, portals)) {
             try {
-                // Simplified approach - use File directly from blob data
+                // Get environment-appropriate HTTP client
+                const { fetch, FormData } = await this.getHttpClient();
+                
+                // Use File directly from blob data
                 const arrayBuffer = await blob.arrayBuffer();
                 const file = new File([arrayBuffer], 'file', { type: 'application/octet-stream' });
                 
-                // Use undici's FormData explicitly
-                const formData = new UndiciFormData();
+                // Use environment-specific FormData (undici in Node.js, native in browser)
+                const formData = new FormData();
                 formData.append('file', file);
                 
                 const uploadUrl = portal.apiURL(portalUploadEndpoint);
                 const authHeader = portal.headers['Authorization'] || portal.headers['authorization'] || '';
                 
-                // Use undici's fetch explicitly
-                const res = await undiciFetch(uploadUrl, {
+                // Use environment-specific fetch (undici in Node.js, native in browser)
+                const res = await fetch(uploadUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': authHeader
                     },
-                    body: formData as any,
+                    body: formData,
                 });
                 if (!res.ok) {
                     const errorText = await res.text();
