@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { MediaProcessor } from '../../src/media/index.js';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { MediaProcessor, BrowserCompat } from '../../src/media/index.js';
 
 describe('MediaProcessor', () => {
   // Helper function at the top level of describe block
@@ -77,11 +77,13 @@ describe('MediaProcessor', () => {
     });
 
     it('should handle errors gracefully and fallback to basic extraction', async () => {
-      // Force WASM to fail
+      // Test with invalid image data that will cause extraction to fail
       MediaProcessor.reset();
-      MediaProcessor.forceWASMError(true);
 
-      const blob = createTestBlob('test', 'image/jpeg');
+      // Create a blob with invalid image data
+      const invalidData = new Uint8Array([0, 1, 2, 3, 4]);
+      const blob = new Blob([invalidData], { type: 'image/jpeg' });
+
       const metadata = await MediaProcessor.extractMetadata(blob);
 
       // Should still get metadata from fallback
@@ -98,13 +100,50 @@ describe('MediaProcessor', () => {
 
     it('should load WASM module on first initialize call', async () => {
       MediaProcessor.reset();
+
+      // Mock browser capabilities to include WASM support
+      const originalCheck = BrowserCompat.checkCapabilities;
+      vi.spyOn(BrowserCompat, 'checkCapabilities').mockResolvedValue({
+        webAssembly: true,
+        webAssemblyStreaming: true,
+        sharedArrayBuffer: false,
+        webWorkers: true,
+        offscreenCanvas: false,
+        createImageBitmap: true,
+        webP: true,
+        avif: false,
+        webGL: false,
+        webGL2: false,
+        memoryInfo: false,
+        performanceAPI: true
+      });
+
       await MediaProcessor.initialize();
       expect(MediaProcessor.getModule()).toBeDefined();
+
+      // Restore original
+      BrowserCompat.checkCapabilities = originalCheck;
     });
 
     it('should support progress callback during WASM loading', async () => {
       MediaProcessor.reset();
       const progressValues: number[] = [];
+
+      // Mock browser capabilities to include WASM support
+      vi.spyOn(BrowserCompat, 'checkCapabilities').mockResolvedValue({
+        webAssembly: true,
+        webAssemblyStreaming: true,
+        sharedArrayBuffer: false,
+        webWorkers: true,
+        offscreenCanvas: false,
+        createImageBitmap: true,
+        webP: true,
+        avif: false,
+        webGL: false,
+        webGL2: false,
+        memoryInfo: false,
+        performanceAPI: true
+      });
 
       await MediaProcessor.initialize({
         onProgress: (percent) => progressValues.push(percent)
@@ -112,6 +151,8 @@ describe('MediaProcessor', () => {
 
       expect(progressValues.length).toBeGreaterThan(0);
       expect(progressValues[progressValues.length - 1]).toBe(100);
+
+      vi.restoreAllMocks();
     });
   });
 
@@ -126,7 +167,44 @@ describe('MediaProcessor', () => {
     });
 
     it('should support timeout option', async () => {
-      const blob = createTestBlob('test', 'image/jpeg');
+      MediaProcessor.reset();
+
+      // Mock browser capabilities to include WASM support for this test
+      vi.spyOn(BrowserCompat, 'checkCapabilities').mockResolvedValue({
+        webAssembly: true,
+        webAssemblyStreaming: true,
+        sharedArrayBuffer: false,
+        webWorkers: true,
+        offscreenCanvas: false,
+        createImageBitmap: true,
+        webP: true,
+        avif: false,
+        webGL: false,
+        webGL2: false,
+        memoryInfo: false,
+        performanceAPI: true
+      });
+
+      await MediaProcessor.initialize();
+
+      // Create a more realistic JPEG blob with proper headers
+      const jpegData = new Uint8Array([
+        0xFF, 0xD8, 0xFF, 0xE0, // JPEG SOI and APP0
+        0x00, 0x10, // Length
+        0x4A, 0x46, 0x49, 0x46, 0x00, // JFIF
+        0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+        0xFF, 0xC0, // SOF0 marker
+        0x00, 0x11, // Length
+        0x08, // Data precision
+        0x00, 0x64, // Height (100)
+        0x00, 0xC8, // Width (200)
+        0x03, // Components
+        0x01, 0x22, 0x00, // Component 1
+        0x02, 0x11, 0x01, // Component 2
+        0x03, 0x11, 0x01, // Component 3
+        0xFF, 0xD9 // EOI
+      ]);
+      const blob = new Blob([jpegData], { type: 'image/jpeg' });
 
       const startTime = Date.now();
       const metadata = await MediaProcessor.extractMetadata(blob, { timeout: 100 });
@@ -134,6 +212,8 @@ describe('MediaProcessor', () => {
 
       expect(endTime - startTime).toBeLessThan(200);
       expect(metadata).toBeDefined();
+
+      vi.restoreAllMocks();
     });
   });
 });

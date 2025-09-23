@@ -357,7 +357,7 @@ describe('CanvasMetadataExtractor Enhanced Features', () => {
       const metadata = await CanvasMetadataExtractor.extract(blob);
 
       expect(metadata).toBeDefined();
-      expect(metadata?.processingErrors).toContain('Canvas context unavailable');
+      expect(metadata?.processingErrors?.[0]).toMatch(/Failed to extract colors/);
 
       // Restore mock
       (globalThis as any).document.createElement = oldCreateElement;

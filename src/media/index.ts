@@ -13,7 +13,6 @@ export class MediaProcessor {
   private static wasmModule?: WASMModule;
   private static loadingPromise?: Promise<WASMModule>;
   private static initialized = false;
-  private static forceError = false; // For testing
   private static processingStrategy?: ProcessingStrategy;
 
   /**
@@ -27,9 +26,7 @@ export class MediaProcessor {
     this.processingStrategy = BrowserCompat.selectProcessingStrategy(capabilities);
 
     // Load WASM module if the strategy includes WASM
-    // OR if we're in a test environment (for backwards compatibility)
-    const shouldLoadWASM = this.processingStrategy.includes('wasm') ||
-                          (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test');
+    const shouldLoadWASM = this.processingStrategy.includes('wasm');
 
     if (shouldLoadWASM) {
       if (!this.loadingPromise) {
@@ -51,17 +48,6 @@ export class MediaProcessor {
     try {
       // Load the real WASM module
       const wasmModule = await WASMModuleImpl.initialize(options);
-
-      // Add test error support for backwards compatibility
-      if (MediaProcessor.forceError) {
-        return {
-          ...wasmModule,
-          extractMetadata(data: Uint8Array): ImageMetadata | undefined {
-            throw new Error('Forced WASM error for testing');
-          }
-        };
-      }
-
       return wasmModule;
     } catch (error) {
       console.warn('Failed to load WASM module, creating fallback:', error);
@@ -72,10 +58,6 @@ export class MediaProcessor {
           // No-op for canvas fallback
         },
         extractMetadata(data: Uint8Array): ImageMetadata | undefined {
-          if (MediaProcessor.forceError) {
-            throw new Error('Forced WASM error for testing');
-          }
-
           // Convert Uint8Array to Blob for Canvas API
           // Try to detect format from magic bytes
           let mimeType = 'application/octet-stream';
@@ -173,7 +155,7 @@ export class MediaProcessor {
 
     const metadata = this.wasmModule.extractMetadata(data);
 
-    // Override format based on blob type for mock
+    // Ensure format matches blob type
     if (metadata) {
       metadata.format = this.detectFormat(blob.type);
       if (metadata.format === 'png') {
@@ -260,14 +242,7 @@ export class MediaProcessor {
     this.wasmModule = undefined;
     this.loadingPromise = undefined;
     this.initialized = false;
-    this.forceError = false;
     this.processingStrategy = undefined;
   }
 
-  /**
-   * Force WASM error (for testing)
-   */
-  static forceWASMError(force: boolean): void {
-    this.forceError = force;
-  }
 }

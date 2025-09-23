@@ -1,9 +1,25 @@
-import { describe, it, expect } from 'vitest';
-import { MediaProcessor } from '../../src/media/index.js';
+import { describe, it, expect, vi } from 'vitest';
+import { MediaProcessor, BrowserCompat } from '../../src/media/index.js';
 
 describe('WASM Progress Tracking', () => {
   it('should track progress during WASM initialization', async () => {
     MediaProcessor.reset();
+
+    // Mock browser capabilities to include WASM support
+    vi.spyOn(BrowserCompat, 'checkCapabilities').mockResolvedValue({
+      webAssembly: true,
+      webAssemblyStreaming: true,
+      sharedArrayBuffer: false,
+      webWorkers: true,
+      offscreenCanvas: false,
+      createImageBitmap: true,
+      webP: true,
+      avif: false,
+      webGL: false,
+      webGL2: false,
+      memoryInfo: false,
+      performanceAPI: true
+    });
 
     const progressValues: number[] = [];
 
@@ -26,6 +42,8 @@ describe('WASM Progress Tracking', () => {
     for (let i = 1; i < progressValues.length; i++) {
       expect(progressValues[i]).toBeGreaterThanOrEqual(progressValues[i - 1]);
     }
+
+    vi.restoreAllMocks();
   });
 
   it('should handle large image optimization', async () => {

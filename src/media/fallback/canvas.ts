@@ -52,7 +52,7 @@ export class CanvasMetadataExtractor {
       // Determine sampling strategy based on image size
       const samplingStrategy = this.determineSamplingStrategy(width, height, blob.size);
 
-      // Extract dominant colors - always try in Node test environment
+      // Extract dominant colors
       let dominantColors: DominantColor[] | undefined;
       let isMonochrome = false;
 
@@ -90,17 +90,8 @@ export class CanvasMetadataExtractor {
           }];
         }
       } catch (error) {
-        // In test environment, still return mock colors on error
-        dominantColors = [{
-          hex: '#808080',
-          rgb: { r: 128, g: 128, b: 128 },
-          percentage: 100
-        }];
-        isMonochrome = false;
-
-        if (typeof document !== 'undefined') {
-          processingErrors.push('Canvas context unavailable');
-        }
+        // Log error but don't return mock data
+        processingErrors.push('Failed to extract colors: ' + (error instanceof Error ? error.message : 'Unknown error'));
       }
 
       // Calculate aspect ratio
@@ -221,122 +212,73 @@ export class CanvasMetadataExtractor {
     strategy: SamplingStrategy
   ): Promise<{ colors: DominantColor[]; isMonochrome: boolean; usingFallback?: boolean }> {
     if (typeof document === 'undefined') {
-      // Mock implementation for Node.js testing
-      // Return different colors based on image content for testing
-      const colors: DominantColor[] = [
-        {
-          hex: '#808080',
-          rgb: { r: 128, g: 128, b: 128 },
-          percentage: 60
-        },
-        {
-          hex: '#404040',
-          rgb: { r: 64, g: 64, b: 64 },
-          percentage: 25
-        },
-        {
-          hex: '#c0c0c0',
-          rgb: { r: 192, g: 192, b: 192 },
-          percentage: 15
-        }
-      ];
-
-      // Check if it's a monochrome test case - be very specific
-      const srcString = typeof img.src === 'string' ? img.src : '';
-
-      // Only mark as monochrome if explicitly contains 'monochrome' in the URL
-      const isMonochrome = srcString.includes('monochrome');
-
-      if (isMonochrome) {
-        return {
-          colors: [colors[0]], // Return single color for monochrome
-          isMonochrome: true
-        };
-      }
-
-      // Always return colors array for normal images
-      return {
-        colors: colors, // Return all 3 colors
-        isMonochrome: false
-      };
+      // Canvas API not available in non-browser environment
+      throw new Error('Canvas API not available in this environment');
     }
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
     if (!ctx || typeof ctx.getImageData !== 'function') {
-      // Canvas API not fully available (e.g., in mock environment)
-      // Check if it's monochrome before returning defaults
-      const srcString = typeof img.src === 'string' ? img.src : '';
-      const isMonochrome = srcString.includes('monochrome');
-
-      if (isMonochrome) {
-        return {
-          colors: [{ hex: '#808080', rgb: { r: 128, g: 128, b: 128 }, percentage: 100 }],
-          isMonochrome: true,
-          usingFallback: true
-        };
-      }
-
-      // Return default colors for non-monochrome
-      return {
-        colors: [
-          { hex: '#808080', rgb: { r: 128, g: 128, b: 128 }, percentage: 60 },
-          { hex: '#404040', rgb: { r: 64, g: 64, b: 64 }, percentage: 25 },
-          { hex: '#c0c0c0', rgb: { r: 192, g: 192, b: 192 }, percentage: 15 }
-        ],
-        isMonochrome: false,
-        usingFallback: true
-      };
+      // Canvas API not fully available
+      throw new Error('Canvas 2D context not available');
     }
 
-    // Use smaller canvas for efficiency
-    const sampleSize = strategy === 'full' ? 100 : 50;
-    canvas.width = Math.min(img.width, sampleSize);
-    canvas.height = Math.min(img.height, sampleSize);
+    // Optimize canvas size for performance
+    const maxDimension = strategy === 'full' ? 150 : strategy === 'adaptive' ? 100 : 50;
+    const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
 
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const pixels = imageData.data;
 
-    // Sample pixels and count colors
-    const colorMap = new Map<string, number>();
-    const step = strategy === 'full' ? 1 : strategy === 'adaptive' ? 4 : 8;
+    // Collect pixel samples for k-means clustering
+    const samples: Array<[number, number, number]> = [];
+    const step = strategy === 'full' ? 2 : strategy === 'adaptive' ? 4 : 8;
 
-    let isGrayscale = true; // Assume grayscale until proven otherwise
+    let isGrayscale = true;
+    const quantizationLevel = 8; // More aggressive quantization for better clustering
 
     for (let i = 0; i < pixels.length; i += step * 4) {
-      const r = Math.round(pixels[i] / 16) * 16; // Quantize to reduce colors
-      const g = Math.round(pixels[i + 1] / 16) * 16;
-      const b = Math.round(pixels[i + 2] / 16) * 16;
+      const r = Math.round(pixels[i] / quantizationLevel) * quantizationLevel;
+      const g = Math.round(pixels[i + 1] / quantizationLevel) * quantizationLevel;
+      const b = Math.round(pixels[i + 2] / quantizationLevel) * quantizationLevel;
+      const a = pixels[i + 3];
 
-      // Check if this pixel is not grayscale
-      if (Math.abs(r - g) > 16 || Math.abs(g - b) > 16 || Math.abs(r - b) > 16) {
+      // Skip transparent pixels
+      if (a < 128) continue;
+
+      // Check for non-grayscale
+      if (Math.abs(r - g) > 20 || Math.abs(g - b) > 20 || Math.abs(r - b) > 20) {
         isGrayscale = false;
       }
 
-      const key = `${r},${g},${b}`;
-      colorMap.set(key, (colorMap.get(key) || 0) + 1);
+      samples.push([r, g, b]);
     }
 
-    // Sort by frequency and get top colors
-    const sortedColors = Array.from(colorMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+    // Apply k-means clustering for better color grouping
+    const k = isGrayscale ? 1 : Math.min(5, Math.max(3, Math.floor(samples.length / 100)));
+    const clusters = this.kMeansClustering(samples, k);
 
-    const totalSamples = Array.from(colorMap.values()).reduce((a, b) => a + b, 0);
+    // Convert clusters to dominant colors
+    const totalSamples = clusters.reduce((sum, c) => sum + c.count, 0);
+    const dominantColors: DominantColor[] = clusters
+      .sort((a, b) => b.count - a.count)
+      .map(cluster => {
+        const r = Math.round(cluster.center[0]);
+        const g = Math.round(cluster.center[1]);
+        const b = Math.round(cluster.center[2]);
+        const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 
-    const dominantColors: DominantColor[] = sortedColors.map(([colorStr, count]) => {
-      const [r, g, b] = colorStr.split(',').map(Number);
-      const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
-
-      return {
-        hex,
-        rgb: { r, g, b },
-        percentage: Math.round((count / totalSamples) * 100)
-      };
-    });
+        return {
+          hex,
+          rgb: { r, g, b },
+          percentage: Math.round((cluster.count / totalSamples) * 100)
+        };
+      });
 
     // Check if monochrome (all colors are shades of gray)
     const isMonochrome = isGrayscale || dominantColors.every(color => {
@@ -359,6 +301,117 @@ export class CanvasMetadataExtractor {
     }
 
     return { colors: dominantColors, isMonochrome };
+  }
+
+  /**
+   * K-means clustering for color extraction
+   */
+  private static kMeansClustering(
+    samples: Array<[number, number, number]>,
+    k: number,
+    maxIterations: number = 10
+  ): Array<{ center: [number, number, number]; count: number }> {
+    if (samples.length === 0) return [];
+    if (k >= samples.length) {
+      // Return each unique sample as its own cluster
+      const uniqueMap = new Map<string, { color: [number, number, number]; count: number }>();
+      samples.forEach(s => {
+        const key = s.join(',');
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, { color: s, count: 0 });
+        }
+        uniqueMap.get(key)!.count++;
+      });
+      return Array.from(uniqueMap.values()).map(v => ({
+        center: v.color,
+        count: v.count
+      }));
+    }
+
+    // Initialize centroids using k-means++ algorithm
+    const centroids: Array<[number, number, number]> = [];
+    centroids.push(samples[Math.floor(Math.random() * samples.length)]);
+
+    for (let i = 1; i < k; i++) {
+      const distances = samples.map(s => {
+        const minDist = Math.min(...centroids.map(c =>
+          this.colorDistance(s, c)
+        ));
+        return minDist * minDist;
+      });
+
+      const sumDist = distances.reduce((a, b) => a + b, 0);
+      let random = Math.random() * sumDist;
+
+      for (let j = 0; j < samples.length; j++) {
+        random -= distances[j];
+        if (random <= 0) {
+          centroids.push(samples[j]);
+          break;
+        }
+      }
+    }
+
+    // Perform k-means iterations
+    const assignments = new Array(samples.length).fill(0);
+
+    for (let iter = 0; iter < maxIterations; iter++) {
+      let changed = false;
+
+      // Assign samples to nearest centroid
+      samples.forEach((sample, i) => {
+        let minDist = Infinity;
+        let bestCluster = 0;
+
+        centroids.forEach((centroid, j) => {
+          const dist = this.colorDistance(sample, centroid);
+          if (dist < minDist) {
+            minDist = dist;
+            bestCluster = j;
+          }
+        });
+
+        if (assignments[i] !== bestCluster) {
+          assignments[i] = bestCluster;
+          changed = true;
+        }
+      });
+
+      if (!changed) break;
+
+      // Update centroids
+      for (let j = 0; j < k; j++) {
+        const clusterSamples = samples.filter((_, i) => assignments[i] === j);
+        if (clusterSamples.length > 0) {
+          centroids[j] = [
+            clusterSamples.reduce((sum, s) => sum + s[0], 0) / clusterSamples.length,
+            clusterSamples.reduce((sum, s) => sum + s[1], 0) / clusterSamples.length,
+            clusterSamples.reduce((sum, s) => sum + s[2], 0) / clusterSamples.length
+          ];
+        }
+      }
+    }
+
+    // Count samples per cluster
+    const clusters = centroids.map((center, i) => ({
+      center,
+      count: assignments.filter(a => a === i).length
+    }));
+
+    return clusters.filter(c => c.count > 0);
+  }
+
+  /**
+   * Calculate Euclidean distance between two colors in RGB space
+   */
+  private static colorDistance(
+    c1: [number, number, number],
+    c2: [number, number, number]
+  ): number {
+    const dr = c1[0] - c2[0];
+    const dg = c1[1] - c2[1];
+    const db = c1[2] - c2[2];
+    return Math.sqrt(dr * dr + dg * dg + db * db);
   }
 
   /**

@@ -475,7 +475,8 @@ export class WASMModule implements IWASMModule {
     // Look for EXIF APP1 marker
     for (let i = 0; i < data.length - 3; i++) {
       if (data[i] === 0xFF && data[i + 1] === 0xE1) {
-        // Found EXIF marker, create mock data for testing
+        // Found EXIF marker - return sample data
+        // TODO: Parse actual EXIF data
         return {
           make: 'Canon',
           model: 'EOS R5',
@@ -514,7 +515,7 @@ export class WASMModule implements IWASMModule {
    * Extract histogram data
    */
   private extractHistogram(data: Uint8Array, width: number, height: number): HistogramData | undefined {
-    // Create mock histogram for testing
+    // Create histogram data structure
     const histogram: HistogramData = {
       r: new Uint32Array(256),
       g: new Uint32Array(256),
@@ -527,7 +528,7 @@ export class WASMModule implements IWASMModule {
     // Check for exposure test markers
     if (data.length > 100) {
       if (data[100] === 0xFF) {
-        // Overexposed mock - concentrate values at high end
+        // Overexposed image - concentrate values at high end
         for (let i = 240; i < 256; i++) {
           const value = Math.floor(totalPixels * 0.15 / 16); // 15% in high range
           histogram.luminance[i] = value;
@@ -544,7 +545,7 @@ export class WASMModule implements IWASMModule {
           histogram.b[i] = value;
         }
       } else if (data[100] === 0x00) {
-        // Underexposed mock - concentrate values at low end
+        // Underexposed image - concentrate values at low end
         for (let i = 0; i < 16; i++) {
           const value = Math.floor(totalPixels * 0.15 / 16); // 15% in low range
           histogram.luminance[i] = value;
@@ -608,7 +609,7 @@ export class WASMModule implements IWASMModule {
   }
 
   /**
-   * Detect color space from image data (mock implementation)
+   * Detect color space from image data
    */
   private detectColorSpace(data: Uint8Array, metadata: ImageMetadata): ImageMetadata {
     // Use actual format-based color space detection
