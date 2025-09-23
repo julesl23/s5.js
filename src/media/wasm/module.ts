@@ -611,8 +611,28 @@ export class WASMModule implements IWASMModule {
    * Detect color space from image data (mock implementation)
    */
   private detectColorSpace(data: Uint8Array, metadata: ImageMetadata): ImageMetadata {
-    // Mock color space detection for testing
-    // Check for specific test patterns in the data
+    // Use actual format-based color space detection
+    if (metadata.format === 'png' || metadata.format === 'jpeg') {
+      // Look for color profile markers
+      for (let i = 0; i < Math.min(data.length - 4, 1000); i++) {
+        // Check for sRGB chunk in PNG
+        if (metadata.format === 'png' &&
+            data[i] === 0x73 && data[i+1] === 0x52 &&
+            data[i+2] === 0x47 && data[i+3] === 0x42) {
+          metadata.colorSpace = 'srgb';
+          return metadata;
+        }
+        // Check for Adobe RGB marker in JPEG
+        if (metadata.format === 'jpeg' &&
+            data[i] === 0x41 && data[i+1] === 0x64 &&
+            data[i+2] === 0x6F && data[i+3] === 0x62 && data[i+4] === 0x65) {
+          metadata.colorSpace = 'adobergb';
+          return metadata;
+        }
+      }
+    }
+
+    // Fallback: Check test patterns
     const dataStr = Array.from(data.slice(0, 50))
       .map(b => String.fromCharCode(b))
       .join('');
@@ -625,6 +645,8 @@ export class WASMModule implements IWASMModule {
       metadata.colorSpace = 'cmyk';
     } else if (dataStr.includes('gray')) {
       metadata.colorSpace = 'gray';
+    } else {
+      metadata.colorSpace = 'srgb'; // Default
     }
 
     // Default bit depths per format

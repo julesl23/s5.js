@@ -15,6 +15,14 @@ export interface WASMExports {
   extract_png_dimensions: (dataPtr: number, dataLen: number) => [number, number];
   extract_jpeg_dimensions: (dataPtr: number, dataLen: number) => [number, number];
   extract_metadata: (dataPtr: number, dataLen: number) => number;
+  // Advanced functions
+  detect_png_bit_depth?: (dataPtr: number, dataLen: number) => number;
+  has_alpha_channel?: (dataPtr: number, dataLen: number) => number;
+  estimate_jpeg_quality?: (dataPtr: number, dataLen: number) => number;
+  is_progressive?: (dataPtr: number, dataLen: number, format: number) => number;
+  calculate_histogram_stats?: (dataPtr: number, dataLen: number, resultPtr: number) => void;
+  find_exif_offset?: (dataPtr: number, dataLen: number) => number;
+  analyze_image?: (dataPtr: number, dataLen: number, resultPtr: number) => void;
 }
 
 export class WASMLoader {
@@ -22,6 +30,7 @@ export class WASMLoader {
   private static module?: WebAssembly.Module;
   private static exports?: WASMExports;
   private static memoryView?: Uint8Array;
+  private static useAdvanced: boolean = false;
 
   /**
    * Load and instantiate the WASM module
@@ -102,33 +111,54 @@ export class WASMLoader {
    * Get WASM URL for streaming compilation
    */
   private static async getWASMUrl(): Promise<string> {
+    const wasmFile = this.useAdvanced ? 'image-advanced.wasm' : 'image-metadata.wasm';
+
     // In browser environment
     if (typeof window !== 'undefined' && window.location) {
-      return new URL('/src/media/wasm/image-metadata.wasm', window.location.href).href;
+      return new URL(`/src/media/wasm/${wasmFile}`, window.location.href).href;
     }
 
     // In Node.js environment
     if (typeof process !== 'undefined' && process.versions?.node) {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
-      const wasmPath = join(__dirname, 'image-metadata.wasm');
+      const wasmPath = join(__dirname, wasmFile);
       return `file://${wasmPath}`;
     }
 
     // Fallback
-    return '/src/media/wasm/image-metadata.wasm';
+    return `/src/media/wasm/${wasmFile}`;
   }
 
   /**
    * Load WASM buffer - tries multiple methods
    */
   private static async loadWASMBuffer(): Promise<ArrayBuffer> {
+    const wasmFile = this.useAdvanced ? 'image-advanced.wasm' : 'image-metadata.wasm';
+
+    // Try to load advanced WASM first if available
+    if (!this.useAdvanced) {
+      // Check if advanced WASM exists
+      if (typeof process !== 'undefined' && process.versions?.node) {
+        try {
+          const __filename = fileURLToPath(import.meta.url);
+          const __dirname = dirname(__filename);
+          const advancedPath = join(__dirname, 'image-advanced.wasm');
+          const buffer = readFileSync(advancedPath);
+          this.useAdvanced = true;
+          return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+        } catch {
+          // Advanced not available, fall back to basic
+        }
+      }
+    }
+
     // In Node.js environment
     if (typeof process !== 'undefined' && process.versions?.node) {
       try {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
-        const wasmPath = join(__dirname, 'image-metadata.wasm');
+        const wasmPath = join(__dirname, wasmFile);
         const buffer = readFileSync(wasmPath);
         return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
       } catch (error) {
@@ -139,7 +169,7 @@ export class WASMLoader {
     // In browser environment or as fallback - use fetch
     if (typeof fetch !== 'undefined') {
       try {
-        const response = await fetch('/src/media/wasm/image-metadata.wasm');
+        const response = await fetch(`/src/media/wasm/${wasmFile}`);
         if (response.ok) {
           return await response.arrayBuffer();
         }
@@ -395,5 +425,183 @@ export class WASMLoader {
    */
   static isInitialized(): boolean {
     return !!this.instance && !!this.exports;
+  }
+
+  /**
+   * Check if advanced functions are available
+   */
+  static hasAdvancedFunctions(): boolean {
+    return !!this.exports?.detect_png_bit_depth;
+  }
+
+  /**
+   * Get bit depth for PNG images
+   */
+  static getPNGBitDepth(imageData: Uint8Array): number | null {
+    if (!this.exports || !this.exports.detect_png_bit_depth) {
+      return null;
+    }
+
+    const dataPtr = this.copyToWASM(imageData);
+    try {
+      const bitDepth = this.exports.detect_png_bit_depth(dataPtr, imageData.length);
+      return bitDepth > 0 ? bitDepth : null;
+    } finally {
+      this.exports.free(dataPtr);
+    }
+  }
+
+  /**
+   * Check if image has alpha channel
+   */
+  static hasAlpha(imageData: Uint8Array): boolean {
+    if (!this.exports || !this.exports.has_alpha_channel) {
+      return false;
+    }
+
+    const dataPtr = this.copyToWASM(imageData);
+    try {
+      return this.exports.has_alpha_channel(dataPtr, imageData.length) === 1;
+    } finally {
+      this.exports.free(dataPtr);
+    }
+  }
+
+  /**
+   * Estimate JPEG quality
+   */
+  static estimateJPEGQuality(imageData: Uint8Array): number | null {
+    if (!this.exports || !this.exports.estimate_jpeg_quality) {
+      return null;
+    }
+
+    const dataPtr = this.copyToWASM(imageData);
+    try {
+      const quality = this.exports.estimate_jpeg_quality(dataPtr, imageData.length);
+      return quality > 0 ? quality : null;
+    } finally {
+      this.exports.free(dataPtr);
+    }
+  }
+
+  /**
+   * Check if image is progressive
+   */
+  static isProgressive(imageData: Uint8Array, format: string): boolean {
+    if (!this.exports || !this.exports.is_progressive) {
+      return false;
+    }
+
+    const formatMap: { [key: string]: number } = {
+      'jpeg': 1,
+      'png': 2
+    };
+
+    const formatNum = formatMap[format] || 0;
+    if (formatNum === 0) return false;
+
+    const dataPtr = this.copyToWASM(imageData);
+    try {
+      return this.exports.is_progressive(dataPtr, imageData.length, formatNum) === 1;
+    } finally {
+      this.exports.free(dataPtr);
+    }
+  }
+
+  /**
+   * Calculate histogram statistics
+   */
+  static calculateHistogram(imageData: Uint8Array): { avgLuminance: number; overexposed: number; underexposed: number } | null {
+    if (!this.exports || !this.exports.calculate_histogram_stats) {
+      return null;
+    }
+
+    const dataPtr = this.copyToWASM(imageData);
+    const resultPtr = this.exports.malloc(12); // 3 x i32
+
+    try {
+      this.exports.calculate_histogram_stats(dataPtr, imageData.length, resultPtr);
+
+      const avgLuminance = this.readInt32(resultPtr);
+      const overexposed = this.readInt32(resultPtr + 4);
+      const underexposed = this.readInt32(resultPtr + 8);
+
+      return { avgLuminance, overexposed, underexposed };
+    } finally {
+      this.exports.free(dataPtr);
+      this.exports.free(resultPtr);
+    }
+  }
+
+  /**
+   * Find EXIF data offset
+   */
+  static findEXIFOffset(imageData: Uint8Array): number | null {
+    if (!this.exports || !this.exports.find_exif_offset) {
+      return null;
+    }
+
+    const dataPtr = this.copyToWASM(imageData);
+    try {
+      const offset = this.exports.find_exif_offset(dataPtr, imageData.length);
+      return offset > 0 ? offset : null;
+    } finally {
+      this.exports.free(dataPtr);
+    }
+  }
+
+  /**
+   * Perform complete image analysis
+   */
+  static analyzeImage(imageData: Uint8Array): any | null {
+    if (!this.exports || !this.exports.analyze_image) {
+      // Fall back to basic metadata extraction
+      return this.extractMetadata(imageData);
+    }
+
+    const dataPtr = this.copyToWASM(imageData);
+    const resultPtr = this.exports.malloc(64); // Enough for all fields
+
+    try {
+      this.exports.analyze_image(dataPtr, imageData.length, resultPtr);
+
+      const format = this.readInt32(resultPtr);
+      const width = this.readInt32(resultPtr + 4);
+      const height = this.readInt32(resultPtr + 8);
+      const size = this.readInt32(resultPtr + 12);
+      const bitDepth = this.readInt32(resultPtr + 16);
+      const hasAlpha = this.readInt32(resultPtr + 20) === 1;
+      const quality = this.readInt32(resultPtr + 24);
+      const isProgressive = this.readInt32(resultPtr + 28) === 1;
+      const avgLuminance = this.readInt32(resultPtr + 32);
+      const overexposed = this.readInt32(resultPtr + 36);
+      const underexposed = this.readInt32(resultPtr + 40);
+      const exifOffset = this.readInt32(resultPtr + 44);
+
+      const formatMap: { [key: number]: string } = {
+        1: 'jpeg',
+        2: 'png',
+        3: 'gif',
+        4: 'bmp',
+        5: 'webp',
+        0: 'unknown'
+      };
+
+      return {
+        format: formatMap[format] || 'unknown',
+        width,
+        height,
+        size,
+        bitDepth: bitDepth > 0 ? bitDepth : undefined,
+        hasAlpha,
+        quality: quality > 0 ? quality : undefined,
+        isProgressive,
+        histogram: avgLuminance > 0 ? { avgLuminance, overexposed, underexposed } : undefined,
+        exifOffset: exifOffset > 0 ? exifOffset : undefined
+      };
+    } finally {
+      this.exports.free(dataPtr);
+      this.exports.free(resultPtr);
+    }
   }
 }

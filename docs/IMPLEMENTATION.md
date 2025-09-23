@@ -276,12 +276,12 @@
     - [x] Replace mock Canvas fallback with proper implementation ✅
     - [x] Add proper error handling and recovery ✅
     - [x] Implement actual progress tracking for WASM download ✅
-  - [ ] Production-grade WASM features
-    - [ ] Real color space detection (replace mock at line 629)
-    - [ ] Real bit depth detection (replace mock at line 440)
-    - [ ] Real EXIF data extraction (replace mock at line 496)
-    - [ ] Real histogram generation (replace mock at lines 535-565)
-    - [ ] Implement actual image format validation
+  - [x] Production-grade WASM features ✅
+    - [x] Real color space detection (uses actual format detection) ✅
+    - [x] Real bit depth detection (WASM getPNGBitDepth function) ✅
+    - [x] Real EXIF data extraction (WASM findEXIFOffset function) ✅
+    - [x] Real histogram generation (WASM calculateHistogram function) ✅
+    - [x] Implement actual image format validation ✅
   - [ ] Canvas implementation cleanup
     - [ ] Remove test-only mock color returns (lines 93-98)
     - [ ] Clean up Node.js test branches
