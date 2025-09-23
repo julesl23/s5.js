@@ -128,7 +128,8 @@ describe('BrowserCompat', () => {
         webGL: true,
         webGL2: true,
         memoryLimit: 4096,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       };
 
       const strategy = BrowserCompat.selectProcessingStrategy(caps);
@@ -148,7 +149,8 @@ describe('BrowserCompat', () => {
         webGL: true,
         webGL2: false,
         memoryLimit: 2048,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       };
 
       const strategy = BrowserCompat.selectProcessingStrategy(caps);
@@ -168,7 +170,8 @@ describe('BrowserCompat', () => {
         webGL: false,
         webGL2: false,
         memoryLimit: 1024,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       };
 
       const strategy = BrowserCompat.selectProcessingStrategy(caps);
@@ -188,7 +191,8 @@ describe('BrowserCompat', () => {
         webGL: false,
         webGL2: false,
         memoryLimit: 512,
-        performanceAPI: false
+        performanceAPI: false,
+        memoryInfo: false
       };
 
       const strategy = BrowserCompat.selectProcessingStrategy(caps);
@@ -208,7 +212,8 @@ describe('BrowserCompat', () => {
         webGL: true,
         webGL2: true,
         memoryLimit: 256, // Very low memory
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       };
 
       const strategy = BrowserCompat.selectProcessingStrategy(caps);

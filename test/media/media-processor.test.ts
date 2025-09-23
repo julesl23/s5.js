@@ -115,7 +115,8 @@ describe('MediaProcessor', () => {
         webGL: false,
         webGL2: false,
         memoryInfo: false,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryLimit: 1024
       });
 
       await MediaProcessor.initialize();
@@ -142,7 +143,8 @@ describe('MediaProcessor', () => {
         webGL: false,
         webGL2: false,
         memoryInfo: false,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryLimit: 1024
       });
 
       await MediaProcessor.initialize({
@@ -182,7 +184,8 @@ describe('MediaProcessor', () => {
         webGL: false,
         webGL2: false,
         memoryInfo: false,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryLimit: 1024
       });
 
       await MediaProcessor.initialize();

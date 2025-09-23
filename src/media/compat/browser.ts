@@ -35,7 +35,8 @@ export class BrowserCompat {
       webGL: false,
       webGL2: false,
       memoryLimit: 512, // Default 512MB
-      performanceAPI: false
+      performanceAPI: false,
+      memoryInfo: false
     };
 
     // Check WebAssembly support
@@ -87,6 +88,7 @@ export class BrowserCompat {
 
     // Check memory constraints
     caps.memoryLimit = this.detectMemoryLimit();
+    caps.memoryInfo = typeof performance !== 'undefined' && !!(performance as any).memory;
 
     // Check image format support
     if (this.isBrowserEnvironment()) {
@@ -348,7 +350,7 @@ export class BrowserCompat {
    */
   static isWebWorkerContext(): boolean {
     return typeof self !== 'undefined' &&
-           typeof importScripts === 'function' &&
+           typeof (globalThis as any).importScripts === 'function' &&
            !this.isServiceWorkerContext();
   }
 }

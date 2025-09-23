@@ -18,7 +18,8 @@ describe('WASM Progress Tracking', () => {
       webGL: false,
       webGL2: false,
       memoryInfo: false,
-      performanceAPI: true
+      performanceAPI: true,
+      memoryLimit: 1024
     });
 
     const progressValues: number[] = [];

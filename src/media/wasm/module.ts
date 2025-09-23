@@ -66,14 +66,6 @@ export class WASMModule implements IWASMModule {
       // WASMLoader handles the actual WASM loading now
       // This code path shouldn't be reached anymore
       throw new Error('Direct WASM loading not implemented - use WASMLoader');
-
-      // Initialize the WASM module if it has an init function
-      const init = this.wasmInstance.exports.initialize as Function | undefined;
-      if (init) {
-        init();
-      }
-
-      options?.onProgress?.(100);
     } catch (error) {
       // For now, we'll handle this gracefully since we don't have the actual WASM file yet
       console.warn('WASM loading failed, using fallback:', error);

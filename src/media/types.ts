@@ -218,6 +218,8 @@ export interface BrowserCapabilities {
   memoryLimit: number;
   /** Performance API availability */
   performanceAPI: boolean;
+  /** Memory info availability (Chrome-specific) */
+  memoryInfo: boolean;
 }
 
 /**

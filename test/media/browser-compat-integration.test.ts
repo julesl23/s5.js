@@ -24,7 +24,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: true,
         webGL2: true,
         memoryLimit: 4096,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       } as BrowserCapabilities);
 
       await MediaProcessor.initialize();
@@ -48,7 +49,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: false,
         webGL2: false,
         memoryLimit: 512,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       } as BrowserCapabilities);
 
       await MediaProcessor.initialize();
@@ -73,7 +75,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: false,
         webGL2: false,
         memoryLimit: 256,
-        performanceAPI: false
+        performanceAPI: false,
+        memoryInfo: false
       } as BrowserCapabilities);
 
       await MediaProcessor.initialize();
@@ -99,7 +102,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: true,
         webGL2: true,
         memoryLimit: 2048,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       } as BrowserCapabilities);
 
       await MediaProcessor.initialize();
@@ -130,7 +134,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: false,
         webGL2: false,
         memoryLimit: 512,
-        performanceAPI: false
+        performanceAPI: false,
+        memoryInfo: false
       } as BrowserCapabilities);
 
       await MediaProcessor.initialize();
@@ -155,7 +160,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: true,
         webGL2: true,
         memoryLimit: 2048,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       } as BrowserCapabilities);
 
       await MediaProcessor.initialize();
@@ -182,7 +188,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: true,
         webGL2: true,
         memoryLimit: 256, // Low memory
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       } as BrowserCapabilities);
 
       await MediaProcessor.initialize();
@@ -208,7 +215,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: false,
         webGL2: false,
         memoryLimit: 256,
-        performanceAPI: false
+        performanceAPI: false,
+        memoryInfo: false
       };
 
       const recommendations = BrowserCompat.getOptimizationRecommendations(limitedCaps);
@@ -231,7 +239,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: true,
         webGL2: true,
         memoryLimit: 4096,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       };
 
       const recommendations = BrowserCompat.getOptimizationRecommendations(fullCaps);
@@ -254,7 +263,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: true,
         webGL2: true,
         memoryLimit: 2048,
-        performanceAPI: true
+        performanceAPI: true,
+        memoryInfo: false
       };
 
       const formats = BrowserCompat.getPreferredImageFormats(caps);
@@ -278,7 +288,8 @@ describe('BrowserCompat Integration with MediaProcessor', () => {
         webGL: false,
         webGL2: false,
         memoryLimit: 512,
-        performanceAPI: false
+        performanceAPI: false,
+        memoryInfo: false
       };
 
       const formats = BrowserCompat.getPreferredImageFormats(caps);
