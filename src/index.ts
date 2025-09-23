@@ -50,5 +50,10 @@ export type {
   ImageFormat,
   ColorSpace,
   ExifData,
-  HistogramData
+  HistogramData,
+  DominantColor,
+  AspectRatio,
+  Orientation,
+  ProcessingSpeed,
+  SamplingStrategy
 } from './media/types.js';

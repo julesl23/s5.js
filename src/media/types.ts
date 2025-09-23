@@ -100,6 +100,36 @@ export interface ImageMetadata {
   frameCount?: number;
   /** Estimated JPEG quality (0-100) */
   estimatedQuality?: number;
+  /** Dominant colors extracted from the image */
+  dominantColors?: DominantColor[];
+  /** Whether the image is monochrome */
+  isMonochrome?: boolean;
+  /** Aspect ratio classification */
+  aspectRatio?: AspectRatio;
+  /** Numerical aspect ratio value (width/height) */
+  aspectRatioValue?: number;
+  /** Common aspect ratio format (e.g., "16:9") */
+  commonAspectRatio?: string;
+  /** Image orientation (EXIF-style, 1-8) */
+  orientation?: Orientation;
+  /** Whether the image needs rotation based on orientation */
+  needsRotation?: boolean;
+  /** Rotation angle needed (0, 90, 180, 270) */
+  rotationAngle?: number;
+  /** Whether the image data is valid */
+  isValidImage?: boolean;
+  /** Validation errors if any */
+  validationErrors?: string[];
+  /** Processing time in milliseconds */
+  processingTime?: number;
+  /** Processing speed classification */
+  processingSpeed?: ProcessingSpeed;
+  /** Whether memory-efficient processing was used */
+  memoryEfficient?: boolean;
+  /** Sampling strategy used for analysis */
+  samplingStrategy?: SamplingStrategy;
+  /** Processing errors if any */
+  processingErrors?: string[];
 }
 
 /**
@@ -123,6 +153,42 @@ export interface InitializeOptions {
   /** Custom WASM module URL */
   wasmUrl?: string;
 }
+
+/**
+ * Dominant color information
+ */
+export interface DominantColor {
+  /** Hex color code */
+  hex: string;
+  /** RGB values */
+  rgb: {
+    r: number;
+    g: number;
+    b: number;
+  };
+  /** Percentage of image this color represents */
+  percentage: number;
+}
+
+/**
+ * Aspect ratio types
+ */
+export type AspectRatio = 'landscape' | 'portrait' | 'square';
+
+/**
+ * Image orientation values (EXIF-style)
+ */
+export type Orientation = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+/**
+ * Processing speed indicator
+ */
+export type ProcessingSpeed = 'fast' | 'normal' | 'slow';
+
+/**
+ * Sampling strategy for large images
+ */
+export type SamplingStrategy = 'full' | 'adaptive' | 'minimal';
 
 /**
  * WASM module interface
