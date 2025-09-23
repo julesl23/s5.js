@@ -11,17 +11,22 @@ export { JSCryptoImplementation } from './api/crypto/js.js';
 export { DirectoryWalker } from './fs/utils/walker.js';
 export { BatchOperations } from './fs/utils/batch.js';
 
+// Export media processing classes
+export { MediaProcessor } from './media/index.js';
+export { CanvasMetadataExtractor } from './media/fallback/canvas.js';
+export { WASMModule } from './media/wasm/module.js';
+
 // Export types
-export type { 
-  DirV1, 
-  FileRef, 
-  DirRef, 
+export type {
+  DirV1,
+  FileRef,
+  DirRef,
   DirLink,
   PutOptions,
   GetOptions,
   ListOptions,
   ListResult,
-  CursorData 
+  CursorData
 } from './fs/dirv1/types.js';
 
 // Export utility types
@@ -36,3 +41,11 @@ export type {
   BatchProgress,
   BatchResult
 } from './fs/utils/batch.js';
+
+// Export media types
+export type {
+  ImageMetadata,
+  MediaOptions,
+  InitializeOptions,
+  ImageFormat
+} from './media/types.js';
