@@ -1,5 +1,8 @@
 import { webcrypto } from 'node:crypto';
 
+// Set NODE_ENV for test environment
+process.env.NODE_ENV = 'test';
+
 // Polyfill Web Crypto API for Node.js
 if (typeof globalThis.crypto === 'undefined') {
   Object.defineProperty(globalThis, 'crypto', {

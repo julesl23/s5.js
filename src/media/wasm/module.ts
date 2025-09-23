@@ -1,4 +1,5 @@
 import type { ImageMetadata, InitializeOptions, WASMModule as IWASMModule, ExifData, HistogramData, ColorSpace } from '../types.js';
+import { WASMLoader } from './loader.js';
 
 /**
  * WebAssembly module wrapper for image processing
@@ -32,50 +33,12 @@ export class WASMModule implements IWASMModule {
     // Report initial progress
     options?.onProgress?.(0);
 
-    const wasmUrl = options?.wasmUrl || new URL('./media-processor.wasm', import.meta.url).href;
-
     try {
-      // Fetch WASM binary with progress tracking
-      const response = await fetch(wasmUrl);
+      // Initialize the WASM loader
+      await WASMLoader.initialize();
 
-      if (!response.ok) {
-        throw new Error(`Failed to load WASM: ${response.status}`);
-      }
-
-      const contentLength = response.headers.get('content-length');
-      const reader = response.body?.getReader();
-
-      if (!reader) {
-        throw new Error('Failed to get response reader');
-      }
-
-      const chunks: Uint8Array[] = [];
-      let receivedLength = 0;
-
-      // Stream with progress
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        chunks.push(value);
-        receivedLength += value.length;
-
-        if (contentLength) {
-          const progress = (receivedLength / parseInt(contentLength)) * 90; // 90% for download
-          options?.onProgress?.(progress);
-        }
-      }
-
-      // Combine chunks
-      const wasmBuffer = new Uint8Array(receivedLength);
-      let position = 0;
-      for (const chunk of chunks) {
-        wasmBuffer.set(chunk, position);
-        position += chunk.length;
-      }
-
-      // Initialize WASM instance
-      const wasmModule = await WebAssembly.compile(wasmBuffer);
+      // Report completion
+      options?.onProgress?.(100);
 
       // Create memory with initial size of 256 pages (16MB)
       this.memory = new WebAssembly.Memory({
@@ -97,7 +60,9 @@ export class WASMModule implements IWASMModule {
         }
       };
 
-      this.wasmInstance = await WebAssembly.instantiate(wasmModule, imports);
+      // WASMLoader handles the actual WASM loading now
+      // This code path shouldn't be reached anymore
+      throw new Error('Direct WASM loading not implemented - use WASMLoader');
 
       // Initialize the WASM module if it has an init function
       const init = this.wasmInstance.exports.initialize as Function | undefined;
@@ -108,19 +73,16 @@ export class WASMModule implements IWASMModule {
       options?.onProgress?.(100);
     } catch (error) {
       // For now, we'll handle this gracefully since we don't have the actual WASM file yet
-      console.warn('WASM loading failed (expected during development):', error);
-      // Use mock implementation for now
-      this.useMockImplementation();
-      options?.onProgress?.(100);
+      console.warn('WASM loading failed, using fallback:', error);
+      throw error; // Let the caller handle fallback
     }
   }
 
   /**
-   * Use mock implementation for development
+   * Initialize the WASM module
    */
-  private useMockImplementation(): void {
-    // This will be replaced with actual WASM in Phase 5
-    // For now, provide a mock that satisfies the tests
+  async initialize(): Promise<void> {
+    // Already initialized in loadWASM
   }
 
   /**
@@ -139,21 +101,73 @@ export class WASMModule implements IWASMModule {
   }
 
   /**
-   * Fallback metadata extraction
+   * Extract metadata using WASM
+   */
+  extractMetadata(data: Uint8Array): ImageMetadata | undefined {
+    if (!WASMLoader.isInitialized()) {
+      // Fallback to basic extraction if WASM not loaded
+      return this.fallbackExtractMetadata(data);
+    }
+
+    try {
+      // Use real WASM extraction
+      const result = WASMLoader.extractMetadata(data);
+
+      if (!result) {
+        return undefined;
+      }
+
+      // Convert WASM result to ImageMetadata
+      const metadata: ImageMetadata = {
+        width: result.width,
+        height: result.height,
+        format: result.format as ImageMetadata['format'],
+        mimeType: this.formatToMimeType(result.format as ImageMetadata['format']),
+        size: result.size,
+        source: 'wasm'
+      };
+
+      // Add additional metadata based on format
+      if (result.format === 'png') {
+        metadata.hasAlpha = true;
+      }
+
+      // Try to extract additional metadata
+      const extraMetadata = this.extractAdditionalMetadata(data, metadata);
+      return { ...metadata, ...extraMetadata };
+
+    } catch (error) {
+      console.warn('WASM extraction failed, using fallback:', error);
+      return this.fallbackExtractMetadata(data);
+    }
+  }
+
+  /**
+   * Fallback metadata extraction when WASM is not available
    */
   private fallbackExtractMetadata(data: Uint8Array): ImageMetadata | undefined {
     if (data.length < 8) {
       return undefined;
     }
 
-    // Detect format from magic bytes
-    const format = this.detectFormatFromBytes(data);
+    // Use WASMLoader's format detection if available
+    let format: ImageMetadata['format'] = 'unknown';
+
+    try {
+      if (WASMLoader.isInitialized()) {
+        format = WASMLoader.detectFormat(data) as ImageMetadata['format'];
+      } else {
+        format = this.detectFormatFromBytes(data);
+      }
+    } catch {
+      format = this.detectFormatFromBytes(data);
+    }
 
     if (format === 'unknown') {
       return undefined;
     }
 
-    // Extract advanced metadata based on format
+    // Basic metadata with fallback dimensions
     let metadata: ImageMetadata = {
       width: 100, // Placeholder
       height: 100, // Placeholder
@@ -162,20 +176,44 @@ export class WASMModule implements IWASMModule {
       source: 'wasm'
     };
 
-    // Extract format-specific metadata
-    if (format === 'jpeg') {
-      metadata = { ...metadata, ...this.extractJPEGMetadata(data) };
-    } else if (format === 'png') {
-      metadata = { ...metadata, ...this.extractPNGMetadata(data) };
-    } else if (format === 'webp') {
-      metadata = { ...metadata, ...this.extractWebPMetadata(data) };
+    // Try to get real dimensions if WASM is available
+    try {
+      if (WASMLoader.isInitialized()) {
+        const dimensions = WASMLoader.getDimensions(data, format);
+        if (dimensions) {
+          metadata.width = dimensions.width;
+          metadata.height = dimensions.height;
+        }
+      }
+    } catch {
+      // Keep placeholder dimensions
     }
 
-    // Mock support for different color spaces based on test patterns
-    metadata = this.detectColorSpace(data, metadata);
+    // Extract format-specific metadata
+    const extraMetadata = this.extractAdditionalMetadata(data, metadata);
+    return { ...metadata, ...extraMetadata };
+  }
+
+  /**
+   * Extract additional metadata that WASM doesn't provide
+   */
+  private extractAdditionalMetadata(data: Uint8Array, baseMetadata: ImageMetadata): Partial<ImageMetadata> {
+    const metadata: Partial<ImageMetadata> = {};
+
+    // Extract format-specific metadata
+    if (baseMetadata.format === 'jpeg') {
+      Object.assign(metadata, this.extractJPEGMetadata(data));
+    } else if (baseMetadata.format === 'png') {
+      Object.assign(metadata, this.extractPNGMetadata(data));
+    } else if (baseMetadata.format === 'webp') {
+      Object.assign(metadata, this.extractWebPMetadata(data));
+    }
+
+    // Detect color space
+    this.detectColorSpace(data, metadata as ImageMetadata);
 
     // Extract histogram if possible
-    const histogram = this.extractHistogram(data, metadata.width, metadata.height);
+    const histogram = this.extractHistogram(data, baseMetadata.width, baseMetadata.height);
     if (histogram) {
       metadata.histogram = histogram;
       metadata.exposureWarning = this.analyzeExposure(histogram);
@@ -220,56 +258,43 @@ export class WASMModule implements IWASMModule {
   }
 
   /**
-   * Initialize the module (for interface compatibility)
+   * Allocate memory in WASM
    */
-  async initialize(): Promise<void> {
-    // Already initialized in constructor
+  private allocate(size: number): number {
+    // Mock allocation - would use real WASM memory management
+    const ptr = Math.floor(Math.random() * 1000000);
+    this.allocatedBuffers.add(ptr);
+    return ptr;
   }
 
   /**
-   * Extract metadata from image data
+   * Write data to WASM memory
    */
-  extractMetadata(data: Uint8Array): ImageMetadata | undefined {
-    if (!this.wasmInstance) {
-      // Use fallback if WASM not loaded
-      return this.fallbackExtractMetadata(data);
-    }
+  private writeMemory(ptr: number, data: Uint8Array): void {
+    // Mock write - would use real WASM memory
+    if (!this.memory) return;
 
-    // Allocate memory in WASM
-    const ptr = this.allocate(data.length);
-    this.writeMemory(ptr, data);
+    const view = new Uint8Array(this.memory.buffer);
+    view.set(data, ptr);
+  }
 
-    try {
-      // Call WASM function (if it exists)
-      const extractMetadata = this.wasmInstance.exports.extract_metadata as Function | undefined;
-
-      if (!extractMetadata) {
-        // Use fallback if function doesn't exist
-        return this.fallbackExtractMetadata(data);
-      }
-
-      const metadataPtr = extractMetadata(ptr, data.length);
-
-      if (!metadataPtr) {
-        return undefined;
-      }
-
-      // Read metadata from WASM memory
-      return this.readMetadata(metadataPtr);
-    } finally {
-      // Clean up allocated memory
-      this.free(ptr);
-    }
+  /**
+   * Free allocated memory
+   */
+  private free(ptr: number): void {
+    this.allocatedBuffers.delete(ptr);
   }
 
   /**
    * Clean up allocated memory
    */
   cleanup(): void {
-    // Free all allocated buffers
-    for (const ptr of this.allocatedBuffers) {
-      this.free(ptr);
+    // Clean up WASM loader resources
+    if (WASMLoader.isInitialized()) {
+      WASMLoader.cleanup();
     }
+
+    // Clear any remaining allocated buffers
     this.allocatedBuffers.clear();
   }
 
@@ -280,52 +305,6 @@ export class WASMModule implements IWASMModule {
     return this.allocatedBuffers.size;
   }
 
-  /**
-   * Allocate memory in WASM
-   */
-  private allocate(size: number): number {
-    if (!this.wasmInstance) {
-      return 0;
-    }
-
-    const alloc = this.wasmInstance.exports.allocate as Function | undefined;
-    if (!alloc) {
-      // Fallback: use a simple offset
-      const ptr = this.allocatedBuffers.size * 1024;
-      this.allocatedBuffers.add(ptr);
-      return ptr;
-    }
-
-    const ptr = alloc(size);
-    this.allocatedBuffers.add(ptr);
-    return ptr;
-  }
-
-  /**
-   * Free memory in WASM
-   */
-  private free(ptr: number): void {
-    if (!this.wasmInstance || !this.allocatedBuffers.has(ptr)) {
-      return;
-    }
-
-    const free = this.wasmInstance.exports.free as Function | undefined;
-    if (free) {
-      free(ptr);
-    }
-
-    this.allocatedBuffers.delete(ptr);
-  }
-
-  /**
-   * Write data to WASM memory
-   */
-  private writeMemory(ptr: number, data: Uint8Array): void {
-    if (!this.memory) return;
-
-    const memory = new Uint8Array(this.memory.buffer);
-    memory.set(data, ptr);
-  }
 
   /**
    * Read string from WASM memory
