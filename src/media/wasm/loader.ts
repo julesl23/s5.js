@@ -26,31 +26,97 @@ export class WASMLoader {
   /**
    * Load and instantiate the WASM module
    */
-  static async initialize(): Promise<void> {
+  static async initialize(onProgress?: (percent: number) => void): Promise<void> {
     if (this.instance) return;
 
     try {
-      // Try to load WASM binary
-      const wasmBuffer = await this.loadWASMBuffer();
-
-      // Compile the module
-      this.module = await WebAssembly.compile(wasmBuffer);
-
-      // Instantiate with imports
-      this.instance = await WebAssembly.instantiate(this.module, {
+      const imports = {
         env: {
           // Add any required imports here
           abort: () => { throw new Error('WASM abort called'); }
         }
-      });
+      };
+
+      // Report initial progress
+      onProgress?.(0);
+
+      // Try streaming compilation first (faster)
+      if (typeof WebAssembly.instantiateStreaming === 'function' && typeof fetch !== 'undefined') {
+        try {
+          const wasmUrl = await this.getWASMUrl();
+          onProgress?.(10); // Fetching
+
+          const response = await fetch(wasmUrl);
+
+          if (response.ok) {
+            onProgress?.(50); // Compiling
+            const result = await WebAssembly.instantiateStreaming(response, imports);
+            this.module = result.module;
+            this.instance = result.instance;
+            this.exports = this.instance.exports as unknown as WASMExports;
+            this.updateMemoryView();
+            onProgress?.(100); // Complete
+            return;
+          }
+        } catch (streamError) {
+          console.warn('Streaming compilation failed, falling back to ArrayBuffer:', streamError);
+        }
+      }
+
+      // Fallback to ArrayBuffer compilation
+      onProgress?.(20); // Loading buffer
+      const wasmBuffer = await this.loadWASMBuffer();
+      onProgress?.(60); // Compiling
+
+      // Use compileStreaming if available and we have a Response
+      if (typeof Response !== 'undefined' && typeof WebAssembly.compileStreaming === 'function') {
+        try {
+          const response = new Response(wasmBuffer, {
+            headers: { 'Content-Type': 'application/wasm' }
+          });
+          this.module = await WebAssembly.compileStreaming(response);
+        } catch {
+          // Fallback to regular compile
+          this.module = await WebAssembly.compile(wasmBuffer);
+        }
+      } else {
+        this.module = await WebAssembly.compile(wasmBuffer);
+      }
+
+      onProgress?.(90); // Instantiating
+
+      // Instantiate with imports
+      this.instance = await WebAssembly.instantiate(this.module, imports);
 
       this.exports = this.instance.exports as unknown as WASMExports;
       this.updateMemoryView();
+      onProgress?.(100); // Complete
 
     } catch (error) {
       console.error('Failed to initialize WASM:', error);
       throw new Error(`WASM initialization failed: ${error}`);
     }
+  }
+
+  /**
+   * Get WASM URL for streaming compilation
+   */
+  private static async getWASMUrl(): Promise<string> {
+    // In browser environment
+    if (typeof window !== 'undefined' && window.location) {
+      return new URL('/src/media/wasm/image-metadata.wasm', window.location.href).href;
+    }
+
+    // In Node.js environment
+    if (typeof process !== 'undefined' && process.versions?.node) {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const wasmPath = join(__dirname, 'image-metadata.wasm');
+      return `file://${wasmPath}`;
+    }
+
+    // Fallback
+    return '/src/media/wasm/image-metadata.wasm';
   }
 
   /**
@@ -131,29 +197,52 @@ export class WASMLoader {
   }
 
   /**
-   * Copy data to WASM memory
+   * Copy data to WASM memory with optimization for large images
    */
   static copyToWASM(data: Uint8Array): number {
     if (!this.exports || !this.memoryView) {
       throw new Error('WASM not initialized');
     }
 
+    // For very large images, consider sampling instead of processing full image
+    const MAX_IMAGE_SIZE = 50 * 1024 * 1024; // 50MB limit
+    let processData = data;
+
+    if (data.length > MAX_IMAGE_SIZE) {
+      console.warn(`Image too large (${data.length} bytes), will process only metadata`);
+      // For metadata extraction, we only need the header
+      processData = data.slice(0, 65536); // First 64KB should contain all metadata
+    }
+
     // Check if memory needs to grow
-    const requiredSize = data.length;
+    const requiredSize = processData.length + 4096; // Add buffer for alignment
     const currentSize = this.memoryView.length;
 
     if (requiredSize > currentSize) {
       // Grow memory (in pages of 64KB)
       const pagesNeeded = Math.ceil((requiredSize - currentSize) / 65536);
-      this.exports.memory.grow(pagesNeeded);
-      this.updateMemoryView();
+      try {
+        this.exports.memory.grow(pagesNeeded);
+        this.updateMemoryView();
+      } catch (error) {
+        throw new Error(`Failed to allocate memory: ${error}. Required: ${requiredSize} bytes`);
+      }
     }
 
     // Allocate memory in WASM
-    const ptr = this.exports.malloc(data.length);
+    const ptr = this.exports.malloc(processData.length);
+
+    if (ptr === 0) {
+      throw new Error('Failed to allocate memory in WASM');
+    }
 
     // Copy data
-    this.memoryView!.set(data, ptr);
+    try {
+      this.memoryView!.set(processData, ptr);
+    } catch (error) {
+      this.exports.free(ptr);
+      throw new Error(`Failed to copy data to WASM memory: ${error}`);
+    }
 
     return ptr;
   }

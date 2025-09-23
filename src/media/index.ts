@@ -72,16 +72,40 @@ export class MediaProcessor {
           // No-op for canvas fallback
         },
         extractMetadata(data: Uint8Array): ImageMetadata | undefined {
-          // This would be called with Uint8Array, but Canvas needs Blob
-          // For now, return basic metadata
           if (MediaProcessor.forceError) {
             throw new Error('Forced WASM error for testing');
           }
+
+          // Convert Uint8Array to Blob for Canvas API
+          // Try to detect format from magic bytes
+          let mimeType = 'application/octet-stream';
+          if (data.length >= 4) {
+            if (data[0] === 0xFF && data[1] === 0xD8) {
+              mimeType = 'image/jpeg';
+            } else if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4E && data[3] === 0x47) {
+              mimeType = 'image/png';
+            } else if (data[0] === 0x47 && data[1] === 0x49 && data[2] === 0x46) {
+              mimeType = 'image/gif';
+            } else if (data[0] === 0x42 && data[1] === 0x4D) {
+              mimeType = 'image/bmp';
+            } else if (data[0] === 0x52 && data[1] === 0x49 && data[2] === 0x46 && data[3] === 0x46 &&
+                       data.length > 11 && data[8] === 0x57 && data[9] === 0x45 && data[10] === 0x42 && data[11] === 0x50) {
+              mimeType = 'image/webp';
+            }
+          }
+
+          const blob = new Blob([data], { type: mimeType });
+
+          // Use the async Canvas extractor synchronously (this is a limitation of the interface)
+          // In a real scenario, this should be async, but the WASMModule interface expects sync
           return {
-            width: 800,
-            height: 600,
-            format: 'unknown',
-            source: 'canvas'
+            width: 0,
+            height: 0,
+            format: MediaProcessor.detectFormat(mimeType),
+            size: data.length,
+            source: 'canvas',
+            isValidImage: false,
+            validationErrors: ['Canvas fallback in WASM context - async extraction not available']
           };
         },
         cleanup() {

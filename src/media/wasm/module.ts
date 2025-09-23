@@ -34,8 +34,11 @@ export class WASMModule implements IWASMModule {
     options?.onProgress?.(0);
 
     try {
-      // Initialize the WASM loader
-      await WASMLoader.initialize();
+      // Initialize the WASM loader with progress tracking
+      await WASMLoader.initialize((percent) => {
+        // Scale progress from 0-100 to account for other initialization steps
+        options?.onProgress?.(percent * 0.9); // WASM loading is 90% of the work
+      });
 
       // Report completion
       options?.onProgress?.(100);
