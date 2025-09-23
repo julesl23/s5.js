@@ -22,15 +22,15 @@ describe('Media Types', () => {
         format: 'png',
         hasAlpha: true,
         exif: {
-          Camera: 'Canon',
-          ISO: 100
+          make: 'Canon',
+          iso: 100
         },
         size: 12345,
         source: 'wasm'
       };
 
       expect(metadata.hasAlpha).toBe(true);
-      expect(metadata.exif).toEqual({ Camera: 'Canon', ISO: 100 });
+      expect(metadata.exif).toEqual({ make: 'Canon', iso: 100 });
       expect(metadata.size).toBe(12345);
       expect(metadata.source).toBe('wasm');
     });

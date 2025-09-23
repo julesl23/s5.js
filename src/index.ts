@@ -47,5 +47,8 @@ export type {
   ImageMetadata,
   MediaOptions,
   InitializeOptions,
-  ImageFormat
+  ImageFormat,
+  ColorSpace,
+  ExifData,
+  HistogramData
 } from './media/types.js';
