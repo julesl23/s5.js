@@ -1,236 +1,354 @@
+import type { BrowserCapabilities, ProcessingStrategy, BrowserInfo } from '../types.js';
+
 /**
  * Browser compatibility detection and strategy selection
  */
-export class BrowserCompatibility {
+export class BrowserCompat {
+  private static capabilities?: BrowserCapabilities;
+  private static browserInfo?: BrowserInfo;
+
   /**
-   * Check if WebAssembly is supported
+   * Reset cached capabilities (mainly for testing)
    */
-  static hasWebAssembly(): boolean {
-    return typeof WebAssembly !== 'undefined' &&
-           typeof WebAssembly.compile === 'function' &&
-           typeof WebAssembly.instantiate === 'function';
+  static resetCache(): void {
+    this.capabilities = undefined;
+    this.browserInfo = undefined;
   }
 
   /**
-   * Check if Canvas API is supported
+   * Check browser capabilities
    */
-  static hasCanvas(): boolean {
-    if (typeof document === 'undefined') {
-      return false;
+  static async checkCapabilities(): Promise<BrowserCapabilities> {
+    if (this.capabilities) {
+      return this.capabilities;
     }
 
+    const caps: BrowserCapabilities = {
+      webAssembly: false,
+      webAssemblyStreaming: false,
+      sharedArrayBuffer: false,
+      webWorkers: false,
+      offscreenCanvas: false,
+      webP: false,
+      avif: false,
+      createImageBitmap: false,
+      webGL: false,
+      webGL2: false,
+      memoryLimit: 512, // Default 512MB
+      performanceAPI: false
+    };
+
+    // Check WebAssembly support
     try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      return ctx !== null;
+      if (typeof WebAssembly === 'object' && WebAssembly !== null) {
+        caps.webAssembly = true;
+        caps.webAssemblyStreaming = typeof WebAssembly.instantiateStreaming === 'function';
+      }
     } catch {
-      return false;
+      // WebAssembly not supported
     }
-  }
 
-  /**
-   * Check if Image constructor is available
-   */
-  static hasImage(): boolean {
-    return typeof Image !== 'undefined';
-  }
+    // Check SharedArrayBuffer (may be disabled due to Spectre mitigations)
+    try {
+      if (typeof SharedArrayBuffer !== 'undefined') {
+        new SharedArrayBuffer(1);
+        caps.sharedArrayBuffer = true;
+      }
+    } catch {
+      // SharedArrayBuffer not supported or disabled
+    }
 
-  /**
-   * Check if Blob is supported
-   */
-  static hasBlob(): boolean {
-    return typeof Blob !== 'undefined';
-  }
+    // Check Web Workers
+    caps.webWorkers = typeof Worker !== 'undefined';
 
-  /**
-   * Check if URL.createObjectURL is supported
-   */
-  static hasObjectURL(): boolean {
-    return typeof URL !== 'undefined' &&
-           typeof URL.createObjectURL === 'function' &&
-           typeof URL.revokeObjectURL === 'function';
-  }
+    // Check OffscreenCanvas
+    caps.offscreenCanvas = typeof OffscreenCanvas !== 'undefined';
 
-  /**
-   * Select the best strategy based on capabilities
-   */
-  static selectStrategy(options: {
-    hasWebAssembly?: boolean;
-    hasCanvas?: boolean;
-    hasImage?: boolean;
-    preferredStrategy?: 'wasm' | 'canvas' | 'basic' | 'none';
-  }): 'wasm' | 'canvas' | 'basic' | 'none' {
-    const {
-      hasWebAssembly = this.hasWebAssembly(),
-      hasCanvas = this.hasCanvas(),
-      hasImage = this.hasImage(),
-      preferredStrategy
-    } = options;
+    // Check createImageBitmap
+    caps.createImageBitmap = typeof createImageBitmap === 'function';
 
-    // If a preferred strategy is specified and available, use it
-    if (preferredStrategy) {
-      switch (preferredStrategy) {
-        case 'wasm':
-          if (hasWebAssembly) return 'wasm';
-          break;
-        case 'canvas':
-          if (hasCanvas && hasImage) return 'canvas';
-          break;
-        case 'basic':
-          if (hasImage) return 'basic';
-          break;
-        case 'none':
-          return 'none';
+    // Check WebGL support
+    if (typeof document !== 'undefined') {
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        caps.webGL = !!gl;
+
+        const gl2 = canvas.getContext('webgl2');
+        caps.webGL2 = !!gl2;
+      } catch {
+        // WebGL not supported
       }
     }
 
-    // Auto-select based on capabilities
-    if (hasWebAssembly) {
-      return 'wasm';
-    } else if (hasCanvas && hasImage) {
-      return 'canvas';
-    } else if (hasImage) {
-      return 'basic';
-    } else {
-      return 'none';
+    // Check Performance API
+    caps.performanceAPI = typeof performance !== 'undefined' &&
+                          typeof performance.now === 'function';
+
+    // Check memory constraints
+    caps.memoryLimit = this.detectMemoryLimit();
+
+    // Check image format support
+    if (this.isBrowserEnvironment()) {
+      caps.webP = await this.checkImageFormatSupport('image/webp');
+      caps.avif = await this.checkImageFormatSupport('image/avif');
     }
+
+    this.capabilities = caps;
+    return caps;
   }
 
   /**
-   * Get comprehensive capability report
+   * Check if a specific image format is supported
    */
-  static checkCapabilities(): CapabilityReport {
-    const hasWebAssembly = this.hasWebAssembly();
-    const hasCanvas = this.hasCanvas();
-    const hasImage = this.hasImage();
-    const hasBlob = this.hasBlob();
-    const hasObjectURL = this.hasObjectURL();
+  private static checkImageFormatSupport(mimeType: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      // In Node.js environment, return false
+      if (!this.isBrowserEnvironment()) {
+        resolve(false);
+        return;
+      }
 
-    const recommendedStrategy = this.selectStrategy({
-      hasWebAssembly,
-      hasCanvas,
-      hasImage
+      const img = new Image();
+
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+
+      // 1x1 pixel test images
+      if (mimeType === 'image/webp') {
+        // Minimal WebP image
+        img.src = 'data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA';
+      } else if (mimeType === 'image/avif') {
+        // Minimal AVIF image
+        img.src = 'data:image/avif;base64,AAAAHGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZgAAAPBtZXRhAAAA';
+      } else {
+        resolve(false);
+      }
     });
+  }
 
-    return {
-      hasWebAssembly,
-      hasCanvas,
-      hasImage,
-      hasBlob,
-      hasObjectURL,
-      recommendedStrategy
+  /**
+   * Detect available memory limit
+   */
+  private static detectMemoryLimit(): number {
+    // In Node.js, use process.memoryUsage
+    if (this.isNodeEnvironment()) {
+      try {
+        const usage = process.memoryUsage();
+        return Math.floor(usage.heapTotal / 1048576); // Convert to MB
+      } catch {
+        return 512; // Default
+      }
+    }
+
+    // In browser, try to use performance.memory (Chrome only)
+    if (typeof performance !== 'undefined' && (performance as any).memory) {
+      const memory = (performance as any).memory;
+      if (memory.jsHeapSizeLimit) {
+        return Math.floor(memory.jsHeapSizeLimit / 1048576); // Convert to MB
+      }
+    }
+
+    // Try to estimate based on navigator.deviceMemory (Chrome only)
+    if (typeof navigator !== 'undefined' && (navigator as any).deviceMemory) {
+      return (navigator as any).deviceMemory * 1024; // Convert GB to MB
+    }
+
+    // Default fallback
+    return 512; // 512MB default
+  }
+
+  /**
+   * Select optimal processing strategy based on capabilities
+   */
+  static selectProcessingStrategy(caps: BrowserCapabilities): ProcessingStrategy {
+    // Consider memory constraints - avoid WASM with very low memory
+    const lowMemory = caps.memoryLimit < 512;
+
+    // Best: WASM in Web Worker
+    if (caps.webAssembly && caps.webWorkers && !lowMemory) {
+      return 'wasm-worker';
+    }
+
+    // Good: WASM in main thread
+    if (caps.webAssembly && !lowMemory) {
+      return 'wasm-main';
+    }
+
+    // OK: Canvas in Web Worker
+    if (caps.webWorkers && caps.offscreenCanvas) {
+      return 'canvas-worker';
+    }
+
+    // Fallback: Canvas in main thread
+    return 'canvas-main';
+  }
+
+  /**
+   * Get browser information
+   */
+  static getBrowserInfo(): BrowserInfo {
+    if (this.browserInfo) {
+      return this.browserInfo;
+    }
+
+    const userAgent = this.getUserAgent();
+    this.browserInfo = this.parseBrowserInfo(userAgent);
+    return this.browserInfo;
+  }
+
+  /**
+   * Parse browser info from user agent string
+   */
+  static parseBrowserInfo(userAgent: string): BrowserInfo {
+    const info: BrowserInfo = {
+      name: 'Unknown',
+      version: '0',
+      platform: 'Unknown',
+      isMobile: false
     };
+
+    // Detect mobile
+    info.isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(userAgent);
+
+    // Detect platform - iOS first since it contains "Mac OS X" in user agent
+    if (/iPhone|iPad|iPod/i.test(userAgent)) {
+      info.platform = 'iOS';
+    } else if (/Android/i.test(userAgent)) {
+      info.platform = 'Android';
+    } else if (/Mac OS X/i.test(userAgent)) {
+      info.platform = 'macOS';
+    } else if (/Windows/i.test(userAgent)) {
+      info.platform = 'Windows';
+    } else if (/Linux/i.test(userAgent)) {
+      info.platform = 'Linux';
+    }
+
+    // Detect browser - order matters!
+    if (/Edg\/(\d+\.\d+\.\d+\.\d+)/i.test(userAgent)) {
+      info.name = 'Edge';
+      info.version = RegExp.$1;
+    } else if (/Chrome\/(\d+\.\d+\.\d+\.\d+)/i.test(userAgent)) {
+      info.name = 'Chrome';
+      info.version = RegExp.$1;
+    } else if (/Firefox\/(\d+\.\d+)/i.test(userAgent)) {
+      info.name = 'Firefox';
+      info.version = RegExp.$1;
+    } else if (/Version\/(\d+\.\d+\.\d+).*Safari/i.test(userAgent)) {
+      info.name = 'Safari';
+      info.version = RegExp.$1;
+    } else if (/Safari/i.test(userAgent)) {
+      info.name = 'Safari';
+      // Try to extract version from Version/ tag
+      const versionMatch = userAgent.match(/Version\/(\d+\.\d+)/);
+      if (versionMatch) {
+        info.version = versionMatch[1];
+      }
+    }
+
+    return info;
   }
 
   /**
-   * Detect browser type
+   * Get user agent string
    */
-  static detectBrowser(): BrowserType {
-    // Check if we're in Node.js
-    if (typeof window === 'undefined' && typeof process !== 'undefined') {
-      return 'node';
+  private static getUserAgent(): string {
+    if (typeof navigator !== 'undefined' && navigator.userAgent) {
+      return navigator.userAgent;
     }
-
-    // Check for browser-specific features
-    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-
-    if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
-      return 'chrome';
-    } else if (userAgent.includes('Firefox')) {
-      return 'firefox';
-    } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
-      return 'safari';
-    } else if (userAgent.includes('Edg')) {
-      return 'edge';
-    } else {
-      return 'unknown';
-    }
+    return '';
   }
 
   /**
-   * Get browser-specific recommendations
+   * Get optimization recommendations based on capabilities
    */
-  static getRecommendations(): string[] {
-    const browser = this.detectBrowser();
-    const capabilities = this.checkCapabilities();
+  static getOptimizationRecommendations(caps: BrowserCapabilities): string[] {
     const recommendations: string[] = [];
 
-    // General recommendations
-    if (!capabilities.hasWebAssembly) {
-      recommendations.push('WebAssembly not supported. Using Canvas fallback for image processing.');
+    if (!caps.webAssembly) {
+      recommendations.push('Consider upgrading to a browser with WASM support for better performance');
     }
 
-    if (!capabilities.hasCanvas) {
-      recommendations.push('Canvas API not available. Limited image processing capabilities.');
+    if (!caps.webWorkers) {
+      recommendations.push('Web Workers are not available - processing will block the main thread');
     }
 
-    // Browser-specific recommendations
-    switch (browser) {
-      case 'safari':
-        recommendations.push('Safari detected. Some WASM features may have reduced performance.');
-        break;
-      case 'firefox':
-        recommendations.push('Firefox detected. Optimal WASM performance available.');
-        break;
-      case 'chrome':
-      case 'edge':
-        recommendations.push('Chromium-based browser detected. All features supported.');
-        break;
-      case 'node':
-        recommendations.push('Node.js environment detected. Limited image processing without Canvas libraries.');
-        break;
+    if (!caps.sharedArrayBuffer) {
+      recommendations.push('SharedArrayBuffer is disabled - parallel processing capabilities are limited');
+    }
+
+    if (caps.memoryLimit < 512) {
+      recommendations.push('Low memory detected - consider closing other applications');
+    }
+
+    if (!caps.webP) {
+      recommendations.push('WebP format not supported - using fallback formats');
+    }
+
+    if (!caps.avif) {
+      recommendations.push('AVIF format not supported - using older formats');
+    }
+
+    if (!caps.offscreenCanvas) {
+      recommendations.push('OffscreenCanvas not available - worker-based rendering is limited');
     }
 
     return recommendations;
   }
 
   /**
-   * Get performance hints based on capabilities
+   * Get preferred image formats based on support
    */
-  static getPerformanceHints(options?: {
-    hasWebAssembly?: boolean;
-    hasCanvas?: boolean;
-  }): PerformanceHints {
-    const capabilities = options || this.checkCapabilities();
+  static getPreferredImageFormats(caps: BrowserCapabilities): string[] {
+    const formats: string[] = [];
 
-    return {
-      useWASM: capabilities.hasWebAssembly ?? false,
-      maxImageSize: capabilities.hasWebAssembly
-        ? 50 * 1024 * 1024  // 50MB with WASM
-        : 10 * 1024 * 1024, // 10MB with Canvas
-      cacheStrategy: capabilities.hasWebAssembly ? 'aggressive' : 'conservative',
-      parallelProcessing: capabilities.hasWebAssembly,
-      preferredFormats: capabilities.hasWebAssembly
-        ? ['webp', 'jpeg', 'png']
-        : ['jpeg', 'png']
-    };
+    // Add in order of preference
+    if (caps.avif) {
+      formats.push('avif');
+    }
+    if (caps.webP) {
+      formats.push('webp');
+    }
+
+    // Always include fallbacks
+    formats.push('jpeg');
+    formats.push('png');
+
+    return formats;
   }
-}
 
-/**
- * Browser type enumeration
- */
-export type BrowserType = 'chrome' | 'firefox' | 'safari' | 'edge' | 'node' | 'unknown';
+  /**
+   * Check if running in Node.js environment
+   */
+  static isNodeEnvironment(): boolean {
+    return typeof process !== 'undefined' &&
+           process.versions != null &&
+           process.versions.node != null;
+  }
 
-/**
- * Capability report interface
- */
-export interface CapabilityReport {
-  hasWebAssembly: boolean;
-  hasCanvas: boolean;
-  hasImage: boolean;
-  hasBlob: boolean;
-  hasObjectURL: boolean;
-  recommendedStrategy: 'wasm' | 'canvas' | 'basic' | 'none';
-}
+  /**
+   * Check if running in browser environment
+   */
+  static isBrowserEnvironment(): boolean {
+    return typeof window !== 'undefined' &&
+           typeof document !== 'undefined' &&
+           !this.isNodeEnvironment();
+  }
 
-/**
- * Performance hints interface
- */
-export interface PerformanceHints {
-  useWASM: boolean;
-  maxImageSize: number;
-  cacheStrategy: 'aggressive' | 'conservative';
-  parallelProcessing?: boolean;
-  preferredFormats?: string[];
+  /**
+   * Check if running in service worker context
+   */
+  static isServiceWorkerContext(): boolean {
+    return typeof self !== 'undefined' &&
+           'ServiceWorkerGlobalScope' in self;
+  }
+
+  /**
+   * Check if running in web worker context
+   */
+  static isWebWorkerContext(): boolean {
+    return typeof self !== 'undefined' &&
+           typeof importScripts === 'function' &&
+           !this.isServiceWorkerContext();
+  }
 }

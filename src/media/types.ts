@@ -191,6 +191,59 @@ export type ProcessingSpeed = 'fast' | 'normal' | 'slow';
 export type SamplingStrategy = 'full' | 'adaptive' | 'minimal';
 
 /**
+ * Browser capabilities for media processing
+ */
+export interface BrowserCapabilities {
+  /** WebAssembly support */
+  webAssembly: boolean;
+  /** WebAssembly streaming compilation support */
+  webAssemblyStreaming: boolean;
+  /** SharedArrayBuffer support (may be disabled due to Spectre) */
+  sharedArrayBuffer: boolean;
+  /** Web Workers support */
+  webWorkers: boolean;
+  /** OffscreenCanvas support for worker-based rendering */
+  offscreenCanvas: boolean;
+  /** WebP image format support */
+  webP: boolean;
+  /** AVIF image format support */
+  avif: boolean;
+  /** createImageBitmap API support */
+  createImageBitmap: boolean;
+  /** WebGL support */
+  webGL: boolean;
+  /** WebGL2 support */
+  webGL2: boolean;
+  /** Available memory limit in MB */
+  memoryLimit: number;
+  /** Performance API availability */
+  performanceAPI: boolean;
+}
+
+/**
+ * Processing strategy based on capabilities
+ */
+export type ProcessingStrategy =
+  | 'wasm-worker'    // Best: WASM in Web Worker
+  | 'wasm-main'      // Good: WASM in main thread
+  | 'canvas-worker'  // OK: Canvas in Web Worker
+  | 'canvas-main';   // Fallback: Canvas in main thread
+
+/**
+ * Browser information
+ */
+export interface BrowserInfo {
+  /** Browser name (Chrome, Firefox, Safari, Edge, etc.) */
+  name: string;
+  /** Browser version */
+  version: string;
+  /** Platform (Windows, macOS, Linux, iOS, Android, etc.) */
+  platform: string;
+  /** Whether this is a mobile browser */
+  isMobile: boolean;
+}
+
+/**
  * WASM module interface
  */
 export interface WASMModule {

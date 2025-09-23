@@ -1,185 +1,348 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { BrowserCompatibility } from '../../src/media/compat/browser.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { BrowserCompat } from '../../src/media/compat/browser.js';
+import type { BrowserCapabilities, ProcessingStrategy, BrowserInfo } from '../../src/media/types.js';
 
-describe('BrowserCompatibility', () => {
-  describe('capability detection', () => {
-    const originalWindow = (globalThis as any).window;
-    const originalDocument = (globalThis as any).document;
-    const originalWebAssembly = (globalThis as any).WebAssembly;
-    const originalImage = (globalThis as any).Image;
+describe('BrowserCompat', () => {
+  beforeEach(() => {
+    // Reset cached capabilities before each test
+    BrowserCompat.resetCache();
+  });
 
-    afterEach(() => {
-      // Restore globals
-      (globalThis as any).window = originalWindow;
-      (globalThis as any).document = originalDocument;
-      (globalThis as any).WebAssembly = originalWebAssembly;
-      (globalThis as any).Image = originalImage;
+  describe('Capability Detection', () => {
+    it('should detect WebAssembly support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps).toBeDefined();
+      expect(caps.webAssembly).toBeDefined();
+      expect(typeof caps.webAssembly).toBe('boolean');
     });
 
-    it('should detect WebAssembly support', () => {
-      // Simulate WebAssembly available
-      (globalThis as any).WebAssembly = {
-        compile: () => {},
-        instantiate: () => {}
+    it('should detect WebAssembly streaming support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.webAssemblyStreaming).toBeDefined();
+      expect(typeof caps.webAssemblyStreaming).toBe('boolean');
+
+      // If WebAssembly is not supported, streaming should also be false
+      if (!caps.webAssembly) {
+        expect(caps.webAssemblyStreaming).toBe(false);
+      }
+    });
+
+    it('should detect SharedArrayBuffer support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.sharedArrayBuffer).toBeDefined();
+      expect(typeof caps.sharedArrayBuffer).toBe('boolean');
+    });
+
+    it('should detect Web Workers support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.webWorkers).toBeDefined();
+      expect(typeof caps.webWorkers).toBe('boolean');
+    });
+
+    it('should detect OffscreenCanvas support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.offscreenCanvas).toBeDefined();
+      expect(typeof caps.offscreenCanvas).toBe('boolean');
+    });
+
+    it('should detect WebP format support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.webP).toBeDefined();
+      expect(typeof caps.webP).toBe('boolean');
+    });
+
+    it('should detect AVIF format support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.avif).toBeDefined();
+      expect(typeof caps.avif).toBe('boolean');
+    });
+
+    it('should detect createImageBitmap support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.createImageBitmap).toBeDefined();
+      expect(typeof caps.createImageBitmap).toBe('boolean');
+    });
+
+    it('should detect WebGL support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.webGL).toBeDefined();
+      expect(typeof caps.webGL).toBe('boolean');
+    });
+
+    it('should detect WebGL2 support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.webGL2).toBeDefined();
+      expect(typeof caps.webGL2).toBe('boolean');
+
+      // WebGL2 cannot be supported without WebGL
+      if (caps.webGL2) {
+        expect(caps.webGL).toBe(true);
+      }
+    });
+
+    it('should cache capabilities after first check', async () => {
+      const caps1 = await BrowserCompat.checkCapabilities();
+      const caps2 = await BrowserCompat.checkCapabilities();
+
+      // Should return the same object reference (cached)
+      expect(caps2).toBe(caps1);
+    });
+
+    it('should detect memory constraints', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.memoryLimit).toBeDefined();
+      expect(typeof caps.memoryLimit).toBe('number');
+      expect(caps.memoryLimit).toBeGreaterThan(0);
+    });
+
+    it('should detect performance API availability', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+
+      expect(caps.performanceAPI).toBeDefined();
+      expect(typeof caps.performanceAPI).toBe('boolean');
+    });
+  });
+
+  describe('Strategy Selection', () => {
+    it('should select wasm-worker strategy when both are available', () => {
+      const caps: BrowserCapabilities = {
+        webAssembly: true,
+        webAssemblyStreaming: true,
+        sharedArrayBuffer: true,
+        webWorkers: true,
+        offscreenCanvas: true,
+        webP: true,
+        avif: false,
+        createImageBitmap: true,
+        webGL: true,
+        webGL2: true,
+        memoryLimit: 4096,
+        performanceAPI: true
       };
 
-      expect(BrowserCompatibility.hasWebAssembly()).toBe(true);
-
-      // Simulate no WebAssembly
-      (globalThis as any).WebAssembly = undefined;
-      expect(BrowserCompatibility.hasWebAssembly()).toBe(false);
+      const strategy = BrowserCompat.selectProcessingStrategy(caps);
+      expect(strategy).toBe('wasm-worker');
     });
 
-    it('should detect Canvas support', () => {
-      // Simulate browser environment with Canvas
-      (globalThis as any).document = {
-        createElement: (tag: string) => {
-          if (tag === 'canvas') {
-            return {
-              getContext: (type: string) => type === '2d' ? {} : null
-            };
-          }
-        }
+    it('should select wasm-main strategy when workers unavailable', () => {
+      const caps: BrowserCapabilities = {
+        webAssembly: true,
+        webAssemblyStreaming: true,
+        sharedArrayBuffer: false,
+        webWorkers: false,
+        offscreenCanvas: false,
+        webP: true,
+        avif: false,
+        createImageBitmap: true,
+        webGL: true,
+        webGL2: false,
+        memoryLimit: 2048,
+        performanceAPI: true
       };
 
-      expect(BrowserCompatibility.hasCanvas()).toBe(true);
-
-      // Simulate no Canvas support
-      (globalThis as any).document = undefined;
-      expect(BrowserCompatibility.hasCanvas()).toBe(false);
+      const strategy = BrowserCompat.selectProcessingStrategy(caps);
+      expect(strategy).toBe('wasm-main');
     });
 
-    it('should detect Image support', () => {
-      // Simulate Image available
-      (globalThis as any).Image = class {};
-      expect(BrowserCompatibility.hasImage()).toBe(true);
+    it('should select canvas-worker strategy when WASM unavailable but workers available', () => {
+      const caps: BrowserCapabilities = {
+        webAssembly: false,
+        webAssemblyStreaming: false,
+        sharedArrayBuffer: false,
+        webWorkers: true,
+        offscreenCanvas: true,
+        webP: true,
+        avif: false,
+        createImageBitmap: true,
+        webGL: false,
+        webGL2: false,
+        memoryLimit: 1024,
+        performanceAPI: true
+      };
 
-      // Simulate no Image
-      (globalThis as any).Image = undefined;
-      expect(BrowserCompatibility.hasImage()).toBe(false);
+      const strategy = BrowserCompat.selectProcessingStrategy(caps);
+      expect(strategy).toBe('canvas-worker');
     });
 
-    it('should detect Blob support', () => {
-      // Blob should be available in modern environments
-      expect(BrowserCompatibility.hasBlob()).toBe(true);
+    it('should select canvas-main as fallback', () => {
+      const caps: BrowserCapabilities = {
+        webAssembly: false,
+        webAssemblyStreaming: false,
+        sharedArrayBuffer: false,
+        webWorkers: false,
+        offscreenCanvas: false,
+        webP: false,
+        avif: false,
+        createImageBitmap: false,
+        webGL: false,
+        webGL2: false,
+        memoryLimit: 512,
+        performanceAPI: false
+      };
+
+      const strategy = BrowserCompat.selectProcessingStrategy(caps);
+      expect(strategy).toBe('canvas-main');
     });
 
-    it('should detect URL.createObjectURL support', () => {
-      expect(BrowserCompatibility.hasObjectURL()).toBe(true);
-    });
-  });
+    it('should consider memory constraints in strategy selection', () => {
+      const caps: BrowserCapabilities = {
+        webAssembly: true,
+        webAssemblyStreaming: true,
+        sharedArrayBuffer: true,
+        webWorkers: true,
+        offscreenCanvas: true,
+        webP: true,
+        avif: false,
+        createImageBitmap: true,
+        webGL: true,
+        webGL2: true,
+        memoryLimit: 256, // Very low memory
+        performanceAPI: true
+      };
 
-  describe('strategy selection', () => {
-    it('should select WASM strategy when available', () => {
-      const strategy = BrowserCompatibility.selectStrategy({
-        hasWebAssembly: true,
-        hasCanvas: true,
-        hasImage: true
-      });
-
-      expect(strategy).toBe('wasm');
-    });
-
-    it('should select Canvas strategy when WASM unavailable', () => {
-      const strategy = BrowserCompatibility.selectStrategy({
-        hasWebAssembly: false,
-        hasCanvas: true,
-        hasImage: true
-      });
-
-      expect(strategy).toBe('canvas');
-    });
-
-    it('should select basic strategy when Canvas unavailable', () => {
-      const strategy = BrowserCompatibility.selectStrategy({
-        hasWebAssembly: false,
-        hasCanvas: false,
-        hasImage: true
-      });
-
-      expect(strategy).toBe('basic');
-    });
-
-    it('should select none when no capabilities available', () => {
-      const strategy = BrowserCompatibility.selectStrategy({
-        hasWebAssembly: false,
-        hasCanvas: false,
-        hasImage: false
-      });
-
-      expect(strategy).toBe('none');
-    });
-
-    it('should allow forcing specific strategy', () => {
-      const strategy = BrowserCompatibility.selectStrategy({
-        hasWebAssembly: true,
-        hasCanvas: true,
-        hasImage: true,
-        preferredStrategy: 'canvas'
-      });
-
-      expect(strategy).toBe('canvas');
+      const strategy = BrowserCompat.selectProcessingStrategy(caps);
+      // Should avoid WASM with low memory
+      expect(strategy).toBe('canvas-worker');
     });
   });
 
-  describe('full capability check', () => {
-    it('should return comprehensive capability report', () => {
-      const capabilities = BrowserCompatibility.checkCapabilities();
+  describe('Browser Detection', () => {
+    it('should detect browser info', () => {
+      const info = BrowserCompat.getBrowserInfo();
 
-      expect(capabilities).toHaveProperty('hasWebAssembly');
-      expect(capabilities).toHaveProperty('hasCanvas');
-      expect(capabilities).toHaveProperty('hasImage');
-      expect(capabilities).toHaveProperty('hasBlob');
-      expect(capabilities).toHaveProperty('hasObjectURL');
-      expect(capabilities).toHaveProperty('recommendedStrategy');
+      expect(info).toBeDefined();
+      expect(info.name).toBeDefined();
+      expect(info.version).toBeDefined();
+      expect(info.platform).toBeDefined();
+      expect(info.isMobile).toBeDefined();
+    });
 
-      expect(typeof capabilities.hasWebAssembly).toBe('boolean');
-      expect(typeof capabilities.hasCanvas).toBe('boolean');
-      expect(typeof capabilities.hasImage).toBe('boolean');
-      expect(typeof capabilities.hasBlob).toBe('boolean');
-      expect(typeof capabilities.hasObjectURL).toBe('boolean');
-      expect(typeof capabilities.recommendedStrategy).toBe('string');
+    it('should detect Chrome/Chromium', () => {
+      const mockUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+      const info = BrowserCompat.parseBrowserInfo(mockUserAgent);
+
+      expect(info.name).toBe('Chrome');
+      expect(info.version).toBe('91.0.4472.124');
+    });
+
+    it('should detect Firefox', () => {
+      const mockUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0';
+      const info = BrowserCompat.parseBrowserInfo(mockUserAgent);
+
+      expect(info.name).toBe('Firefox');
+      expect(info.version).toBe('89.0');
+    });
+
+    it('should detect Safari', () => {
+      const mockUserAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15';
+      const info = BrowserCompat.parseBrowserInfo(mockUserAgent);
+
+      expect(info.name).toBe('Safari');
+      expect(info.version).toBe('14.1.1');
+    });
+
+    it('should detect Edge', () => {
+      const mockUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59';
+      const info = BrowserCompat.parseBrowserInfo(mockUserAgent);
+
+      expect(info.name).toBe('Edge');
+      expect(info.version).toBe('91.0.864.59');
+    });
+
+    it('should detect mobile browsers', () => {
+      const mockMobileUA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1';
+      const info = BrowserCompat.parseBrowserInfo(mockMobileUA);
+
+      expect(info.isMobile).toBe(true);
+      expect(info.platform).toContain('iOS');
+    });
+
+    it('should detect Android browsers', () => {
+      const mockAndroidUA = 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36';
+      const info = BrowserCompat.parseBrowserInfo(mockAndroidUA);
+
+      expect(info.isMobile).toBe(true);
+      expect(info.platform).toContain('Android');
     });
   });
 
-  describe('browser detection', () => {
-    it('should detect browser type', () => {
-      const browser = BrowserCompatibility.detectBrowser();
-
-      // In Node.js environment, should return 'node'
-      expect(browser).toBeDefined();
-      expect(['chrome', 'firefox', 'safari', 'edge', 'node', 'unknown'].includes(browser)).toBe(true);
-    });
-
-    it('should provide browser-specific recommendations', () => {
-      const recommendations = BrowserCompatibility.getRecommendations();
+  describe('Recommendations', () => {
+    it('should provide optimization recommendations based on capabilities', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+      const recommendations = BrowserCompat.getOptimizationRecommendations(caps);
 
       expect(recommendations).toBeDefined();
       expect(Array.isArray(recommendations)).toBe(true);
+
+      // Should provide relevant recommendations
+      if (!caps.webAssembly) {
+        expect(recommendations.some(r => r.includes('WASM'))).toBe(true);
+      }
+      if (!caps.webWorkers) {
+        expect(recommendations.some(r => r.includes('Worker'))).toBe(true);
+      }
+    });
+
+    it('should suggest format preferences based on support', async () => {
+      const caps = await BrowserCompat.checkCapabilities();
+      const formats = BrowserCompat.getPreferredImageFormats(caps);
+
+      expect(formats).toBeDefined();
+      expect(Array.isArray(formats)).toBe(true);
+      expect(formats.length).toBeGreaterThan(0);
+
+      // Should always include JPEG/PNG as fallback
+      expect(formats).toContain('jpeg');
+      expect(formats).toContain('png');
+
+      // Should include modern formats if supported
+      if (caps.webP) {
+        expect(formats.indexOf('webp')).toBeLessThan(formats.indexOf('jpeg'));
+      }
+      if (caps.avif) {
+        expect(formats.indexOf('avif')).toBeLessThan(formats.indexOf('webp') || formats.indexOf('jpeg'));
+      }
     });
   });
 
-  describe('performance hints', () => {
-    it('should provide performance hints based on capabilities', () => {
-      const hints = BrowserCompatibility.getPerformanceHints({
-        hasWebAssembly: true,
-        hasCanvas: true
-      });
+  describe('Environment Detection', () => {
+    it('should detect Node.js environment', () => {
+      const isNode = BrowserCompat.isNodeEnvironment();
 
-      expect(hints).toBeDefined();
-      expect(hints).toHaveProperty('useWASM');
-      expect(hints).toHaveProperty('maxImageSize');
-      expect(hints).toHaveProperty('cacheStrategy');
+      expect(typeof isNode).toBe('boolean');
+      // In test environment (Node.js), this should be true
+      expect(isNode).toBe(true);
     });
 
-    it('should adjust hints for limited capabilities', () => {
-      const hints = BrowserCompatibility.getPerformanceHints({
-        hasWebAssembly: false,
-        hasCanvas: true
-      });
+    it('should detect browser environment', () => {
+      const isBrowser = BrowserCompat.isBrowserEnvironment();
 
-      expect(hints.useWASM).toBe(false);
-      expect(hints.maxImageSize).toBeLessThanOrEqual(10 * 1024 * 1024); // 10MB max for Canvas
+      expect(typeof isBrowser).toBe('boolean');
+      // In test environment (Node.js), this should be false
+      expect(isBrowser).toBe(false);
+    });
+
+    it('should detect service worker context', () => {
+      const isServiceWorker = BrowserCompat.isServiceWorkerContext();
+
+      expect(typeof isServiceWorker).toBe('boolean');
+    });
+
+    it('should detect web worker context', () => {
+      const isWebWorker = BrowserCompat.isWebWorkerContext();
+
+      expect(typeof isWebWorker).toBe('boolean');
     });
   });
 });

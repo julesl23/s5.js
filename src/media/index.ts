@@ -1,4 +1,8 @@
-import type { ImageMetadata, MediaOptions, InitializeOptions, WASMModule } from './types.js';
+import type { ImageMetadata, MediaOptions, InitializeOptions, WASMModule, ProcessingStrategy } from './types.js';
+import { BrowserCompat } from './compat/browser.js';
+
+// Export BrowserCompat for external use
+export { BrowserCompat };
 
 /**
  * Main media processing class with lazy WASM loading
@@ -8,6 +12,7 @@ export class MediaProcessor {
   private static loadingPromise?: Promise<WASMModule>;
   private static initialized = false;
   private static forceError = false; // For testing
+  private static processingStrategy?: ProcessingStrategy;
 
   /**
    * Initialize the MediaProcessor and load WASM module
@@ -15,11 +20,18 @@ export class MediaProcessor {
   static async initialize(options?: InitializeOptions): Promise<void> {
     if (this.initialized) return;
 
-    if (!this.loadingPromise) {
-      this.loadingPromise = this.loadWASM(options);
+    // Detect browser capabilities and select processing strategy
+    const capabilities = await BrowserCompat.checkCapabilities();
+    this.processingStrategy = BrowserCompat.selectProcessingStrategy(capabilities);
+
+    // Only load WASM if strategy uses it
+    if (this.processingStrategy.includes('wasm')) {
+      if (!this.loadingPromise) {
+        this.loadingPromise = this.loadWASM(options);
+      }
+      this.wasmModule = await this.loadingPromise;
     }
 
-    this.wasmModule = await this.loadingPromise;
     this.initialized = true;
   }
 
@@ -76,8 +88,11 @@ export class MediaProcessor {
       await this.initialize();
     }
 
-    // Check if we should use WASM
-    if (options?.useWASM === false) {
+    // Check if we should use WASM based on strategy and options
+    const useWASM = options?.useWASM !== false &&
+                    this.processingStrategy?.includes('wasm');
+
+    if (!useWASM) {
       return this.basicMetadataExtraction(blob);
     }
 
@@ -185,6 +200,13 @@ export class MediaProcessor {
   }
 
   /**
+   * Get the current processing strategy
+   */
+  static getProcessingStrategy(): ProcessingStrategy | undefined {
+    return this.processingStrategy;
+  }
+
+  /**
    * Reset the MediaProcessor (for testing)
    */
   static reset(): void {
@@ -192,6 +214,7 @@ export class MediaProcessor {
     this.loadingPromise = undefined;
     this.initialized = false;
     this.forceError = false;
+    this.processingStrategy = undefined;
   }
 
   /**
