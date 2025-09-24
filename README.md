@@ -13,6 +13,9 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - 🗂️ **HAMT Sharding**: Automatic directory sharding for millions of entries
 - 🚶 **Directory Walker**: Recursive traversal with filters and resumable cursors
 - 📋 **Batch Operations**: High-level copy/delete operations with progress tracking
+- 🖼️ **Media Processing**: WASM-based image metadata extraction with Canvas fallback
+- 🎨 **Color Analysis**: Dominant color extraction and palette generation
+- 📊 **Bundle Optimization**: Code-splitting support (~70KB gzipped total)
 - ✅ **Real S5 Portal Integration**: Fully tested with s5.vup.cx portal
 
 ## Key Components
@@ -25,6 +28,11 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 ### Utility Classes
 - **DirectoryWalker**: Recursive directory traversal with cursor support
 - **BatchOperations**: High-level copy/delete operations with progress tracking
+
+### Media Processing
+- **MediaProcessor**: Unified image metadata extraction with WASM/Canvas
+- **BrowserCompat**: Browser capability detection and strategy selection
+- **CanvasMetadataExtractor**: Fallback image processing using Canvas API
 
 See the [API Documentation](./docs/API.md) for detailed usage examples.
 
@@ -100,7 +108,7 @@ for await (const item of s5.fs.list("home/documents")) {
 ### Advanced Usage
 
 ```typescript
-import { DirectoryWalker, BatchOperations } from "./dist/src/index.js";
+import { DirectoryWalker, BatchOperations, MediaProcessor } from "./dist/src/index.js";
 
 // Recursive directory traversal
 const walker = new DirectoryWalker(s5.fs, '/');
@@ -116,6 +124,13 @@ const result = await batch.copyDirectory("home/source", "home/backup", {
   }
 });
 console.log(`Completed: ${result.success} success, ${result.failed} failed`);
+
+// Media processing - extract image metadata
+await MediaProcessor.initialize();
+const imageBlob = await fetch('/path/to/image.jpg').then(r => r.blob());
+const metadata = await MediaProcessor.extractMetadata(imageBlob);
+console.log(`Image: ${metadata.width}x${metadata.height} ${metadata.format}`);
+console.log(`Dominant colors:`, metadata.dominantColors);
 ```
 
 ## Testing with Real S5 Portal
@@ -197,6 +212,29 @@ See [BENCHMARKS.md](./docs/BENCHMARKS.md) for detailed performance analysis show
 
 For production deployments, these benchmarks confirm the implementation is ready for large-scale directory operations.
 
+## Bundle Size & Code Splitting
+
+The library supports multiple import strategies to optimize bundle size:
+
+```javascript
+// Full bundle (~273KB uncompressed, ~70KB gzipped)
+import { S5, MediaProcessor } from "@s5-dev/s5js";
+
+// Core only - no media features (~195KB uncompressed, ~51KB gzipped)
+import { S5, FS5 } from "s5/core";
+
+// Media only - for lazy loading (~79KB uncompressed, ~19KB gzipped)
+import { MediaProcessor } from "s5/media";
+
+// Dynamic import for code-splitting
+const { MediaProcessor } = await import("s5/media");
+```
+
+Monitor bundle sizes with:
+```bash
+node scripts/analyze-bundle.js
+```
+
 ## Documentation
 
 - [API Documentation](./docs/API.md) - Complete API reference with examples
@@ -247,7 +285,7 @@ npm run test:coverage # Generate coverage report
 ### Test Organization
 
 - **`test/`** - Real implementation tests using actual S5.js functionality
-  - Run with `npm test` (14 test files, 128+ tests)
+  - Run with `npm test` (30+ test files, 284+ tests)
   - Tests core functionality without mocks
   
 - **`test/mocked/`** - Mock-based unit and performance tests
@@ -288,12 +326,17 @@ See [test-server-README.md](./test-server-README.md) for details.
   - `dirv1/` - CBOR-based directory format implementation
   - `hamt/` - Hash Array Mapped Trie for large directories
   - `utils/` - Directory walker and batch operations
+- `src/media/` - Media processing and metadata extraction
+  - `wasm/` - WebAssembly module wrapper for image processing
+  - `fallback/` - Canvas-based fallback implementation
+  - `compat/` - Browser compatibility detection
 - `src/identity/` - User identity and authentication
 - `src/node/` - P2P networking and registry operations
 - `src/kv/` - Key-value storage abstractions
 - `src/encryption/` - Encryption utilities
 - `src/identifier/` - Content identifiers and multibase encoding
 - `src/util/` - Utility functions
+- `src/exports/` - Modular export paths for code-splitting
 
 ## Project Status
 
@@ -301,9 +344,10 @@ See [test-server-README.md](./test-server-README.md) for details.
 - ✅ Month 2: Path Helpers v0.1 - Complete
 - ✅ Month 3: Path-cascade Optimization & HAMT - Complete
 - ✅ Month 4: Directory Utilities - Complete
+- ✅ Month 5: Media Processing Foundation - Complete
 - ✅ **S5 Portal Integration** - Complete (100% test success rate)
-- 🚧 Month 5: Media Processing (Part 1) - In Progress
-- ⏳ Months 6-8: Advanced features pending
+- 🚧 Month 6: Thumbnail Generation - Next
+- ⏳ Months 7-8: Progressive loading and final integration
 
 See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 
@@ -313,16 +357,13 @@ See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 - **Phase 2**: Path-Based API (get, put, delete, list, getMetadata)
 - **Phase 3**: HAMT Integration (auto-sharding at 1000+ entries)
 - **Phase 4**: Directory Utilities (walker, batch operations)
-
-### In Progress 🚧
-
-- **Phase 5**: Media Processing Foundation (WASM setup)
+- **Phase 5**: Media Processing Foundation (WASM + Canvas with browser detection)
 
 ### Upcoming ⏳
 
-- **Phase 6**: Thumbnail Generation
-- **Phase 7**: Progressive Image Loading
-- **Phase 8**: Final Integration and Testing
+- **Phase 6**: Thumbnail Generation (Month 6)
+- **Phase 7**: Progressive Image Loading (Month 7)
+- **Phase 8**: Final Integration and Testing (Month 8)
 
 ## Performance
 

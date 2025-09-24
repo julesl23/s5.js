@@ -61,7 +61,16 @@
     - [DirectoryWalker](#directorywalker)
     - [BatchOperations](#batchoperations)
     - [Directory Utility Examples](#directory-utility-examples)
+  - [Media Processing (Phase 5)](#media-processing-phase-5)
+    - [MediaProcessor](#mediaprocessor)
+    - [Image Metadata Extraction](#image-metadata-extraction)
+    - [Browser Compatibility Detection](#browser-compatibility-detection)
+    - [Processing Strategies](#processing-strategies)
+    - [Lazy Loading and Code Splitting](#lazy-loading-and-code-splitting)
+    - [Media Processing Examples](#media-processing-examples)
   - [Performance Considerations](#performance-considerations)
+  - [Performance Testing](#performance-testing)
+  - [Bundle Size Optimization](#bundle-size-optimization)
   - [Next Steps](#next-steps)
 
 ## Overview
@@ -860,23 +869,23 @@ const result = await batch.deleteDirectory("home/cache", {
 async function backupDirectory(source: string, dest: string) {
   const batch = new BatchOperations(s5.fs);
   const startTime = Date.now();
-  
+
   console.log(`Starting backup of ${source}...`);
-  
+
   const result = await batch.copyDirectory(source, dest, {
     onProgress: (progress) => {
       process.stdout.write(`\rProcessed: ${progress.processed} items`);
     },
     onError: "continue"
   });
-  
+
   const duration = (Date.now() - startTime) / 1000;
   console.log(`\nBackup complete in ${duration}s`);
   console.log(`Success: ${result.success}, Failed: ${result.failed}`);
-  
+
   if (result.failed > 0) {
     const logPath = `${dest}-errors.log`;
-    const errorLog = result.errors.map(e => 
+    const errorLog = result.errors.map(e =>
       `${e.path}: ${e.error.message}`
     ).join('\n');
     await s5.fs.put(logPath, errorLog);
@@ -885,69 +894,411 @@ async function backupDirectory(source: string, dest: string) {
 }
 ```
 
-#### Find Large Files
+## Media Processing (Phase 5)
+
+Phase 5 introduces a comprehensive media processing foundation with WASM-based image metadata extraction, Canvas fallback, and intelligent browser capability detection.
+
+### MediaProcessor
+
+The `MediaProcessor` class provides unified image metadata extraction with automatic fallback between WASM and Canvas implementations based on browser capabilities.
+
+#### Basic Usage
 
 ```typescript
-async function findLargeFiles(path: string, minSize: number) {
-  const walker = new DirectoryWalker(s5.fs, path);
-  const largeFiles: Array<{ path: string; size: number }> = [];
-  
-  for await (const result of walker.walk(path)) {
-    if (result.type === 'file' && result.size && result.size > minSize) {
-      largeFiles.push({
-        path: result.path,
-        size: result.size
-      });
-    }
-  }
-  
-  // Sort by size descending
-  largeFiles.sort((a, b) => b.size - a.size);
-  
-  return largeFiles;
+import { MediaProcessor } from "@s5-dev/s5js";
+// Or for code-splitting:
+import { MediaProcessor } from "s5/media";
+
+// Initialize the processor (auto-detects best strategy)
+await MediaProcessor.initialize();
+
+// Extract metadata from an image
+const imageBlob = await fetch('/path/to/image.jpg').then(r => r.blob());
+const metadata = await MediaProcessor.extractMetadata(imageBlob);
+
+console.log(metadata);
+// {
+//   width: 1920,
+//   height: 1080,
+//   format: 'jpeg',
+//   size: 245678,
+//   hasAlpha: false,
+//   dominantColors: [...],
+//   aspectRatio: 'landscape',
+//   ...
+// }
+```
+
+#### Initialization Options
+
+```typescript
+interface InitializeOptions {
+  wasmUrl?: string;          // Custom WASM binary URL
+  onProgress?: (percent: number) => void;  // Loading progress callback
+  preferredStrategy?: ProcessingStrategy;  // Force specific strategy
 }
 
-// Find files larger than 100MB
-const largeFiles = await findLargeFiles("home", 100 * 1024 * 1024);
-largeFiles.forEach(f => {
-  console.log(`${f.path}: ${(f.size / 1024 / 1024).toFixed(2)} MB`);
+// With progress tracking
+await MediaProcessor.initialize({
+  onProgress: (percent) => {
+    console.log(`Loading: ${percent}%`);
+  }
+});
+
+// Force Canvas-only mode (no WASM)
+const metadata = await MediaProcessor.extractMetadata(blob, {
+  useWASM: false
+});
+
+// With timeout
+const metadata = await MediaProcessor.extractMetadata(blob, {
+  timeout: 5000  // 5 second timeout
 });
 ```
 
-#### Directory Synchronization
+### Image Metadata Extraction
+
+The media processor can extract comprehensive metadata from images:
+
+#### ImageMetadata Interface
 
 ```typescript
-async function syncDirectories(source: string, dest: string) {
-  const batch = new BatchOperations(s5.fs);
-  
-  // First, copy new and updated files
-  const copyResult = await batch.copyDirectory(source, dest, {
-    preserveMetadata: true,
-    onError: "continue"
-  });
-  
-  // Then, remove files that exist in dest but not in source
-  const sourceWalker = new DirectoryWalker(s5.fs, source);
-  const sourceFiles = new Set<string>();
-  for await (const result of sourceWalker.walk()) {
-    sourceFiles.add(result.path.substring(source.length));
+interface ImageMetadata {
+  // Basic properties
+  width: number;
+  height: number;
+  format: 'jpeg' | 'png' | 'webp' | 'gif' | 'bmp' | 'unknown';
+  size: number;              // File size in bytes
+  hasAlpha: boolean;         // Transparency support
+
+  // Color analysis
+  dominantColors?: DominantColor[];
+  isMonochrome?: boolean;
+  colorSpace?: 'srgb' | 'display-p3' | 'rec2020' | 'unknown';
+
+  // Image characteristics
+  aspectRatio?: 'landscape' | 'portrait' | 'square';
+  aspectRatioValue?: number; // Numerical ratio (width/height)
+  commonAspectRatio?: string; // e.g., "16:9", "4:3", "1:1"
+
+  // Technical details
+  bitDepth?: number;         // Bits per channel (8, 16, etc.)
+  isProgressive?: boolean;   // Progressive JPEG
+  isInterlaced?: boolean;    // Interlaced PNG/GIF
+  isAnimated?: boolean;      // Animated GIF/WebP
+  frameCount?: number;       // Number of animation frames
+
+  // EXIF data (if available)
+  exifData?: {
+    make?: string;           // Camera manufacturer
+    model?: string;          // Camera model
+    dateTime?: string;       // Creation date
+    orientation?: number;    // EXIF orientation (1-8)
+    gpsLocation?: {
+      latitude: number;
+      longitude: number;
+    };
+  };
+
+  // Quality metrics
+  estimatedQuality?: number; // JPEG quality estimate (0-100)
+  histogram?: HistogramData; // Color distribution
+  exposureWarning?: 'overexposed' | 'underexposed' | 'normal';
+
+  // Processing metadata
+  source: 'wasm' | 'canvas'; // Which engine processed it
+  processingTime?: number;   // Milliseconds
+  processingSpeed?: 'fast' | 'normal' | 'slow';
+
+  // Validation
+  isValidImage: boolean;
+  validationErrors?: string[];
+}
+
+interface DominantColor {
+  hex: string;              // "#FF5733"
+  rgb: { r: number; g: number; b: number };
+  percentage: number;       // Percentage of image
+}
+```
+
+### Browser Compatibility Detection
+
+The `BrowserCompat` class automatically detects browser capabilities and selects the optimal processing strategy:
+
+```typescript
+import { BrowserCompat } from "@s5-dev/s5js";
+
+// Check browser capabilities
+const capabilities = await BrowserCompat.checkCapabilities();
+console.log(capabilities);
+// {
+//   webAssembly: true,
+//   webAssemblyStreaming: true,
+//   sharedArrayBuffer: false,
+//   webWorkers: true,
+//   offscreenCanvas: true,
+//   webP: true,
+//   avif: false,
+//   createImageBitmap: true,
+//   webGL: true,
+//   webGL2: true,
+//   memoryLimit: 2048,
+//   performanceAPI: true,
+//   memoryInfo: true
+// }
+
+// Get recommended processing strategy
+const strategy = BrowserCompat.selectProcessingStrategy(capabilities);
+console.log(strategy); // 'wasm-worker' | 'wasm-main' | 'canvas-worker' | 'canvas-main'
+
+// Get optimization recommendations
+const recommendations = BrowserCompat.getOptimizationRecommendations(capabilities);
+recommendations.forEach(rec => console.log(rec));
+// ["Consider enabling SharedArrayBuffer for better WASM performance"]
+// ["WebP support available - use for better compression"]
+```
+
+### Processing Strategies
+
+The media processor automatically selects the best strategy based on browser capabilities:
+
+1. **`wasm-worker`** - WASM in Web Worker (best performance)
+2. **`wasm-main`** - WASM in main thread (good performance)
+3. **`canvas-worker`** - Canvas in Web Worker (moderate performance)
+4. **`canvas-main`** - Canvas in main thread (baseline)
+
+```typescript
+// Check current strategy
+const strategy = MediaProcessor.getProcessingStrategy();
+console.log(`Using ${strategy} for image processing`);
+
+// Force specific strategy
+await MediaProcessor.initialize({
+  preferredStrategy: 'canvas-main'  // Force Canvas-only
+});
+```
+
+### Lazy Loading and Code Splitting
+
+The media processing module supports code-splitting for optimal bundle sizes:
+
+```typescript
+// Option 1: Direct import (includes in main bundle)
+import { MediaProcessor } from "@s5-dev/s5js";
+
+// Option 2: Separate media bundle (recommended)
+import { MediaProcessor } from "s5/media";
+
+// Option 3: Dynamic import (lazy loading)
+const { MediaProcessor } = await import("s5/media");
+await MediaProcessor.initialize();
+
+// Option 4: Core-only import (no media features)
+import { S5, FS5 } from "s5/core";  // Lighter bundle without media
+```
+
+### Media Processing Examples
+
+#### Extract and Display Image Metadata
+
+```typescript
+async function analyzeImage(imagePath: string) {
+  const blob = await s5.fs.get(imagePath);
+  const metadata = await MediaProcessor.extractMetadata(
+    new Blob([blob], { type: 'image/jpeg' })
+  );
+
+  console.log(`Image: ${imagePath}`);
+  console.log(`Dimensions: ${metadata.width}x${metadata.height}`);
+  console.log(`Format: ${metadata.format.toUpperCase()}`);
+  console.log(`Size: ${(metadata.size / 1024).toFixed(2)} KB`);
+  console.log(`Aspect Ratio: ${metadata.commonAspectRatio || metadata.aspectRatio}`);
+
+  if (metadata.dominantColors) {
+    console.log('Dominant Colors:');
+    metadata.dominantColors.forEach(color => {
+      console.log(`  ${color.hex} (${color.percentage.toFixed(1)}%)`);
+    });
   }
-  
-  const destWalker = new DirectoryWalker(s5.fs, dest);
-  const toDelete: string[] = [];
-  for await (const result of destWalker.walk()) {
-    const relativePath = result.path.substring(dest.length);
-    if (!sourceFiles.has(relativePath)) {
-      toDelete.push(result.path);
+
+  if (metadata.exifData) {
+    console.log('EXIF Data:', metadata.exifData);
+  }
+
+  if (metadata.exposureWarning !== 'normal') {
+    console.log(`⚠️ Image is ${metadata.exposureWarning}`);
+  }
+}
+```
+
+#### Batch Process Images with Progress
+
+```typescript
+async function processImageDirectory(dirPath: string) {
+  const walker = new DirectoryWalker(s5.fs, dirPath);
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
+
+  let processed = 0;
+  let totalSize = 0;
+  const formats = new Map<string, number>();
+
+  for await (const entry of walker.walk()) {
+    if (entry.type !== 'file') continue;
+
+    const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+    if (!imageExtensions.includes(ext)) continue;
+
+    const blob = await s5.fs.get(entry.path);
+    const metadata = await MediaProcessor.extractMetadata(
+      new Blob([blob], { type: `image/${ext.substring(1)}` })
+    );
+
+    processed++;
+    totalSize += metadata.size;
+    formats.set(metadata.format, (formats.get(metadata.format) || 0) + 1);
+
+    // Store metadata alongside image
+    await s5.fs.put(`${entry.path}.meta.json`, metadata);
+
+    console.log(`Processed ${entry.name}: ${metadata.width}x${metadata.height}`);
+  }
+
+  console.log('\nSummary:');
+  console.log(`Total images: ${processed}`);
+  console.log(`Total size: ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
+  console.log('Formats:', Object.fromEntries(formats));
+}
+```
+
+#### Image Validation and Quality Check
+
+```typescript
+async function validateImages(dirPath: string) {
+  const issues: Array<{ path: string; issues: string[] }> = [];
+  const walker = new DirectoryWalker(s5.fs, dirPath);
+
+  for await (const entry of walker.walk({
+    filter: (name) => /\.(jpg|jpeg|png|webp|gif|bmp)$/i.test(name)
+  })) {
+    if (entry.type !== 'file') continue;
+
+    const blob = await s5.fs.get(entry.path);
+    const metadata = await MediaProcessor.extractMetadata(
+      new Blob([blob])
+    );
+
+    const fileIssues: string[] = [];
+
+    // Check for issues
+    if (!metadata.isValidImage) {
+      fileIssues.push('Invalid image format');
+      if (metadata.validationErrors) {
+        fileIssues.push(...metadata.validationErrors);
+      }
+    }
+
+    if (metadata.width > 4096 || metadata.height > 4096) {
+      fileIssues.push(`Very large dimensions: ${metadata.width}x${metadata.height}`);
+    }
+
+    if (metadata.estimatedQuality && metadata.estimatedQuality < 60) {
+      fileIssues.push(`Low quality: ${metadata.estimatedQuality}/100`);
+    }
+
+    if (metadata.exposureWarning && metadata.exposureWarning !== 'normal') {
+      fileIssues.push(`Exposure issue: ${metadata.exposureWarning}`);
+    }
+
+    if (fileIssues.length > 0) {
+      issues.push({ path: entry.path, issues: fileIssues });
     }
   }
-  
-  // Delete orphaned files
-  for (const path of toDelete) {
-    await s5.fs.delete(path);
+
+  if (issues.length > 0) {
+    console.log('Image Quality Issues Found:');
+    issues.forEach(({ path, issues }) => {
+      console.log(`\n${path}:`);
+      issues.forEach(issue => console.log(`  - ${issue}`));
+    });
+  } else {
+    console.log('All images passed validation ✅');
   }
-  
-  console.log(`Sync complete: ${copyResult.success} copied, ${toDelete.length} deleted`);
+}
+```
+
+#### Color Palette Extraction
+
+```typescript
+async function extractColorPalette(imagePath: string) {
+  const blob = await s5.fs.get(imagePath);
+  const metadata = await MediaProcessor.extractMetadata(
+    new Blob([blob])
+  );
+
+  if (!metadata.dominantColors || metadata.dominantColors.length === 0) {
+    console.log('No colors extracted');
+    return;
+  }
+
+  // Create HTML color palette
+  const paletteHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Color Palette - ${imagePath}</title>
+      <style>
+        body { font-family: system-ui; padding: 20px; }
+        .palette { display: flex; gap: 10px; margin: 20px 0; }
+        .color {
+          width: 100px;
+          height: 100px;
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          color: white;
+          text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+          padding: 8px;
+          font-size: 12px;
+        }
+        .stats { margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <h1>Color Palette: ${imagePath}</h1>
+      <div class="palette">
+        ${metadata.dominantColors.map(color => `
+          <div class="color" style="background: ${color.hex}">
+            ${color.percentage.toFixed(1)}%
+          </div>
+        `).join('')}
+      </div>
+      <div class="stats">
+        <p>Image: ${metadata.width}x${metadata.height} ${metadata.format}</p>
+        <p>Monochrome: ${metadata.isMonochrome ? 'Yes' : 'No'}</p>
+        <p>Processing: ${metadata.processingTime}ms via ${metadata.source}</p>
+      </div>
+      <h2>Color Details</h2>
+      <ul>
+        ${metadata.dominantColors.map(color => `
+          <li>
+            <strong>${color.hex}</strong> -
+            RGB(${color.rgb.r}, ${color.rgb.g}, ${color.rgb.b}) -
+            ${color.percentage.toFixed(2)}%
+          </li>
+        `).join('')}
+      </ul>
+    </body>
+    </html>
+  `;
+
+  await s5.fs.put(`${imagePath}.palette.html`, paletteHtml, {
+    mediaType: 'text/html'
+  });
+
+  console.log(`Color palette saved to ${imagePath}.palette.html`);
 }
 ```
 
@@ -962,6 +1313,10 @@ async function syncDirectories(source: string, dest: string) {
 - **Walker Efficiency**: DirectoryWalker uses depth-first traversal with lazy loading
 - **Batch Operations**: Progress callbacks allow for UI updates without blocking
 - **Resumable Operations**: Cursor support enables efficient resume after interruption
+- **WASM Loading**: WebAssembly module is loaded once and cached for reuse
+- **Image Processing**: Large images (>50MB) are automatically sampled for performance
+- **Memory Management**: WASM module includes automatic memory cleanup
+- **Code Splitting**: Media features can be loaded separately from core functionality
 
 ## Performance Testing
 
@@ -973,7 +1328,7 @@ To run performance benchmarks and verify HAMT efficiency:
 # Basic HAMT verification
 node test/integration/test-hamt-local-simple.js
 
-# Comprehensive scaling test (up to 100K entries)  
+# Comprehensive scaling test (up to 100K entries)
 node test/integration/test-hamt-mock-comprehensive.js
 ```
 
@@ -992,6 +1347,54 @@ node test/integration/test-hamt-real-portal.js
 
 See [BENCHMARKS.md](./BENCHMARKS.md) for detailed performance results.
 
+## Bundle Size Optimization
+
+The Enhanced S5.js library implements several strategies to minimize bundle size:
+
+### Export Paths
+
+Different export paths allow you to include only what you need:
+
+```javascript
+// Full bundle (273KB uncompressed, 70KB gzipped)
+import { S5, MediaProcessor } from "@s5-dev/s5js";
+
+// Core only - no media features (195KB uncompressed, 51KB gzipped)
+import { S5, FS5 } from "s5/core";
+
+// Media only - for lazy loading (79KB uncompressed, 19KB gzipped)
+import { MediaProcessor } from "s5/media";
+```
+
+### Tree Shaking
+
+The library is configured with `sideEffects: false` for optimal tree shaking:
+
+```json
+{
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./core": "./dist/src/exports/core.js",
+    "./media": "./dist/src/exports/media.js"
+  }
+}
+```
+
+### Bundle Analysis
+
+Run the bundle analyzer to monitor sizes:
+
+```bash
+node scripts/analyze-bundle.js
+```
+
+Output shows module breakdown:
+- Core functionality: ~195KB (51KB gzipped)
+- Media processing: ~79KB (19KB gzipped)
+- File system: ~109KB (24KB gzipped)
+- Total bundle: ~273KB (70KB gzipped)
+
 ## Next Steps
 
 - Review the [test suite](https://github.com/julesl23/s5.js/tree/main/test/fs) for comprehensive usage examples
@@ -1001,4 +1404,4 @@ See [BENCHMARKS.md](./BENCHMARKS.md) for detailed performance results.
 
 ---
 
-_This documentation covers Phase 2, Phase 3, and Phase 4 of the Enhanced S5.js grant project. Phase 3 added automatic HAMT sharding for efficient handling of large directories. Phase 4 added the DirectoryWalker and BatchOperations utilities for recursive directory operations. Future phases will add media processing capabilities including thumbnail generation and progressive image loading._
+_This documentation covers Phases 2-5 of the Enhanced S5.js grant project. Phase 3 added automatic HAMT sharding for efficient handling of large directories. Phase 4 added the DirectoryWalker and BatchOperations utilities for recursive directory operations. Phase 5 added the media processing foundation with WASM-based image metadata extraction, Canvas fallback, browser compatibility detection, and bundle size optimization. Future phases will add thumbnail generation and progressive image loading capabilities._
