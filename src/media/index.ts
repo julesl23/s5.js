@@ -110,8 +110,10 @@ export class MediaProcessor {
     }
 
     // Check if we should use WASM based on strategy and options
-    const useWASM = options?.useWASM !== false &&
-                    this.processingStrategy?.includes('wasm');
+    // If useWASM is explicitly true, force WASM usage
+    // Otherwise, use WASM only if the strategy includes it
+    const useWASM = options?.useWASM === true ||
+                    (options?.useWASM !== false && this.processingStrategy?.includes('wasm'));
 
     if (!useWASM) {
       return this.basicMetadataExtraction(blob);
@@ -131,8 +133,10 @@ export class MediaProcessor {
 
       return await extractPromise;
     } catch (error) {
-      // Fallback to basic extraction on error
-      console.warn('WASM extraction failed, falling back to canvas:', error);
+      // Fallback to basic extraction on error (silently unless it's a real error)
+      if (!(error instanceof Error) || !error.message.includes('WASM module not available')) {
+        console.warn('WASM extraction failed, falling back to canvas:', error);
+      }
       return this.basicMetadataExtraction(blob);
     }
   }
@@ -141,8 +145,18 @@ export class MediaProcessor {
    * Extract metadata using WASM
    */
   private static async extractWithWASM(blob: Blob): Promise<ImageMetadata | undefined> {
+    // If WASM module not loaded, try to load it now
     if (!this.wasmModule) {
-      throw new Error('WASM module not initialized');
+      // Try to load WASM on demand
+      try {
+        if (!this.loadingPromise) {
+          this.loadingPromise = this.loadWASM();
+        }
+        this.wasmModule = await this.loadingPromise;
+      } catch (error) {
+        console.warn('Failed to load WASM on demand:', error);
+        throw new Error('WASM module not available');
+      }
     }
 
     // Check if it's actually an image
@@ -155,12 +169,17 @@ export class MediaProcessor {
 
     const metadata = this.wasmModule.extractMetadata(data);
 
-    // Ensure format matches blob type
+    // Ensure format matches blob type and add blob size
     if (metadata) {
-      metadata.format = this.detectFormat(blob.type);
+      // Only override format if it's unknown
+      if (!metadata.format || metadata.format === 'unknown') {
+        metadata.format = this.detectFormat(blob.type);
+      }
       if (metadata.format === 'png') {
         metadata.hasAlpha = true;
       }
+      // Add the actual blob size
+      metadata.size = blob.size;
     }
 
     return metadata;

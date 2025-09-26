@@ -130,6 +130,7 @@ export class CanvasMetadataExtractor {
       // If image loading fails, return error metadata
       processingErrors.push(error instanceof Error ? error.message : 'Image load failed');
 
+      const processingTime = (performance?.now?.() || Date.now()) - startTime;
       return {
         width: 0,
         height: 0,
@@ -140,7 +141,8 @@ export class CanvasMetadataExtractor {
         isValidImage: false,
         validationErrors: ['Failed to load image'],
         processingErrors,
-        processingTime: (performance?.now?.() || Date.now()) - startTime
+        processingTime,
+        processingSpeed: this.classifyProcessingSpeed(processingTime)
       };
     }
   }

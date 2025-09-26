@@ -50,22 +50,9 @@ export class WASMModule implements IWASMModule {
         shared: false
       });
 
-      const imports = {
-        env: {
-          memory: this.memory,
-          abort: (msg: number, file: number, line: number, col: number) => {
-            console.error('WASM abort:', { msg, file, line, col });
-          },
-          log: (ptr: number, len: number) => {
-            const msg = this.readString(ptr, len);
-            console.log('WASM:', msg);
-          }
-        }
-      };
+      // WASMLoader is initialized, we can use it
+      // Note: The actual WASM instance is managed by WASMLoader internally
 
-      // WASMLoader handles the actual WASM loading now
-      // This code path shouldn't be reached anymore
-      throw new Error('Direct WASM loading not implemented - use WASMLoader');
     } catch (error) {
       // For now, we'll handle this gracefully since we don't have the actual WASM file yet
       console.warn('WASM loading failed, using fallback:', error);
@@ -99,9 +86,17 @@ export class WASMModule implements IWASMModule {
    * Extract metadata using WASM
    */
   extractMetadata(data: Uint8Array): ImageMetadata | undefined {
+    const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
     if (!WASMLoader.isInitialized()) {
       // Fallback to basic extraction if WASM not loaded
-      return this.fallbackExtractMetadata(data);
+      const result = this.fallbackExtractMetadata(data);
+      if (result) {
+        const processingTime = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime;
+        result.processingTime = processingTime;
+        result.processingSpeed = this.classifyProcessingSpeed(processingTime);
+      }
+      return result;
     }
 
     try {
@@ -118,7 +113,7 @@ export class WASMModule implements IWASMModule {
         height: result.height,
         format: result.format as ImageMetadata['format'],
         mimeType: this.formatToMimeType(result.format as ImageMetadata['format']),
-        size: result.size,
+        size: result.size || data.length,
         source: 'wasm'
       };
 
@@ -129,11 +124,24 @@ export class WASMModule implements IWASMModule {
 
       // Try to extract additional metadata
       const extraMetadata = this.extractAdditionalMetadata(data, metadata);
-      return { ...metadata, ...extraMetadata };
+      const finalMetadata = { ...metadata, ...extraMetadata };
+
+      // Calculate processing time and speed
+      const processingTime = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime;
+      finalMetadata.processingTime = processingTime;
+      finalMetadata.processingSpeed = this.classifyProcessingSpeed(processingTime);
+
+      return finalMetadata;
 
     } catch (error) {
       console.warn('WASM extraction failed, using fallback:', error);
-      return this.fallbackExtractMetadata(data);
+      const fallbackResult = this.fallbackExtractMetadata(data);
+      if (fallbackResult) {
+        const processingTime = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime;
+        fallbackResult.processingTime = processingTime;
+        fallbackResult.processingSpeed = this.classifyProcessingSpeed(processingTime);
+      }
+      return fallbackResult;
     }
   }
 
@@ -168,6 +176,7 @@ export class WASMModule implements IWASMModule {
       height: 100, // Placeholder
       format,
       mimeType: this.formatToMimeType(format),
+      size: data.length,
       source: 'wasm'
     };
 
@@ -278,6 +287,15 @@ export class WASMModule implements IWASMModule {
    */
   private free(ptr: number): void {
     this.allocatedBuffers.delete(ptr);
+  }
+
+  /**
+   * Classify processing speed based on time
+   */
+  private classifyProcessingSpeed(timeMs: number): ImageMetadata['processingSpeed'] {
+    if (timeMs < 50) return 'fast';
+    if (timeMs < 200) return 'normal';
+    return 'slow';
   }
 
   /**

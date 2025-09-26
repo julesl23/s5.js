@@ -64,3 +64,6 @@ docs/grant/
 # Docker
 .dockerignore
 docker-compose.override.yml
+
+demos/media/baseline-performance.json
+demos/media/metadata-report.html

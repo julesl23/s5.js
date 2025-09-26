@@ -2,10 +2,6 @@
  * WebAssembly module loader for image metadata extraction
  */
 
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
 // WASM module exports interface
 export interface WASMExports {
   memory: WebAssembly.Memory;
@@ -68,7 +64,10 @@ export class WASMLoader {
             return;
           }
         } catch (streamError) {
-          console.warn('Streaming compilation failed, falling back to ArrayBuffer:', streamError);
+          // Expected in Node.js environment - silently fall back
+          if (typeof process === 'undefined' || !process.versions?.node) {
+            console.warn('Streaming compilation failed, falling back to ArrayBuffer:', streamError);
+          }
         }
       }
 
@@ -120,6 +119,8 @@ export class WASMLoader {
 
     // In Node.js environment
     if (typeof process !== 'undefined' && process.versions?.node) {
+      const { fileURLToPath } = await import('url');
+      const { dirname, join } = await import('path');
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
       const wasmPath = join(__dirname, wasmFile);
@@ -141,6 +142,9 @@ export class WASMLoader {
       // Check if advanced WASM exists
       if (typeof process !== 'undefined' && process.versions?.node) {
         try {
+          const { readFileSync } = await import('fs');
+          const { fileURLToPath } = await import('url');
+          const { dirname, join } = await import('path');
           const __filename = fileURLToPath(import.meta.url);
           const __dirname = dirname(__filename);
           const advancedPath = join(__dirname, 'image-advanced.wasm');
@@ -156,6 +160,9 @@ export class WASMLoader {
     // In Node.js environment
     if (typeof process !== 'undefined' && process.versions?.node) {
       try {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, join } = await import('path');
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
         const wasmPath = join(__dirname, wasmFile);
@@ -203,6 +210,9 @@ export class WASMLoader {
     // Try to load from file first (Node.js)
     if (typeof process !== 'undefined' && process.versions?.node) {
       try {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, join } = await import('path');
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
         const base64Path = join(__dirname, 'image-metadata.wasm.base64');
