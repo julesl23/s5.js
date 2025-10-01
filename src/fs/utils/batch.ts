@@ -118,16 +118,18 @@ export class BatchOperations {
             await this._ensureDirectory(targetPath);
           } else {
             // It's a file - copy it
-            const fileMetadata = await this.fs.getMetadata(path);
-            if (!fileMetadata || fileMetadata.type !== 'file') continue;
-            
-            const fileData = await this.fs.api.downloadBlobAsBytes(fileMetadata.hash);
-            
+            const fileData = await this.fs.get(path);
+            if (!fileData) continue;
+
             const putOptions: PutOptions = {};
-            if (preserveMetadata && fileMetadata.mediaType) {
-              putOptions.mediaType = fileMetadata.mediaType;
+            if (preserveMetadata) {
+              // Get metadata to preserve media type
+              const metadata = await this.fs.getMetadata(path);
+              if (metadata?.mediaType) {
+                putOptions.mediaType = metadata.mediaType;
+              }
             }
-            
+
             await this.fs.put(targetPath, fileData, putOptions);
           }
 
