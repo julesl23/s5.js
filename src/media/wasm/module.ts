@@ -88,6 +88,21 @@ export class WASMModule implements IWASMModule {
   extractMetadata(data: Uint8Array): ImageMetadata | undefined {
     const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
+    // Validate input before processing
+    if (!data || data.length === 0) {
+      return undefined; // Empty data
+    }
+
+    if (data.length < 8) {
+      return undefined; // Too small to be any valid image
+    }
+
+    // Pre-validate format before calling WASM
+    const format = this.detectFormatFromBytes(data);
+    if (format === 'unknown') {
+      return undefined; // Not a recognized image format
+    }
+
     if (!WASMLoader.isInitialized()) {
       // Fallback to basic extraction if WASM not loaded
       const result = this.fallbackExtractMetadata(data);
@@ -149,6 +164,11 @@ export class WASMModule implements IWASMModule {
    * Fallback metadata extraction when WASM is not available
    */
   private fallbackExtractMetadata(data: Uint8Array): ImageMetadata | undefined {
+    // Validate input
+    if (!data || data.length === 0) {
+      return undefined; // Empty data
+    }
+
     if (data.length < 8) {
       return undefined;
     }

@@ -317,6 +317,15 @@ export class WASMLoader {
     height: number;
     size: number;
   } | null {
+    // Validate input before processing
+    if (!imageData || imageData.length === 0) {
+      return null; // Empty data
+    }
+
+    if (imageData.length < 8) {
+      return null; // Too small to be any valid image
+    }
+
     if (!this.exports) {
       throw new Error('WASM not initialized');
     }
