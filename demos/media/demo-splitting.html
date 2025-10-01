@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code-Splitting Demo - S5.js Media Processing</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 2.5rem;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    @media (max-width: 768px) {
+      .demo-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .demo-card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .demo-card h2 {
+      color: #333;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .demo-card h2 .icon {
+      font-size: 1.5rem;
+    }
+
+    .status {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      font-family: monospace;
+      min-height: 60px;
+    }
+
+    .status.loading {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      background: #5a67d8;
+      transform: translateY(-1px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .bundle-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .bundle-stat {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 5px;
+      text-align: center;
+    }
+
+    .bundle-stat .label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+
+    .bundle-stat .value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #f0f0f0;
+      border-radius: 15px;
+      overflow: hidden;
+      margin: 15px 0;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+
+    .file-input-wrapper {
+      margin-top: 15px;
+    }
+
+    .file-input-wrapper input[type="file"] {
+      display: none;
+    }
+
+    .file-input-label {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #28a745;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .file-input-label:hover {
+      background: #218838;
+    }
+
+    .results {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 5px;
+    }
+
+    .results h3 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .results pre {
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+
+    .comparison-card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .comparison-card h2 {
+      color: #333;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    .comparison-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+    }
+
+    .comparison-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .savings {
+      color: #28a745;
+      font-weight: bold;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📦 Code-Splitting Demonstration</h1>
+
+    <div class="demo-grid">
+      <!-- Core-only Import -->
+      <div class="demo-card">
+        <h2>
+          <span class="icon">⚡</span>
+          Core-Only Import
+        </h2>
+        <p style="margin-bottom: 15px;">
+          Imports only the core S5.js functionality without media processing features.
+        </p>
+        <div id="core-status" class="status">
+          Click "Load Core Bundle" to import core modules only
+        </div>
+        <button id="load-core" onclick="loadCoreBundle()">
+          Load Core Bundle
+        </button>
+        <div class="bundle-info">
+          <div class="bundle-stat">
+            <div class="label">Bundle Size</div>
+            <div class="value" id="core-size">-</div>
+          </div>
+          <div class="bundle-stat">
+            <div class="label">Load Time</div>
+            <div class="value" id="core-time">-</div>
+          </div>
+          <div class="bundle-stat">
+            <div class="label">Modules</div>
+            <div class="value" id="core-modules">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic Media Import -->
+      <div class="demo-card">
+        <h2>
+          <span class="icon">🖼️</span>
+          Lazy Media Import
+        </h2>
+        <p style="margin-bottom: 15px;">
+          Dynamically imports media processing features only when needed.
+        </p>
+        <div id="media-status" class="status">
+          Click "Lazy Load Media" to dynamically import media modules
+        </div>
+        <button id="load-media" onclick="loadMediaBundle()">
+          Lazy Load Media
+        </button>
+        <button id="process-image" onclick="processTestImage()" disabled>
+          Process Image
+        </button>
+        <div class="bundle-info">
+          <div class="bundle-stat">
+            <div class="label">Bundle Size</div>
+            <div class="value" id="media-size">-</div>
+          </div>
+          <div class="bundle-stat">
+            <div class="label">Load Time</div>
+            <div class="value" id="media-time">-</div>
+          </div>
+          <div class="bundle-stat">
+            <div class="label">Modules</div>
+            <div class="value" id="media-modules">-</div>
+          </div>
+        </div>
+        <div class="progress-bar" style="display: none;" id="media-progress">
+          <div class="progress-fill" id="media-progress-fill">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison -->
+    <div class="comparison-card">
+      <h2>📊 Bundle Size Comparison</h2>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Import Strategy</th>
+            <th>Size (Uncompressed)</th>
+            <th>Size (Gzipped)</th>
+            <th>Savings</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Full Bundle (all features)</td>
+            <td>~273 KB</td>
+            <td>~70 KB</td>
+            <td>-</td>
+          </tr>
+          <tr>
+            <td>Core Only (no media)</td>
+            <td>~195 KB</td>
+            <td>~51 KB</td>
+            <td class="savings">-27% size</td>
+          </tr>
+          <tr>
+            <td>Media Only (lazy loaded)</td>
+            <td>~79 KB</td>
+            <td>~19 KB</td>
+            <td class="savings">-73% initial</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Interactive Image Processing -->
+    <div class="demo-card" style="margin-top: 20px;">
+      <h2>
+        <span class="icon">🎨</span>
+        Try It Yourself
+      </h2>
+      <p style="margin-bottom: 15px;">
+        After loading the media bundle, select an image to extract metadata.
+      </p>
+      <div class="file-input-wrapper">
+        <label for="image-input" class="file-input-label">
+          Choose an Image
+        </label>
+        <input type="file" id="image-input" accept="image/*" onchange="processUploadedImage(event)" disabled>
+      </div>
+      <div id="image-results" class="results" style="display: none;">
+        <h3>Extracted Metadata:</h3>
+        <pre id="metadata-output"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Make functions available globally
+    window.coreModules = null;
+    window.mediaProcessor = null;
+
+    // Track bundle loading metrics
+    const metrics = {
+      core: { size: 0, time: 0, modules: [] },
+      media: { size: 0, time: 0, modules: [] }
+    };
+
+    // Load Core Bundle
+    window.loadCoreBundle = async function() {
+      const button = document.getElementById('load-core');
+      const status = document.getElementById('core-status');
+
+      button.disabled = true;
+      status.className = 'status loading';
+      status.innerHTML = '<span class="loading-spinner"></span>Loading core modules...';
+
+      const startTime = performance.now();
+
+      try {
+        // Import core modules with absolute path
+        const coreModule = await import('/dist/src/exports/core.js');
+
+        window.coreModules = coreModule;
+        const loadTime = performance.now() - startTime;
+
+        // Update metrics
+        metrics.core.time = loadTime;
+        metrics.core.modules = Object.keys(coreModule);
+
+        // Estimate bundle size (would need actual network data in production)
+        metrics.core.size = 195; // KB
+
+        // Update UI
+        status.className = 'status success';
+        status.innerHTML = `✅ Core modules loaded successfully!<br>
+                           Modules: ${metrics.core.modules.join(', ')}`;
+
+        document.getElementById('core-size').textContent = `${metrics.core.size} KB`;
+        document.getElementById('core-time').textContent = `${loadTime.toFixed(0)}ms`;
+        document.getElementById('core-modules').textContent = metrics.core.modules.length;
+
+      } catch (error) {
+        status.className = 'status error';
+        status.innerHTML = `❌ Failed to load core modules: ${error.message}`;
+        button.disabled = false;
+      }
+    };
+
+    // Load Media Bundle (Lazy)
+    window.loadMediaBundle = async function() {
+      const button = document.getElementById('load-media');
+      const status = document.getElementById('media-status');
+      const progressBar = document.getElementById('media-progress');
+      const progressFill = document.getElementById('media-progress-fill');
+
+      button.disabled = true;
+      status.className = 'status loading';
+      status.innerHTML = '<span class="loading-spinner"></span>Lazy loading media modules...';
+      progressBar.style.display = 'block';
+
+      const startTime = performance.now();
+
+      // Simulate progress
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress = Math.min(progress + 10, 90);
+        progressFill.style.width = `${progress}%`;
+        progressFill.textContent = `${progress}%`;
+      }, 100);
+
+      try {
+        // Dynamically import media modules with absolute path
+        const mediaModule = await import('/dist/src/exports/media.js');
+
+        clearInterval(progressInterval);
+        progressFill.style.width = '100%';
+        progressFill.textContent = '100%';
+
+        // Initialize MediaProcessor
+        const { MediaProcessor } = mediaModule;
+        await MediaProcessor.initialize();
+        window.mediaProcessor = MediaProcessor;
+
+        const loadTime = performance.now() - startTime;
+
+        // Update metrics
+        metrics.media.time = loadTime;
+        metrics.media.modules = Object.keys(mediaModule);
+        metrics.media.size = 79; // KB
+
+        // Update UI
+        status.className = 'status success';
+        status.innerHTML = `✅ Media modules loaded and initialized!<br>
+                           Ready to process images with WASM/Canvas`;
+
+        document.getElementById('media-size').textContent = `${metrics.media.size} KB`;
+        document.getElementById('media-time').textContent = `${loadTime.toFixed(0)}ms`;
+        document.getElementById('media-modules').textContent = metrics.media.modules.length;
+
+        // Enable image processing
+        document.getElementById('process-image').disabled = false;
+        document.getElementById('image-input').disabled = false;
+
+        setTimeout(() => {
+          progressBar.style.display = 'none';
+        }, 1000);
+
+      } catch (error) {
+        clearInterval(progressInterval);
+        status.className = 'status error';
+        status.innerHTML = `❌ Failed to load media modules: ${error.message}`;
+        button.disabled = false;
+        progressBar.style.display = 'none';
+      }
+    };
+
+    // Process Test Image
+    window.processTestImage = async function() {
+      if (!window.mediaProcessor) {
+        alert('Please load the media bundle first!');
+        return;
+      }
+
+      const status = document.getElementById('media-status');
+      status.className = 'status loading';
+      status.innerHTML = '<span class="loading-spinner"></span>Processing test image...';
+
+      // Create a small test image
+      const canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d');
+
+      // Draw a gradient
+      const gradient = ctx.createLinearGradient(0, 0, 100, 100);
+      gradient.addColorStop(0, '#667eea');
+      gradient.addColorStop(1, '#764ba2');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 100, 100);
+
+      // Convert to blob
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+      try {
+        const metadata = await window.mediaProcessor.extractMetadata(blob);
+
+        status.className = 'status success';
+        status.innerHTML = `✅ Test image processed successfully!<br>
+                           ${metadata.width}x${metadata.height} ${metadata.format} |
+                           Processing: ${metadata.processingTime?.toFixed(2)}ms |
+                           Source: ${metadata.source}`;
+
+        // Show results
+        document.getElementById('image-results').style.display = 'block';
+        document.getElementById('metadata-output').textContent = JSON.stringify(metadata, null, 2);
+
+      } catch (error) {
+        status.className = 'status error';
+        status.innerHTML = `❌ Failed to process image: ${error.message}`;
+      }
+    };
+
+    // Process Uploaded Image
+    window.processUploadedImage = async function(event) {
+      if (!window.mediaProcessor) {
+        alert('Please load the media bundle first!');
+        return;
+      }
+
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const status = document.getElementById('media-status');
+      status.className = 'status loading';
+      status.innerHTML = `<span class="loading-spinner"></span>Processing ${file.name}...`;
+
+      try {
+        const metadata = await window.mediaProcessor.extractMetadata(file);
+
+        status.className = 'status success';
+        status.innerHTML = `✅ Image processed successfully!<br>
+                           ${metadata.width}x${metadata.height} ${metadata.format} |
+                           Size: ${(file.size / 1024).toFixed(2)}KB |
+                           Processing: ${metadata.processingTime?.toFixed(2)}ms`;
+
+        // Show results
+        document.getElementById('image-results').style.display = 'block';
+        document.getElementById('metadata-output').textContent = JSON.stringify(metadata, null, 2);
+
+      } catch (error) {
+        status.className = 'status error';
+        status.innerHTML = `❌ Failed to process image: ${error.message}`;
+      }
+    };
+
+    // Show initial bundle info
+    window.addEventListener('DOMContentLoaded', () => {
+      console.log('Code-Splitting Demo Ready');
+      console.log('This demo shows how to:');
+      console.log('1. Load core S5.js without media features (smaller bundle)');
+      console.log('2. Lazy load media processing when needed');
+      console.log('3. Reduce initial bundle size by 27-73%');
+    });
+  </script>
+</body>
+</html>

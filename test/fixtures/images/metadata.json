@@ -1,0 +1,48 @@
+{
+  "1x1-red.jpg": {
+    "width": 1,
+    "height": 1,
+    "format": "jpeg",
+    "hasAlpha": false,
+    "description": "Minimal valid JPEG with single red pixel"
+  },
+  "1x1-red.png": {
+    "width": 1,
+    "height": 1,
+    "format": "png",
+    "hasAlpha": false,
+    "bitDepth": 8,
+    "colorType": 2,
+    "description": "Minimal valid PNG with single red pixel"
+  },
+  "1x1-red.gif": {
+    "width": 1,
+    "height": 1,
+    "format": "gif",
+    "hasAlpha": false,
+    "colorCount": 2,
+    "description": "Minimal valid GIF with single red pixel"
+  },
+  "1x1-red.bmp": {
+    "width": 1,
+    "height": 1,
+    "format": "bmp",
+    "hasAlpha": false,
+    "bitsPerPixel": 24,
+    "description": "Minimal valid BMP with single red pixel"
+  },
+  "1x1-red.webp": {
+    "width": 1,
+    "height": 1,
+    "format": "webp",
+    "hasAlpha": false,
+    "description": "Simplified WebP structure (may not decode properly)"
+  },
+  "100x100-gradient.png": {
+    "width": 100,
+    "height": 100,
+    "format": "png",
+    "hasAlpha": false,
+    "description": "PNG with gradient pattern"
+  }
+}

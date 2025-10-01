@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code-Splitting Demo (Simulated) - S5.js Media Processing</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 2.5rem;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    @media (max-width: 768px) {
+      .demo-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .demo-card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .demo-card h2 {
+      color: #333;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .demo-card h2 .icon {
+      font-size: 1.5rem;
+    }
+
+    .status {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      font-family: monospace;
+      min-height: 60px;
+    }
+
+    .status.loading {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .bundle-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .bundle-stat {
+      text-align: center;
+    }
+
+    .bundle-stat .label {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 5px;
+    }
+
+    .bundle-stat .value {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0,0,0,0.1);
+      border-top-color: #856404;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #f0f0f0;
+      border-radius: 15px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+
+    .metrics-table {
+      width: 100%;
+      margin-top: 20px;
+    }
+
+    .metrics-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .metrics-table th, .metrics-table td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    .metrics-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+    }
+
+    .savings {
+      color: #28a745;
+      font-weight: bold;
+    }
+
+    .note {
+      background: #e9ecef;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 20px;
+      font-size: 0.9rem;
+      color: #495057;
+    }
+
+    .note strong {
+      color: #212529;
+    }
+
+    .demo-info {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+
+    .demo-info h3 {
+      color: #856404;
+      margin-bottom: 10px;
+    }
+
+    .demo-info p {
+      color: #856404;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📦 Code-Splitting Demonstration</h1>
+
+    <div class="demo-info">
+      <h3>💡 Demo Information</h3>
+      <p>
+        This demo uses <strong>real S5.js code</strong> with <strong>real MediaProcessor functionality</strong>.
+        All image processing, WASM initialization, and metadata extraction are fully functional.
+        Only the bundle loading animation is simulated for demonstration purposes (the bundles are pre-loaded in this HTML page).
+        In a production environment with proper bundler configuration (Webpack, Rollup, Vite),
+        the code-splitting would happen automatically at build time.
+      </p>
+    </div>
+
+    <div class="demo-grid">
+      <!-- Core Bundle Demo -->
+      <div class="demo-card">
+        <h2>
+          <span class="icon">📘</span>
+          Core Bundle
+        </h2>
+        <div id="core-status" class="status">
+          Click "Load Core Bundle" to simulate loading core modules only
+        </div>
+        <button id="load-core" onclick="simulateLoadCore()">
+          Load Core Bundle
+        </button>
+        <div class="bundle-info">
+          <div class="bundle-stat">
+            <div class="label">Bundle Size</div>
+            <div class="value" id="core-size">-</div>
+          </div>
+          <div class="bundle-stat">
+            <div class="label">Load Time</div>
+            <div class="value" id="core-time">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Media Bundle Demo -->
+      <div class="demo-card">
+        <h2>
+          <span class="icon">🎨</span>
+          Media Bundle (Lazy)
+        </h2>
+        <div id="media-status" class="status">
+          Load core bundle first, then load media features when needed
+        </div>
+        <button id="load-media" onclick="simulateLoadMedia()" disabled>
+          Load Media Bundle
+        </button>
+        <div class="progress-bar" style="display: none;" id="media-progress-container">
+          <div class="progress-fill" id="media-progress" style="width: 0%">0%</div>
+        </div>
+        <div class="bundle-info">
+          <div class="bundle-stat">
+            <div class="label">Bundle Size</div>
+            <div class="value" id="media-size">-</div>
+          </div>
+          <div class="bundle-stat">
+            <div class="label">Load Time</div>
+            <div class="value" id="media-time">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bundle Size Comparison -->
+    <div class="demo-card">
+      <h2>
+        <span class="icon">📊</span>
+        Bundle Size Comparison
+      </h2>
+      <div class="metrics-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Import Strategy</th>
+              <th>Size (Uncompressed)</th>
+              <th>Size (Gzipped)</th>
+              <th>Savings</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Full Bundle (all features)</td>
+              <td>~273 KB</td>
+              <td>~70 KB</td>
+              <td>-</td>
+            </tr>
+            <tr>
+              <td>Core Only (no media)</td>
+              <td>~195 KB</td>
+              <td>~51 KB</td>
+              <td class="savings">-27% size</td>
+            </tr>
+            <tr>
+              <td>Media Only (lazy loaded)</td>
+              <td>~79 KB</td>
+              <td>~19 KB</td>
+              <td class="savings">-73% initial</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Real Media API Demo -->
+    <div class="demo-card">
+      <h2>
+        <span class="icon">🖼️</span>
+        Real Media API (Already Loaded)
+      </h2>
+      <p style="margin-bottom: 15px;">
+        The actual MediaProcessor API is already available. Test it with an image:
+      </p>
+      <input type="file" id="image-input" accept="image/*" onchange="processRealImage(event)">
+      <div id="real-results" style="margin-top: 15px; display: none;">
+        <div class="status success" id="real-metadata"></div>
+      </div>
+    </div>
+
+    <!-- Code Example -->
+    <div class="demo-card">
+      <h2>
+        <span class="icon">💻</span>
+        Implementation Example
+      </h2>
+      <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;">
+<code>// Regular import (loads everything)
+import { S5, MediaProcessor } from 's5.js';
+
+// Code-split imports (recommended)
+import { S5 } from 's5.js/core';
+
+// Lazy load media when needed
+const loadMedia = async () => {
+  const { MediaProcessor } = await import('s5.js/media');
+  return MediaProcessor;
+};
+
+// Usage
+button.onclick = async () => {
+  const MediaProcessor = await loadMedia();
+  await MediaProcessor.initialize();
+  // Now ready for image processing
+};</code></pre>
+    </div>
+
+    <div class="note">
+      <strong>Note:</strong> Code-splitting reduces initial bundle size by ~27% when media features aren't needed immediately.
+      Media processing adds only ~79KB (19KB gzipped) when loaded on-demand.
+    </div>
+  </div>
+
+  <script type="module">
+    // Import actual MediaProcessor for real demo
+    import { MediaProcessor } from '/dist/src/media/index.js';
+
+    // Metrics tracking
+    const metrics = {
+      core: { size: 0, time: 0 },
+      media: { size: 0, time: 0 }
+    };
+
+    // Simulate core bundle loading
+    window.simulateLoadCore = async function() {
+      const button = document.getElementById('load-core');
+      const status = document.getElementById('core-status');
+
+      button.disabled = true;
+      status.className = 'status loading';
+      status.innerHTML = '<span class="loading-spinner"></span>Simulating core bundle load...';
+
+      // Simulate network delay
+      const delay = 300 + Math.random() * 200; // 300-500ms
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      // Update metrics
+      metrics.core.size = 195;
+      metrics.core.time = delay;
+
+      // Update UI
+      document.getElementById('core-size').textContent = '195 KB';
+      document.getElementById('core-time').textContent = `${delay.toFixed(0)}ms`;
+
+      status.className = 'status success';
+      status.innerHTML = '✅ Core bundle loaded (S5, FS5, Identity, Node)';
+
+      // Enable media loading
+      document.getElementById('load-media').disabled = false;
+    };
+
+    // Simulate media bundle loading
+    window.simulateLoadMedia = async function() {
+      const button = document.getElementById('load-media');
+      const status = document.getElementById('media-status');
+      const progressContainer = document.getElementById('media-progress-container');
+      const progressFill = document.getElementById('media-progress');
+
+      button.disabled = true;
+      status.className = 'status loading';
+      status.innerHTML = '<span class="loading-spinner"></span>Loading media bundle...';
+      progressContainer.style.display = 'block';
+
+      // Simulate progressive loading
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += Math.random() * 30;
+        if (progress > 90) progress = 90;
+        progressFill.style.width = `${progress}%`;
+        progressFill.textContent = `${Math.floor(progress)}%`;
+      }, 100);
+
+      // Simulate network delay
+      const delay = 400 + Math.random() * 300; // 400-700ms
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      clearInterval(progressInterval);
+      progressFill.style.width = '100%';
+      progressFill.textContent = '100%';
+
+      // Initialize real MediaProcessor
+      await MediaProcessor.initialize();
+
+      // Update metrics
+      metrics.media.size = 79;
+      metrics.media.time = delay;
+
+      // Update UI
+      document.getElementById('media-size').textContent = '79 KB';
+      document.getElementById('media-time').textContent = `${delay.toFixed(0)}ms`;
+
+      status.className = 'status success';
+      status.innerHTML = '✅ Media bundle loaded (MediaProcessor, WASM, Canvas)';
+
+      // Show total savings
+      const totalSize = metrics.core.size + metrics.media.size;
+      const totalTime = metrics.core.time + metrics.media.time;
+
+      setTimeout(() => {
+        status.innerHTML += `<br><strong>Total: ${totalSize} KB in ${totalTime.toFixed(0)}ms</strong>`;
+      }, 500);
+    };
+
+    // Process real image with MediaProcessor
+    window.processRealImage = async function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const resultsDiv = document.getElementById('real-results');
+      const metadataDiv = document.getElementById('real-metadata');
+
+      resultsDiv.style.display = 'block';
+      metadataDiv.innerHTML = 'Processing...';
+
+      try {
+        // Ensure MediaProcessor is initialized
+        if (!MediaProcessor.isInitialized()) {
+          await MediaProcessor.initialize();
+        }
+
+        // Extract metadata
+        const metadata = await MediaProcessor.extractMetadata(file);
+
+        if (metadata) {
+          metadataDiv.innerHTML = `
+            <strong>✅ Metadata Extracted:</strong><br>
+            Format: ${metadata.format}<br>
+            Dimensions: ${metadata.width} × ${metadata.height}<br>
+            Size: ${(file.size / 1024).toFixed(2)} KB<br>
+            Processing: ${metadata.processingTime?.toFixed(2) || 'N/A'}ms<br>
+            Source: ${metadata.source}
+          `;
+        } else {
+          metadataDiv.innerHTML = '❌ Could not extract metadata';
+        }
+      } catch (error) {
+        metadataDiv.className = 'status error';
+        metadataDiv.innerHTML = `❌ Error: ${error.message}`;
+      }
+    };
+
+    // Initialize on load
+    console.log('Code-splitting demo ready. This simulates the loading behavior.');
+    console.log('In production, use a bundler like Webpack, Rollup, or Vite for real code-splitting.');
+  </script>
+</body>
+</html>
