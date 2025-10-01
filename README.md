@@ -163,6 +163,20 @@ Tests direct portal communication:
 node test/integration/test-portal-direct.js
 ```
 
+### 4. Batch Operations Test
+
+Tests BatchOperations (copy/delete) with real S5 portal:
+
+```bash
+node test/integration/test-batch-real.js
+```
+
+This test validates:
+- Copy directory with progress tracking
+- Delete directory with progress tracking
+- Error handling modes
+- Metadata preservation
+
 ### Important Notes
 
 - **Use Fresh Identities**: The new deterministic key derivation system requires fresh identities. Old accounts created with the previous system won't work.
