@@ -18,7 +18,10 @@ export class WASMModule implements IWASMModule {
     try {
       await module.loadWASM(options);
     } catch (error) {
-      console.warn('Failed to load WASM, using fallback:', error);
+      // Expected when WASM not available - fallback to Canvas
+      if (process.env.DEBUG) {
+        console.warn('WASM not available, using Canvas fallback:', error);
+      }
       // Return a fallback implementation
       return module.createFallback();
     }
@@ -54,8 +57,10 @@ export class WASMModule implements IWASMModule {
       // Note: The actual WASM instance is managed by WASMLoader internally
 
     } catch (error) {
-      // For now, we'll handle this gracefully since we don't have the actual WASM file yet
-      console.warn('WASM loading failed, using fallback:', error);
+      // Expected when WASM not available - caller will handle fallback
+      if (process.env.DEBUG) {
+        console.warn('WASM loading failed, using fallback:', error);
+      }
       throw error; // Let the caller handle fallback
     }
   }
@@ -149,7 +154,10 @@ export class WASMModule implements IWASMModule {
       return finalMetadata;
 
     } catch (error) {
-      console.warn('WASM extraction failed, using fallback:', error);
+      // Expected when WASM not loaded - use Canvas fallback
+      if (process.env.DEBUG) {
+        console.warn('WASM extraction failed, using fallback:', error);
+      }
       const fallbackResult = this.fallbackExtractMetadata(data);
       if (fallbackResult) {
         const processingTime = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startTime;

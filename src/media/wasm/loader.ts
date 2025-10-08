@@ -101,7 +101,10 @@ export class WASMLoader {
       onProgress?.(100); // Complete
 
     } catch (error) {
-      console.error('Failed to initialize WASM:', error);
+      // Only log in debug mode - fallback mechanism will handle this gracefully
+      if (process.env.DEBUG) {
+        console.error('WASM initialization failed:', error);
+      }
       throw new Error(`WASM initialization failed: ${error}`);
     }
   }
@@ -169,7 +172,10 @@ export class WASMLoader {
         const buffer = readFileSync(wasmPath);
         return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
       } catch (error) {
-        console.warn('Failed to load WASM from file, trying base64 fallback:', error);
+        // Expected in Node.js when WASM file not in dist - fallback to base64
+        if (process.env.DEBUG) {
+          console.warn('WASM file not found, using fallback:', error);
+        }
       }
     }
 
@@ -181,7 +187,10 @@ export class WASMLoader {
           return await response.arrayBuffer();
         }
       } catch (error) {
-        console.warn('Failed to fetch WASM, trying base64 fallback:', error);
+        // Expected when not running with HTTP server - fallback to base64
+        if (process.env.DEBUG) {
+          console.warn('WASM fetch failed, using fallback:', error);
+        }
       }
     }
 

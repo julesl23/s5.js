@@ -50,7 +50,10 @@ export class MediaProcessor {
       const wasmModule = await WASMModuleImpl.initialize(options);
       return wasmModule;
     } catch (error) {
-      console.warn('Failed to load WASM module, creating fallback:', error);
+      // Expected when WASM not available - use Canvas fallback
+      if (process.env.DEBUG) {
+        console.warn('WASM not available, using Canvas fallback:', error);
+      }
 
       // Return a fallback that uses Canvas API
       return {
@@ -133,9 +136,10 @@ export class MediaProcessor {
 
       return await extractPromise;
     } catch (error) {
-      // Fallback to basic extraction on error (silently unless it's a real error)
-      if (!(error instanceof Error) || !error.message.includes('WASM module not available')) {
-        console.warn('WASM extraction failed, falling back to canvas:', error);
+      // Fallback to basic extraction on error
+      // Only log unexpected errors in debug mode
+      if (process.env.DEBUG && (!(error instanceof Error) || !error.message.includes('WASM module not available'))) {
+        console.warn('Unexpected error during extraction, using Canvas:', error);
       }
       return this.basicMetadataExtraction(blob);
     }
@@ -154,7 +158,10 @@ export class MediaProcessor {
         }
         this.wasmModule = await this.loadingPromise;
       } catch (error) {
-        console.warn('Failed to load WASM on demand:', error);
+        // Expected when WASM not available
+        if (process.env.DEBUG) {
+          console.warn('WASM not available:', error);
+        }
         throw new Error('WASM module not available');
       }
     }
@@ -195,7 +202,10 @@ export class MediaProcessor {
       // Use the real Canvas metadata extractor
       return await CanvasMetadataExtractor.extract(blob);
     } catch (error) {
-      console.warn('Canvas extraction failed:', error);
+      // This is unexpected - Canvas is the final fallback
+      if (process.env.DEBUG) {
+        console.warn('Canvas extraction failed:', error);
+      }
 
       // Final fallback - return basic info from blob
       const format = this.detectFormat(blob.type);
