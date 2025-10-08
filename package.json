@@ -1,6 +1,6 @@
 {
   "name": "s5",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Use S5",
   "main": "./dist/src/index.js",
@@ -81,6 +81,7 @@
     "@types/node": "^24.2.0",
     "@types/ws": "^8.18.1",
     "@vitest/ui": "^3.2.4",
+    "typescript": "^5.8.0",
     "vitest": "^3.2.4",
     "wabt": "^1.0.37"
   }

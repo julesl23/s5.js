@@ -40,6 +40,12 @@ See the [API Documentation](./docs/API.md) for detailed usage examples.
 
 The enhanced path-based API features are currently in development as part of a Sia Foundation grant project.
 
+**Prerequisites:**
+
+- **Node.js** v20+ (for development and testing)
+- **Python 3** (required for browser tests - used to run local HTTP server)
+- **npm** (comes with Node.js)
+
 **For production use:**
 
 ```bash
@@ -53,7 +59,7 @@ npm install @s5-dev/s5js
 git clone https://github.com/julesl23/s5.js
 cd s5.js
 
-# Install dependencies
+# Install dependencies (includes TypeScript)
 npm install
 
 # Build the project

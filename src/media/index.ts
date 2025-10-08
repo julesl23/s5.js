@@ -76,7 +76,7 @@ export class MediaProcessor {
             }
           }
 
-          const blob = new Blob([data], { type: mimeType });
+          const blob = new Blob([data as BlobPart], { type: mimeType });
 
           // Use the async Canvas extractor synchronously (this is a limitation of the interface)
           // In a real scenario, this should be async, but the WASMModule interface expects sync
