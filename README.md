@@ -336,10 +336,12 @@ node demos/media/demo-metadata.js           # Metadata extraction
 node demos/media/test-media-integration.js  # Integration tests (Node.js)
 
 # Run browser tests (all 20 tests pass in browser)
-./demos/media/run-browser-tests.sh          # Or open http://localhost:8081/demos/media/browser-tests.html
+./demos/media/run-browser-tests.sh          # Linux/Mac
+# Windows: npx http-server -p 8080, then open http://localhost:8080/demos/media/browser-tests.html
 
-# View code-splitting demo
-# Open http://localhost:8081/demos/media/demo-splitting-simple.html
+# View code-splitting demo (requires HTTP server)
+# Linux/Mac: ./demos/media/run-browser-tests.sh (uses port 8081)
+# Windows: npx http-server -p 8081, then open http://localhost:8081/demos/media/demo-splitting-simple.html
 ```
 
 #### ⚙️ Platform-Specific Notes
@@ -454,7 +456,19 @@ http://localhost:8080/demos/media/browser-tests.html
 
 #### 📦 Code-Splitting Demo
 
-**Run**: Open http://localhost:8081/demos/media/demo-splitting-simple.html
+**Prerequisites**: Requires HTTP server
+
+**Windows:**
+```cmd
+npx http-server -p 8081
+# Then open: http://localhost:8081/demos/media/demo-splitting-simple.html
+```
+
+**Linux/Mac:**
+```bash
+./demos/media/run-browser-tests.sh
+# Then open: http://localhost:8081/demos/media/demo-splitting-simple.html
+```
 
 **Shows**:
 - Core bundle: 195 KB (-27% from full)
