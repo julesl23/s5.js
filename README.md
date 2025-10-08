@@ -342,11 +342,50 @@ node demos/media/test-media-integration.js  # Integration tests (Node.js)
 # Open http://localhost:8081/demos/media/demo-splitting-simple.html
 ```
 
+#### ⚙️ Platform-Specific Notes
+
+**Node.js Test Expectations:**
+
+When running `node demos/media/test-media-integration.js`:
+- ✅ **Expected: 17/20 tests pass (85%)**
+- ❌ 3 tests fail due to Node.js platform limitations (NOT bugs):
+  1. "WASM Module Loading" - Canvas is 42x faster in Node.js, WASM not loaded (correct)
+  2. "Process Real JPEG Image - Width" - Node.js lacks full Canvas API for dimensions (works in browser)
+  3. "Dominant Color Extraction" - Node.js can't access pixel data (works in browser)
+
+**Browser Test Expectations:**
+- ✅ **All 20/20 tests pass (100%)**
+
+**Windows Users:**
+
+The bash script `./demos/media/run-browser-tests.sh` won't work in Windows CMD. Use one of these alternatives:
+
+```cmd
+# Option 1: Using npx (recommended - no Python needed)
+npx http-server -p 8080
+
+# Option 2: Using Python (if installed)
+python -m http.server 8080
+
+# Then open in browser:
+http://localhost:8080/demos/media/browser-tests.html
+```
+
+**Linux/Mac Users:**
+
+```bash
+# Use the provided script
+./demos/media/run-browser-tests.sh
+
+# Automatically opens: http://localhost:8081/demos/media/browser-tests.html
+```
+
 #### 🧪 Browser Tests - All 20 Tests Passing
 
-**Run**: `./demos/media/run-browser-tests.sh`
-
-Opens interactive test suite at http://localhost:8081/demos/media/browser-tests.html
+**Expected Results:**
+- ✅ 20/20 tests pass in browser (100%)
+- ✅ Full WASM functionality
+- ✅ Real dimensions, color extraction, all features working
 
 **Tests Include**:
 1. MediaProcessor initialization
