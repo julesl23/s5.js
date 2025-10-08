@@ -286,7 +286,7 @@ export class FS5 {
     }
 
     // Upload the blob
-    const blob = new Blob([encodedData]);
+    const blob = new Blob([encodedData as BlobPart]);
     const { hash, size } = await this.uploadBlobWithoutEncryption(blob);
 
     // Create FileRef
@@ -324,7 +324,7 @@ export class FS5 {
 
         // Save updated HAMT
         const newHamtData = hamt.serialise();
-        const { hash } = await this.api.uploadBlob(new Blob([newHamtData]));
+        const { hash } = await this.api.uploadBlob(new Blob([newHamtData as BlobPart]));
         dir.header.sharding.root.cid = hash;
         dir.header.sharding.root.totalEntries++;
       } else {
@@ -468,7 +468,7 @@ export class FS5 {
           if (deleted) {
             // Save updated HAMT
             const newHamtData = hamt.serialise();
-            const { hash } = await this.api.uploadBlob(new Blob([newHamtData]));
+            const { hash } = await this.api.uploadBlob(new Blob([newHamtData as BlobPart]));
             dir.header.sharding.root.cid = hash;
             dir.header.sharding.root.totalEntries--;
           }
@@ -491,7 +491,7 @@ export class FS5 {
               // Save updated HAMT
               const newHamtData = hamt.serialise();
               const { hash } = await this.api.uploadBlob(
-                new Blob([newHamtData])
+                new Blob([newHamtData as BlobPart])
               );
               dir.header.sharding.root.cid = hash;
               dir.header.sharding.root.totalEntries--;
@@ -699,7 +699,7 @@ export class FS5 {
         encodeLittleEndian(chunkIndex, 24),
         plaintext
       );
-      encryptedBlob = new Blob([encryptedBlob, encrypted]);
+      encryptedBlob = new Blob([encryptedBlob as BlobPart, encrypted as BlobPart]);
     }
     const lastChunkPlaintext = new Uint8Array([
       ...new Uint8Array(
@@ -713,7 +713,7 @@ export class FS5 {
       encodeLittleEndian(chunkCount - 1, 24),
       lastChunkPlaintext
     );
-    encryptedBlob = new Blob([encryptedBlob, lastChunkEncrypted]);
+    encryptedBlob = new Blob([encryptedBlob as BlobPart, lastChunkEncrypted as BlobPart]);
 
     const encryptedBlobIdentifier = await this.api.uploadBlob(encryptedBlob);
 
@@ -772,7 +772,7 @@ export class FS5 {
 
           // Save updated HAMT
           const newHamtData = hamt.serialise();
-          const { hash } = await this.api.uploadBlob(new Blob([newHamtData]));
+          const { hash } = await this.api.uploadBlob(new Blob([newHamtData as BlobPart]));
           dir.header.sharding.root.cid = hash;
           dir.header.sharding.root.totalEntries++;
 
@@ -862,7 +862,7 @@ export class FS5 {
             )
           : DirV1Serialiser.serialise(transactionRes);
 
-      const cid = await this.api.uploadBlob(new Blob([newBytes]));
+      const cid = await this.api.uploadBlob(new Blob([newBytes as BlobPart]));
 
       const kp = await this.api.crypto.newKeyPairEd25519(ks.writeKey!);
 
@@ -953,7 +953,7 @@ export class FS5 {
 
     // Serialize and upload
     const serialized = DirV1Serialiser.serialise(emptyDir);
-    const cid = await this.api.uploadBlob(new Blob([serialized]));
+    const cid = await this.api.uploadBlob(new Blob([serialized as BlobPart]));
 
     // Create registry entry for the new directory
     const kp = await this.api.crypto.newKeyPairEd25519(newWriteKey);
@@ -1405,7 +1405,7 @@ export class FS5 {
   ): Promise<Uint8Array> {
     // Store HAMT structure
     const hamtData = hamt.serialise();
-    const { hash } = await this.api.uploadBlob(new Blob([hamtData]));
+    const { hash } = await this.api.uploadBlob(new Blob([hamtData as BlobPart]));
 
     // Update directory to reference HAMT
     dir.header.sharding = {
@@ -1559,7 +1559,7 @@ export class FS5 {
 
       // Update directory to use HAMT
       const hamtData = hamt.serialise();
-      const { hash } = await this.api.uploadBlob(new Blob([hamtData]));
+      const { hash } = await this.api.uploadBlob(new Blob([hamtData as BlobPart]));
 
       dir.header.sharding = {
         type: "hamt",

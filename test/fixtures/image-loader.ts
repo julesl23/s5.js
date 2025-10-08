@@ -25,7 +25,7 @@ export function loadTestImageBuffer(filename: string): Buffer {
 export function loadTestImageBlob(filename: string): Blob {
   const buffer = loadTestImageBuffer(filename);
   const mimeType = getMimeType(filename);
-  return new Blob([buffer], { type: mimeType });
+  return new Blob([buffer as BlobPart], { type: mimeType });
 }
 
 /**

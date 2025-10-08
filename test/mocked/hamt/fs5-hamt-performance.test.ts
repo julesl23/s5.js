@@ -61,7 +61,7 @@ class MockS5API {
 
   async downloadBlob(cid: Uint8Array): Promise<Blob> {
     const data = await this.downloadBlobAsBytes(cid);
-    return new Blob([data]);
+    return new Blob([data as BlobPart]);
   }
 
   async downloadBlobAsBytes(cid: Uint8Array): Promise<Uint8Array> {

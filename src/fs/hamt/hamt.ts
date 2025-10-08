@@ -347,7 +347,7 @@ export class HAMT {
    */
   private async _storeNode(node: HAMTNode, existingCid?: Uint8Array): Promise<Uint8Array> {
     const serialized = this._serializeNode(node);
-    const blob = new Blob([serialized]);
+    const blob = new Blob([serialized as BlobPart]);
     const { hash } = await this.api.uploadBlob(blob);
     
     // Update cache

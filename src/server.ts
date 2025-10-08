@@ -183,7 +183,7 @@ app.post('/api/v1/upload', async (req: Request, res: Response) => {
       });
     } else {
       // With authentication, upload to S5 network
-      const blob = new Blob([data]);
+      const blob = new Blob([data as BlobPart]);
       const blobId = await s5Api.uploadBlob(blob);
       
       res.json({ 

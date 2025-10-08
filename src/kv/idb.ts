@@ -17,10 +17,10 @@ export class IDBStore implements KeyValueStore {
     }
 
     async put(key: Uint8Array, value: Uint8Array): Promise<void> {
-        await this.db.put("kv", value, key);
+        await this.db.put("kv", value, Array.from(key));
     }
     async get(key: Uint8Array): Promise<Uint8Array | undefined> {
-        return await this.db.get("kv", key);
+        return await this.db.get("kv", Array.from(key));
     }
     async contains(key: Uint8Array): Promise<boolean> {
         return (await this.get(key)) !== undefined;

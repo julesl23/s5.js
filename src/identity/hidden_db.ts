@@ -159,7 +159,7 @@ export class TrustedHiddenDBProvider extends HiddenDBProvider {
             this.api.crypto,
         );
 
-        const cid = await this.api.uploadBlob(new Blob([cipherText]));
+        const cid = await this.api.uploadBlob(new Blob([cipherText as BlobPart]));
 
         const writeKey = deriveHashInt(
             pathKey,
