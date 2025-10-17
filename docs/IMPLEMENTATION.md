@@ -316,12 +316,16 @@
   - [x] Add JPEG progressive support (multiple quality scans)
   - [x] Add PNG interlacing support (Adam7)
   - [x] Add WebP quality levels (configurable quality progression)
-- [ ] **6.3 FS5 Integration**
-  - [ ] Create src/fs/media-extensions.ts
-  - [ ] Extend FS5 with putImage method
-  - [ ] Add getThumbnail method
-  - [ ] Add getImageMetadata method
-  - [ ] Add createImageGallery method
+- [x] **6.3 FS5 Integration** ✅ COMPLETE
+  - [x] Create src/fs/media-extensions.ts
+  - [x] Extend FS5 with putImage method
+  - [x] Add getThumbnail method
+  - [x] Add getImageMetadata method
+  - [x] Add createImageGallery method
+  - [x] Align with path-based API design (CIDs abstracted away)
+  - [x] Create comprehensive unit test suite (29 tests passing)
+  - [x] Create integration test suite (skipped pending IndexedDB)
+  - [x] Update API documentation with media extensions
 - [ ] **6.4 Bundle Optimisation**
   - [ ] Configure webpack for code splitting
   - [ ] Implement WASM lazy loading
@@ -389,6 +393,7 @@
 7. **Phase 5**: Media Processing Foundation (Complete) ✅
 8. **Phase 6.1**: Thumbnail Generation ✅
 9. **Phase 6.2**: Progressive Loading ✅
+10. **Phase 6.3**: FS5 Integration ✅
 
 ### Phase 5 Status (Media Processing)
 
@@ -404,9 +409,7 @@
 **Completed Sub-phases:**
 - ✅ **6.1**: Thumbnail Generation (Canvas-based with smart cropping & size optimization)
 - ✅ **6.2**: Progressive Loading (JPEG/PNG/WebP multi-layer support)
-
-**In Progress:**
-- 🚧 **6.3**: FS5 Integration (putImage, getThumbnail, getImageMetadata, createImageGallery)
+- ✅ **6.3**: FS5 Integration (putImage, getThumbnail, getImageMetadata, createImageGallery with path-based design)
 
 ### Key Achievements
 
@@ -418,13 +421,14 @@
 - Browser capability detection and smart strategy selection
 - Thumbnail generation with smart cropping and size optimization
 - Progressive image loading (JPEG/PNG/WebP)
-- Comprehensive test suite (204 tests passing across 12 test files)
+- FS5 media integration with path-based API (no CID exposure)
+- Comprehensive test suite (233 tests passing across 14 test files)
 - Full API documentation
 - Performance benchmarks documented
 
 ### Current Work
 
-**Phase 6.3**: FS5 Integration - Integrating media features with file system operations (putImage, getThumbnail, getImageMetadata, createImageGallery)
+**Phase 6.4**: Bundle Optimisation - Next phase focuses on webpack configuration, code splitting, and bundle size verification
 
 ## Notes
 

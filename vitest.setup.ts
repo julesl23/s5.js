@@ -1,4 +1,5 @@
 import { webcrypto } from 'node:crypto';
+import 'fake-indexeddb/auto';
 
 // Set NODE_ENV for test environment
 process.env.NODE_ENV = 'test';

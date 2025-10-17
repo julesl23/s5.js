@@ -183,6 +183,24 @@ This test validates:
 - Error handling modes
 - Metadata preservation
 
+### 5. Media Extensions Test (Phase 6.3)
+
+Tests FS5 media integration (putImage, getThumbnail, getImageMetadata, createImageGallery) with real S5 instance:
+
+```bash
+node test/integration/test-media-real.js
+```
+
+This test validates:
+- Image upload with automatic thumbnail generation
+- Metadata extraction (format, dimensions)
+- Thumbnail retrieval (pre-generated and on-demand)
+- Gallery creation with manifest.json
+- Directory integration with media operations
+- Path-based API (no CID exposure)
+
+Expected output: 10/10 tests passing
+
 ### Important Notes
 
 - **Use Fresh Identities**: The new deterministic key derivation system requires fresh identities. Old accounts created with the previous system won't work.

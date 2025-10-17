@@ -47,7 +47,7 @@ class ProgressiveJPEG extends ProgressiveImage {
     // In a real implementation, this would be a properly encoded progressive JPEG
     // For now, we return the highest quality layer
     const bestLayer = this.layers[this.layers.length - 1];
-    return new Blob([bestLayer.data], { type: 'image/jpeg' });
+    return new Blob([new Uint8Array(bestLayer.data)], { type: 'image/jpeg' });
   }
 }
 
@@ -65,7 +65,7 @@ class ProgressivePNG extends ProgressiveImage {
   }
 
   toBlob(): Blob {
-    return new Blob([this.layers[0].data], { type: 'image/png' });
+    return new Blob([new Uint8Array(this.layers[0].data)], { type: 'image/png' });
   }
 }
 
@@ -84,7 +84,7 @@ class ProgressiveWebP extends ProgressiveImage {
   toBlob(): Blob {
     // Return highest quality version
     const bestLayer = this.layers[this.layers.length - 1];
-    return new Blob([bestLayer.data], { type: 'image/webp' });
+    return new Blob([new Uint8Array(bestLayer.data)], { type: 'image/webp' });
   }
 }
 

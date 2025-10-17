@@ -264,8 +264,9 @@ async getMetadata(path: string): Promise<Record<string, any> | undefined>
   name: "example.txt",
   size: 1234,              // Size in bytes
   mediaType: "text/plain",
-  timestamp: 1705432100000, // Milliseconds since epoch
-  hash: "..."              // File hash
+  timestamp: 1705432100000 // Milliseconds since epoch
+  // Note: Content hashes (CIDs) are not exposed in the path-based API
+  // Files are identified by their paths, abstracting away content addressing
 }
 ```
 
@@ -1593,6 +1594,239 @@ async function extractColorPalette(imagePath: string) {
   console.log(`Color palette saved to ${imagePath}.palette.html`);
 }
 ```
+
+
+## FS5 Media Extensions (Phase 6.3)
+
+The FS5 class provides integrated media operations that combine file system functionality with image processing capabilities. These methods use path-based identifiers consistent with FS5's design philosophy.
+
+### putImage()
+
+Upload an image with automatic metadata extraction and thumbnail generation.
+
+```typescript
+async putImage(
+  path: string,
+  blob: Blob,
+  options?: PutImageOptions
+): Promise<ImageReference>
+```
+
+#### Parameters
+
+- **path** (string): File system path where the image will be stored
+- **blob** (Blob): Image data to upload
+- **options** (PutImageOptions): Optional configuration
+
+#### PutImageOptions
+
+```typescript
+interface PutImageOptions {
+  generateThumbnail?: boolean;      // Default: true
+  thumbnailOptions?: ThumbnailOptions;
+  extractMetadata?: boolean;        // Default: true
+  progressive?: boolean;            // Default: false
+  progressiveOptions?: ProgressiveLoadingOptions;
+  // Plus all standard PutOptions (encryption, etc.)
+}
+```
+
+#### Returns
+
+```typescript
+interface ImageReference {
+  path: string;              // Path to uploaded image
+  thumbnailPath?: string;    // Path to generated thumbnail
+  metadata?: ImageMetadata;  // Extracted image metadata
+}
+```
+
+**Note**: Content identifiers (CIDs) are not exposed. The path-based API abstracts away content addressing - files are identified by paths.
+
+#### Example
+
+```typescript
+// Basic usage
+const imageFile = await fetch('/photo.jpg').then(r => r.blob());
+const result = await s5.fs.putImage('home/photos/vacation.jpg', imageFile);
+
+console.log(`Uploaded to: ${result.path}`);
+console.log(`Thumbnail at: ${result.thumbnailPath}`);
+console.log(`Dimensions: ${result.metadata.width}x${result.metadata.height}`);
+
+// With custom options
+const result = await s5.fs.putImage('home/photos/portrait.jpg', imageFile, {
+  generateThumbnail: true,
+  thumbnailOptions: {
+    maxWidth: 256,
+    maxHeight: 256,
+    quality: 85,
+    format: 'webp'
+  },
+  extractMetadata: true
+});
+
+// Skip thumbnail generation
+const result = await s5.fs.putImage('home/photos/raw.jpg', imageFile, {
+  generateThumbnail: false
+});
+```
+
+### getThumbnail()
+
+Retrieve or generate a thumbnail for an image.
+
+```typescript
+async getThumbnail(
+  path: string,
+  options?: GetThumbnailOptions
+): Promise<Blob>
+```
+
+#### Parameters
+
+- **path** (string): Path to the image file
+- **options** (GetThumbnailOptions): Optional configuration
+
+#### GetThumbnailOptions
+
+```typescript
+interface GetThumbnailOptions {
+  thumbnailOptions?: ThumbnailOptions;  // Used if generating on-demand
+  cache?: boolean;                       // Cache generated thumbnail (default: true)
+}
+```
+
+#### Example
+
+```typescript
+// Get pre-generated thumbnail
+const thumbnail = await s5.fs.getThumbnail('home/photos/vacation.jpg');
+const url = URL.createObjectURL(thumbnail);
+document.getElementById('img').src = url;
+
+// Generate on-demand with custom size
+const thumbnail = await s5.fs.getThumbnail('home/photos/large.jpg', {
+  thumbnailOptions: {
+    maxWidth: 128,
+    maxHeight: 128
+  },
+  cache: true  // Save generated thumbnail for future use
+});
+```
+
+### getImageMetadata()
+
+Extract metadata from a stored image.
+
+```typescript
+async getImageMetadata(path: string): Promise<ImageMetadata>
+```
+
+#### Example
+
+```typescript
+const metadata = await s5.fs.getImageMetadata('home/photos/vacation.jpg');
+
+console.log(`Format: ${metadata.format}`);
+console.log(`Size: ${metadata.width}x${metadata.height}`);
+console.log(`Aspect: ${metadata.aspectRatio}`);
+if (metadata.exif) {
+  console.log(`Camera: ${metadata.exif.make} ${metadata.exif.model}`);
+}
+```
+
+### createImageGallery()
+
+Batch upload multiple images with thumbnails and manifest generation.
+
+```typescript
+async createImageGallery(
+  galleryPath: string,
+  images: ImageUpload[],
+  options?: CreateImageGalleryOptions
+): Promise<ImageReference[]>
+```
+
+#### Parameters
+
+- **galleryPath** (string): Directory path for the gallery
+- **images** (ImageUpload[]): Array of images to upload
+- **options** (CreateImageGalleryOptions): Optional configuration
+
+#### CreateImageGalleryOptions
+
+```typescript
+interface CreateImageGalleryOptions {
+  concurrency?: number;              // Parallel uploads (default: 4)
+  generateThumbnails?: boolean;      // Generate thumbnails (default: true)
+  thumbnailOptions?: ThumbnailOptions;
+  onProgress?: (completed: number, total: number) => void;
+  createManifest?: boolean;          // Create manifest.json (default: true)
+}
+```
+
+#### Example
+
+```typescript
+// Prepare images
+const images = [
+  { name: 'photo1.jpg', blob: await fetch('/img1.jpg').then(r => r.blob()) },
+  { name: 'photo2.jpg', blob: await fetch('/img2.jpg').then(r => r.blob()) },
+  { name: 'photo3.jpg', blob: await fetch('/img3.jpg').then(r => r.blob()) }
+];
+
+// Upload gallery with progress tracking
+const results = await s5.fs.createImageGallery('home/galleries/vacation', images, {
+  concurrency: 2,
+  generateThumbnails: true,
+  thumbnailOptions: {
+    maxWidth: 256,
+    maxHeight: 256,
+    quality: 85
+  },
+  onProgress: (completed, total) => {
+    console.log(`Uploaded ${completed}/${total} images`);
+  },
+  createManifest: true
+});
+
+// Access the manifest
+const manifestData = await s5.fs.get('home/galleries/vacation/manifest.json');
+const manifest = JSON.parse(manifestData);
+console.log(`Gallery contains ${manifest.count} images`);
+```
+
+#### Gallery Manifest Structure
+
+```typescript
+interface GalleryManifest {
+  created: string;      // ISO 8601 timestamp
+  count: number;        // Number of images
+  images: Array<{
+    name: string;       // Image filename
+    path: string;       // Full path to image
+    thumbnailPath?: string;    // Path to thumbnail
+    metadata?: ImageMetadata;  // Image metadata
+  }>;
+}
+```
+
+### Path-Based Design Philosophy
+
+FS5 media extensions follow the path-based API design:
+
+- **Paths are identifiers**: Files are accessed by filesystem paths, not content hashes
+- **Content addressing abstracted**: The underlying S5 content-addressed storage is an implementation detail
+- **Simple, familiar interface**: Works like traditional file systems
+- **No CID exposure**: Content identifiers (CIDs) are not exposed in the public API
+
+This design makes the API:
+- Easier to use for web developers
+- Consistent with file system semantics
+- Independent of underlying storage implementation
+
+For advanced use cases requiring content addressing, access the internal `FileRef` structures through the S5Node API.
 
 ## Performance Considerations
 

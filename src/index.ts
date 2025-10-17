@@ -15,6 +15,8 @@ export { BatchOperations } from './fs/utils/batch.js';
 export { MediaProcessor } from './media/index.js';
 export { CanvasMetadataExtractor } from './media/fallback/canvas.js';
 export { WASMModule } from './media/wasm/module.js';
+export { ThumbnailGenerator } from './media/thumbnail/generator.js';
+export { ProgressiveImageLoader } from './media/progressive/loader.js';
 
 // Export types
 export type {
@@ -28,6 +30,17 @@ export type {
   ListResult,
   CursorData
 } from './fs/dirv1/types.js';
+
+// Export FS5 media integration types
+export type {
+  PutImageOptions,
+  ImageReference,
+  ImageUpload,
+  GetThumbnailOptions,
+  CreateImageGalleryOptions,
+  GalleryManifest,
+  GalleryManifestEntry
+} from './fs/media-types.js';
 
 // Export utility types
 export type {
@@ -55,5 +68,9 @@ export type {
   AspectRatio,
   Orientation,
   ProcessingSpeed,
-  SamplingStrategy
+  SamplingStrategy,
+  ThumbnailOptions,
+  ThumbnailResult,
+  ProgressiveLoadingOptions,
+  ProgressiveLayer
 } from './media/types.js';

@@ -1720,6 +1720,55 @@ export class FS5 {
 
     return dir;
   }
+
+  // Phase 6.3: Media Extensions
+
+  /**
+   * Upload an image with automatic metadata extraction and thumbnail generation
+   */
+  async putImage(
+    path: string,
+    blob: Blob,
+    options: import('./media-types.js').PutImageOptions = {}
+  ): Promise<import('./media-types.js').ImageReference> {
+    const { FS5MediaExtensions } = await import('./media-extensions.js');
+    const mediaExt = new FS5MediaExtensions(this);
+    return mediaExt.putImage(path, blob, options);
+  }
+
+  /**
+   * Get a thumbnail for an image, generating on-demand if needed
+   */
+  async getThumbnail(
+    path: string,
+    options?: import('./media-types.js').GetThumbnailOptions
+  ): Promise<Blob> {
+    const { FS5MediaExtensions } = await import('./media-extensions.js');
+    const mediaExt = new FS5MediaExtensions(this);
+    return mediaExt.getThumbnail(path, options);
+  }
+
+  /**
+   * Get metadata for an image
+   */
+  async getImageMetadata(path: string): Promise<import('../media/types.js').ImageMetadata> {
+    const { FS5MediaExtensions } = await import('./media-extensions.js');
+    const mediaExt = new FS5MediaExtensions(this);
+    return mediaExt.getImageMetadata(path);
+  }
+
+  /**
+   * Create an image gallery by uploading multiple images
+   */
+  async createImageGallery(
+    galleryPath: string,
+    images: import('./media-types.js').ImageUpload[],
+    options?: import('./media-types.js').CreateImageGalleryOptions
+  ): Promise<import('./media-types.js').ImageReference[]> {
+    const { FS5MediaExtensions } = await import('./media-extensions.js');
+    const mediaExt = new FS5MediaExtensions(this);
+    return mediaExt.createImageGallery(galleryPath, images, options);
+  }
 }
 interface KeySet {
   // has multicodec prefix
