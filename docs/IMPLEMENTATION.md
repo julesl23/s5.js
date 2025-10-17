@@ -332,6 +332,59 @@
   - [x] Verify bundle size ≤ 700KB compressed (60.09 KB brotli - 10x under limit!) ✅
   - [x] Create bundle analysis report (docs/BUNDLE_ANALYSIS.md, bundle-analysis.json)
 
+### Phase 6.5: Advanced CID API (Optional Enhancement)
+
+**Goal**: Provide CID-level access for advanced developers without affecting path-based API simplicity
+
+- [x] **6.5.1 Test Suite First (TDD)** ✅ COMPLETE
+  - [x] Create test/fs/fs5-advanced.test.ts (~40 tests)
+  - [x] Write tests for CID extraction (pathToCID)
+  - [x] Write tests for CID lookup (cidToPath)
+  - [x] Write tests for direct CID operations (getByCID, putByCID)
+  - [x] Write tests for combined operations (putWithCID)
+  - [x] Create test/fs/cid-utils.test.ts (~50 tests)
+  - [x] Write tests for CID utilities (format, parse, verify)
+
+- [x] **6.5.2 CID Utilities** ✅ COMPLETE
+  - [x] Create src/fs/cid-utils.ts
+  - [x] Implement formatCID(cid, encoding) - multibase formatting
+  - [x] Implement parseCID(cidString) - parse various formats
+  - [x] Implement verifyCID(cid, data) - verify CID matches data
+  - [x] Implement cidToString(cid) - human-readable format
+  - [x] Add comprehensive unit tests (38/38 tests passing)
+
+- [x] **6.5.3 FS5Advanced Class** ✅ COMPLETE
+  - [x] Create src/fs/fs5-advanced.ts
+  - [x] Implement constructor(fs5: FS5)
+  - [x] Implement async pathToCID(path: string): Promise<Uint8Array>
+  - [x] Implement async cidToPath(cid: Uint8Array): Promise<string | null>
+  - [x] Implement async getByCID(cid: Uint8Array): Promise<any>
+  - [x] Implement async putByCID(data: any): Promise<Uint8Array>
+  - [x] Implement async putWithCID(path: string, data: any, options?): Promise<{ path: string, cid: Uint8Array }>
+  - [x] Implement async getMetadataWithCID(path: string): Promise<{ metadata: any, cid: Uint8Array }>
+  - [x] All 36 tests passing
+
+- [x] **6.5.4 Advanced Export Package** ✅ COMPLETE
+  - [x] Create src/exports/advanced.ts
+  - [x] Export FS5Advanced class
+  - [x] Export CID utility functions
+  - [x] Export FileRef, DirRef, DirLink types
+  - [x] Export BlobLocation types
+  - [x] Add to package.json exports: `"./advanced": "./dist/src/exports/advanced.js"`
+
+- [x] **6.5.5 Bundle Verification** ✅ COMPLETE
+  - [x] Run bundle analysis with advanced export
+  - [x] Verify tree-shaking works (advanced similar to core)
+  - [x] Advanced export is 59.53 KB compressed (similar to core)
+  - [x] Update BUNDLE_ANALYSIS.md with advanced bundle stats
+
+- [ ] **6.5.6 Documentation**
+  - [ ] Add Advanced API section to docs/API.md
+  - [ ] Create examples for CID operations
+  - [ ] Document when to use advanced vs. path-based API
+  - [ ] Add JSDoc comments to all public methods
+  - [ ] Update README with advanced import example
+
 ### Phase 7: Testing & Performance (Grant Month 7)
 
 - [ ] **7.1 Comprehensive Test Suite**

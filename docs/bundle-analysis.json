@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-10-17T21:36:18.718Z",
+  "timestamp": "2025-10-17T22:26:16.144Z",
   "bundles": [
     {
       "name": "Core",
@@ -26,6 +26,20 @@
       },
       "metadata": {
         "inputs": 9,
+        "modules": 1
+      }
+    },
+    {
+      "name": "Advanced",
+      "description": "Advanced CID-aware API with core functionality",
+      "entryPoint": "dist/src/exports/advanced.js",
+      "sizes": {
+        "raw": 220078,
+        "gzipped": 73067,
+        "brotli": 60954
+      },
+      "metadata": {
+        "inputs": 295,
         "modules": 1
       }
     },

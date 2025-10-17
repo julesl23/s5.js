@@ -23,6 +23,11 @@
       "import": "./dist/src/exports/media.js",
       "default": "./dist/src/exports/media.js"
     },
+    "./advanced": {
+      "types": "./dist/src/exports/advanced.d.ts",
+      "import": "./dist/src/exports/advanced.js",
+      "default": "./dist/src/exports/advanced.js"
+    },
     "./dist/*": "./dist/*"
   },
   "scripts": {

@@ -46,6 +46,12 @@ const bundles = [
     expectedMaxSizeKB: 300, // Media processing
   },
   {
+    name: 'Advanced',
+    entryPoint: 'dist/src/exports/advanced.js',
+    description: 'Advanced CID-aware API with core functionality',
+    expectedMaxSizeKB: 450, // Core + CID utilities
+  },
+  {
     name: 'Full',
     entryPoint: 'dist/src/index.js',
     description: 'Complete SDK with all features',
@@ -315,6 +321,7 @@ The library uses a modular export structure with separate entry points:
 1. **Main export** (\`s5\`): Full SDK with all features
 2. **Core export** (\`s5/core\`): File system operations only
 3. **Media export** (\`s5/media\`): Media processing with lazy loading
+4. **Advanced export** (\`s5/advanced\`): CID-aware API for power users
 
 ### Lazy Loading
 

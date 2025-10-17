@@ -1,6 +1,6 @@
 # S5.js Bundle Analysis Report
 
-**Generated:** 2025-10-17T21:36:18.716Z
+**Generated:** 2025-10-17T22:26:16.143Z
 
 ## Executive Summary
 
@@ -12,6 +12,7 @@ This report analyzes bundle sizes for different entry points of the S5.js librar
 |--------|-----|------|--------|--------|
 | Core | 214.72 KB | 71.75 KB | 59.61 KB | ✅ Pass |
 | Media | 35.98 KB | 11.03 KB | 9.79 KB | ✅ Pass |
+| Advanced | 214.92 KB | 71.35 KB | 59.53 KB | ✅ Pass |
 | Full | 217.15 KB | 72.37 KB | 60.09 KB | ✅ Pass |
 
 ## Tree-Shaking Analysis
@@ -54,6 +55,21 @@ The modular export structure enables consumers to import only what they need:
 
 **Metadata:**
 - Input files: 9
+- Output modules: 1
+
+### Advanced
+
+**Description:** Advanced CID-aware API with core functionality
+
+**Entry Point:** `dist/src/exports/advanced.js`
+
+**Sizes:**
+- Raw: 214.92 KB
+- Gzipped: 71.35 KB (33.2% of raw)
+- Brotli: 59.53 KB (27.7% of raw)
+
+**Metadata:**
+- Input files: 295
 - Output modules: 1
 
 ### Full
@@ -112,6 +128,7 @@ The library uses a modular export structure with separate entry points:
 1. **Main export** (`s5`): Full SDK with all features
 2. **Core export** (`s5/core`): File system operations only
 3. **Media export** (`s5/media`): Media processing with lazy loading
+4. **Advanced export** (`s5/advanced`): CID-aware API for power users
 
 ### Lazy Loading
 
