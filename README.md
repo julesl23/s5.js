@@ -440,6 +440,9 @@ npm run test:mocked # Run mock-based tests
 npm run test:all    # Run all tests (real + mocked)
 npm run test:ui     # Run tests with UI
 npm run test:coverage # Generate coverage report
+
+# Run specific test suites
+npm run test:run test/fs/cid-utils.test.ts test/fs/fs5-advanced.test.ts  # Advanced CID API (74 tests)
 ```
 
 ### Test Organization
