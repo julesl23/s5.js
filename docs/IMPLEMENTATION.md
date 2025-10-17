@@ -326,11 +326,11 @@
   - [x] Create comprehensive unit test suite (29 tests passing)
   - [x] Create integration test suite (skipped pending IndexedDB)
   - [x] Update API documentation with media extensions
-- [ ] **6.4 Bundle Optimisation**
-  - [ ] Configure webpack for code splitting
-  - [ ] Implement WASM lazy loading
-  - [ ] Verify bundle size ≤ 700KB compressed
-  - [ ] Create bundle analysis report
+- [x] **6.4 Bundle Optimisation** ✅ COMPLETE (2025-10-17)
+  - [x] Configure esbuild for bundle analysis (using modular exports instead of webpack)
+  - [x] Implement WASM lazy loading (via dynamic imports in index.lazy.ts)
+  - [x] Verify bundle size ≤ 700KB compressed (60.09 KB brotli - 10x under limit!) ✅
+  - [x] Create bundle analysis report (docs/BUNDLE_ANALYSIS.md, bundle-analysis.json)
 
 ### Phase 7: Testing & Performance (Grant Month 7)
 
@@ -375,7 +375,7 @@
 - [x] All new code has tests ✅
 - [x] TypeScript strict mode compliance ✅
 - [x] No linting errors ✅
-- [ ] Bundle size within limits (pending Phase 5)
+- [x] Bundle size within limits (60.09 KB brotli - far under 700 KB target) ✅
 - [x] Performance benchmarks pass ✅
 - [x] Documentation complete ✅
 - [ ] Cross-browser compatibility verified (pending Phase 5)
@@ -390,10 +390,12 @@
 4. **Phase 4**: Utility Functions (DirectoryWalker, BatchOperations) ✅
 5. **Phase 4.5**: Real S5 Portal Integration ✅
 6. **Phase 4.6**: Documentation & Export Updates ✅
-7. **Phase 5**: Media Processing Foundation (Complete) ✅
-8. **Phase 6.1**: Thumbnail Generation ✅
-9. **Phase 6.2**: Progressive Loading ✅
-10. **Phase 6.3**: FS5 Integration ✅
+7. **Phase 5**: Media Processing Foundation ✅
+8. **Phase 6**: Advanced Media Processing ✅
+   - **6.1**: Thumbnail Generation ✅
+   - **6.2**: Progressive Loading ✅
+   - **6.3**: FS5 Integration ✅
+   - **6.4**: Bundle Optimisation ✅
 
 ### Phase 5 Status (Media Processing)
 
@@ -404,12 +406,13 @@
 - ✅ **5.4**: Browser Compatibility (full capability detection & strategy selection)
 - ✅ **5.5**: Production Readiness (real WASM implementation complete)
 
-### Phase 6 Status (Advanced Media Processing)
+### Phase 6 Status (Advanced Media Processing) ✅ COMPLETE
 
 **Completed Sub-phases:**
 - ✅ **6.1**: Thumbnail Generation (Canvas-based with smart cropping & size optimization)
 - ✅ **6.2**: Progressive Loading (JPEG/PNG/WebP multi-layer support)
 - ✅ **6.3**: FS5 Integration (putImage, getThumbnail, getImageMetadata, createImageGallery with path-based design)
+- ✅ **6.4**: Bundle Optimisation (esbuild analysis, modular exports, lazy loading - 60.09 KB compressed)
 
 ### Key Achievements
 
@@ -425,10 +428,30 @@
 - Comprehensive test suite (233 tests passing across 14 test files)
 - Full API documentation
 - Performance benchmarks documented
+- Bundle optimization complete with modular exports (60.09 KB compressed)
+- Lazy loading for media processing (9.79 KB media module)
+- Tree-shaking enabled with 13.4% efficiency
+
+### Bundle Size Results (Phase 6.4)
+
+**Grant Requirement:** ≤ 700 KB compressed (brotli)
+
+**Actual Results:**
+- **Full Bundle:** 60.09 KB (10.6x under limit) ✅
+- **Core Only:** 59.61 KB (file system operations)
+- **Media Only:** 9.79 KB (media processing)
+- **Margin:** 639.91 KB under budget
+
+**Implementation:**
+- Modular exports via package.json (`s5`, `s5/core`, `s5/media`)
+- Dynamic imports for lazy loading (`index.lazy.ts`)
+- Tree-shaking enabled (`sideEffects: false`)
+- Bundle analysis tool (`npm run analyze-bundle`)
+- Comprehensive report (docs/BUNDLE_ANALYSIS.md)
 
 ### Current Work
 
-**Phase 6.4**: Bundle Optimisation - Next phase focuses on webpack configuration, code splitting, and bundle size verification
+**Phase 6 Complete!** All advanced media processing features implemented with excellent bundle size performance.
 
 ## Notes
 

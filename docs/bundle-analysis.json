@@ -1,0 +1,60 @@
+{
+  "timestamp": "2025-10-17T21:36:18.718Z",
+  "bundles": [
+    {
+      "name": "Core",
+      "description": "File system operations without media processing",
+      "entryPoint": "dist/src/exports/core.js",
+      "sizes": {
+        "raw": 219872,
+        "gzipped": 73475,
+        "brotli": 61044
+      },
+      "metadata": {
+        "inputs": 295,
+        "modules": 1
+      }
+    },
+    {
+      "name": "Media",
+      "description": "Media processing modules only",
+      "entryPoint": "dist/src/exports/media.js",
+      "sizes": {
+        "raw": 36840,
+        "gzipped": 11294,
+        "brotli": 10028
+      },
+      "metadata": {
+        "inputs": 9,
+        "modules": 1
+      }
+    },
+    {
+      "name": "Full",
+      "description": "Complete SDK with all features",
+      "entryPoint": "dist/src/index.js",
+      "sizes": {
+        "raw": 222363,
+        "gzipped": 74107,
+        "brotli": 61537
+      },
+      "metadata": {
+        "inputs": 295,
+        "modules": 1
+      }
+    }
+  ],
+  "treeShaking": {
+    "coreSize": 61044,
+    "mediaSize": 10028,
+    "fullSize": 61537,
+    "combined": 71072,
+    "savings": 9535,
+    "efficiency": 13.415972534894191
+  },
+  "compliance": {
+    "target": 716800,
+    "actual": 61537,
+    "status": true
+  }
+}
