@@ -111,6 +111,61 @@ for await (const item of s5.fs.list("home/documents")) {
 }
 ```
 
+## Encryption
+
+Enhanced S5.js includes **built-in encryption** using XChaCha20-Poly1305, providing both confidentiality and integrity for sensitive data.
+
+### Basic Encryption
+
+```typescript
+// Auto-generate encryption key
+await s5.fs.put("home/secrets/credentials.json", sensitiveData, {
+  encryption: {
+    algorithm: "xchacha20-poly1305",
+  },
+});
+
+// Retrieve and decrypt automatically
+const data = await s5.fs.get("home/secrets/credentials.json");
+console.log(data); // Original decrypted data
+```
+
+### User-Provided Encryption Keys
+
+```typescript
+// Use your own 32-byte encryption key
+const myKey = new Uint8Array(32); // Your secure key
+crypto.getRandomValues(myKey);
+
+await s5.fs.put("home/private/document.txt", "Secret content", {
+  encryption: {
+    algorithm: "xchacha20-poly1305",
+    key: myKey, // Use specific key
+  },
+});
+
+// Decryption uses key from metadata automatically
+const content = await s5.fs.get("home/private/document.txt");
+```
+
+### Features
+
+- **Algorithm**: XChaCha20-Poly1305 (AEAD cipher)
+- **Key Size**: 256-bit (32 bytes)
+- **Chunk-based**: Large files encrypted in 256 KiB chunks
+- **Transparent**: Automatic encryption/decryption
+- **Secure**: Each chunk uses unique nonce
+
+### Security Considerations
+
+⚠️ **Important**: Encryption keys are stored in directory metadata. Anyone with directory read access can decrypt files. This design provides:
+
+- ✅ Convenience: No separate key management needed
+- ✅ Automatic decryption with directory access
+- ⚠️ Access control: Secure your directory access credentials
+
+For complete encryption documentation, examples, and security best practices, see the [Encryption section in API.md](./docs/API.md#encryption).
+
 ### Advanced Usage
 
 ```typescript
