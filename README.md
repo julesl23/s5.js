@@ -442,7 +442,7 @@ npm run test:ui     # Run tests with UI
 npm run test:coverage # Generate coverage report
 
 # Run specific test suites
-npm run test:run test/fs/cid-utils.test.ts test/fs/fs5-advanced.test.ts  # Advanced CID API (74 tests)
+npm run test:run test/fs/cid-utils.test.ts test/fs/fs5-advanced.test.ts  # Advanced CID API unit tests (74 tests)
 ```
 
 ### Test Organization
@@ -459,6 +459,25 @@ npm run test:run test/fs/cid-utils.test.ts test/fs/fs5-advanced.test.ts  # Advan
 - **`test/integration/`** - Real S5 integration tests with actual network connections
   - Tests that connect to real S5 portals (e.g., s5.vup.cx)
   - Use real seed phrases and portal registration
+
+### Running Real S5 Portal Integration Tests
+
+For comprehensive testing with real S5 infrastructure, use the standalone integration test scripts:
+
+```bash
+# Build the project first
+npm run build
+
+# Run Advanced CID API integration tests with real S5 portal
+node test/integration/test-advanced-cid-real.js
+```
+
+**Note:** These tests:
+- Connect to real S5 portals (default: https://s5.vup.cx)
+- Use actual registry operations with 5+ second propagation delays
+- Run sequentially to avoid registry conflicts
+- Generate temporary test files (auto-cleaned)
+- Take ~2 minutes to complete (18 tests)
 
 ## Media Processing Tests & Demos
 
