@@ -3,6 +3,7 @@ import { BrowserCompat } from './compat/browser.js';
 import { WASMModule as WASMModuleImpl } from './wasm/module.js';
 import { CanvasMetadataExtractor } from './fallback/canvas.js';
 import { ThumbnailGenerator } from './thumbnail/generator.js';
+import { ProgressiveImageLoader } from './progressive/loader.js';
 
 // Export types
 export type {
@@ -10,7 +11,9 @@ export type {
   MediaOptions,
   InitializeOptions,
   ThumbnailOptions,
-  ThumbnailResult
+  ThumbnailResult,
+  ProgressiveLoadingOptions,
+  ProgressiveLayer
 } from './types.js';
 
 // Export browser compatibility checker
@@ -18,6 +21,9 @@ export { BrowserCompat };
 
 // Export thumbnail generator
 export { ThumbnailGenerator };
+
+// Export progressive image loader
+export { ProgressiveImageLoader };
 
 /**
  * Main media processing class with lazy WASM loading

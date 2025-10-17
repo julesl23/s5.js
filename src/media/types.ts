@@ -298,3 +298,29 @@ export interface ThumbnailResult {
   /** Processing time in milliseconds */
   processingTime: number;
 }
+
+/**
+ * Options for progressive image loading
+ */
+export interface ProgressiveLoadingOptions {
+  /** Number of progressive scans for JPEG (default: 3) */
+  progressiveScans?: number;
+  /** Enable interlacing for PNG (default: true) */
+  interlace?: boolean;
+  /** Quality levels for each progressive layer (default: [20, 50, 85]) */
+  qualityLevels?: number[];
+}
+
+/**
+ * A single layer in a progressive image
+ */
+export interface ProgressiveLayer {
+  /** Image data for this layer */
+  data: Uint8Array;
+  /** Quality level for this layer (0-100) */
+  quality: number;
+  /** Whether this is the baseline/first layer */
+  isBaseline: boolean;
+  /** Scan number (0-indexed) */
+  scanNumber: number;
+}
