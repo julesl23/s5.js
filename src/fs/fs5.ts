@@ -180,9 +180,12 @@ export class FS5 {
     let data: Uint8Array;
     if (fileRef.extra && fileRef.extra.has('encryption')) {
       const encryptionMeta = fileRef.extra.get('encryption');
-      if (encryptionMeta && encryptionMeta.algorithm === 'xchacha20-poly1305') {
+      // encryptionMeta is a Map after CBOR deserialization
+      const algorithm = encryptionMeta instanceof Map ? encryptionMeta.get('algorithm') : encryptionMeta?.algorithm;
+      if (algorithm === 'xchacha20-poly1305') {
         // Convert array back to Uint8Array
-        const encryptionKey = new Uint8Array(encryptionMeta.key);
+        const keyData = encryptionMeta instanceof Map ? encryptionMeta.get('key') : encryptionMeta.key;
+        const encryptionKey = new Uint8Array(keyData);
         // Download and decrypt
         data = await this.downloadAndDecryptBlob(
           fileRef.hash,
@@ -190,7 +193,7 @@ export class FS5 {
           Number(fileRef.size)
         );
       } else {
-        throw new Error(`Unsupported encryption algorithm: ${encryptionMeta?.algorithm}`);
+        throw new Error(`Unsupported encryption algorithm: ${algorithm}`);
       }
     } else {
       // Download unencrypted file data

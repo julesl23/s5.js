@@ -139,7 +139,7 @@ export class FS5Advanced {
 
     // Second pass: if not found, search .cid directory only
     if (!foundPath) {
-      foundPath = await this._searchForCID(cid, '.cid', false);
+      foundPath = await this._searchForCID(cid, 'home/.cid', false);
     }
 
     return foundPath;
@@ -192,10 +192,10 @@ export class FS5Advanced {
    */
   async putByCID(data: any): Promise<Uint8Array> {
     // Generate a temporary unique path for CID-only storage
-    // Use a special .cid/ directory to avoid conflicts
+    // Use home/.cid/ directory (paths must start with home/ or archive/)
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 15);
-    const tempPath = `.cid/${timestamp}-${random}`;
+    const tempPath = `home/.cid/${timestamp}-${random}`;
 
     // Store the data
     await this.fs5.put(tempPath, data);
