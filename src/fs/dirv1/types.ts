@@ -105,6 +105,10 @@ export const BLOB_LOCATION_TAGS = {
 export interface PutOptions {
   mediaType?: string;
   timestamp?: number;
+  encryption?: {
+    algorithm: 'xchacha20-poly1305';
+    key?: Uint8Array;  // If not provided, will be auto-generated
+  };
 }
 
 export interface ListResult {

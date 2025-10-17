@@ -176,10 +176,28 @@ export class FS5 {
       return undefined;
     }
 
-    // Download the file data
-    const data = await this.api.downloadBlobAsBytes(
-      new Uint8Array([MULTIHASH_BLAKE3, ...fileRef.hash])
-    );
+    // Check if file is encrypted
+    let data: Uint8Array;
+    if (fileRef.extra && fileRef.extra.has('encryption')) {
+      const encryptionMeta = fileRef.extra.get('encryption');
+      if (encryptionMeta && encryptionMeta.algorithm === 'xchacha20-poly1305') {
+        // Convert array back to Uint8Array
+        const encryptionKey = new Uint8Array(encryptionMeta.key);
+        // Download and decrypt
+        data = await this.downloadAndDecryptBlob(
+          fileRef.hash,
+          encryptionKey,
+          Number(fileRef.size)
+        );
+      } else {
+        throw new Error(`Unsupported encryption algorithm: ${encryptionMeta?.algorithm}`);
+      }
+    } else {
+      // Download unencrypted file data
+      data = await this.api.downloadBlobAsBytes(
+        new Uint8Array([MULTIHASH_BLAKE3, ...fileRef.hash])
+      );
+    }
 
     // Check if this is binary data based on media type
     const isBinaryType =
@@ -285,11 +303,36 @@ export class FS5 {
         mediaType || getMediaTypeFromExtension(fileName) || "application/cbor";
     }
 
-    // Upload the blob
+    // Upload the blob (with or without encryption)
     const blob = new Blob([encodedData as BlobPart]);
-    const { hash, size } = await this.uploadBlobWithoutEncryption(blob);
+    let hash: Uint8Array;
+    let size: number;
+    let encryptionMetadata: any = undefined;
 
-    // Create FileRef
+    if (options?.encryption) {
+      // Upload with encryption - store encrypted blob hash and encryption key
+      const encryptionKey = options.encryption.key || this.api.crypto.generateSecureRandomBytes(32);
+
+      // Manually encrypt and upload
+      const plaintextBlake3Hash = await this.api.crypto.hashBlake3(encodedData);
+      const encryptedBlobId = await this._encryptAndUploadBlob(blob, encryptionKey);
+
+      // Store encrypted blob hash (for download) and metadata (for decryption)
+      hash = encryptedBlobId.hash;  // This is the encrypted blob's hash
+      size = blob.size;  // Original size
+      encryptionMetadata = {
+        algorithm: 'xchacha20-poly1305',
+        key: Array.from(encryptionKey),
+        plaintextHash: Array.from(plaintextBlake3Hash),
+      };
+    } else {
+      // Upload without encryption
+      const result = await this.uploadBlobWithoutEncryption(blob);
+      hash = result.hash;
+      size = result.size;
+    }
+
+    // Create FileRef with encryption metadata if applicable
     const fileRef: FileRef = {
       hash: hash,
       size: size,
@@ -298,6 +341,11 @@ export class FS5 {
         ? Math.floor(options.timestamp / 1000)
         : Math.floor(Date.now() / 1000),
     };
+
+    // Store encryption metadata in extra field if encrypted
+    if (encryptionMetadata) {
+      fileRef.extra = new Map([['encryption', encryptionMetadata]]);
+    }
 
     // Update the parent directory
     await this._updateDirectory(dirPath, async (dir, writeKey) => {
@@ -659,6 +707,96 @@ export class FS5 {
     return {
       hash: blobIdentifier.hash.subarray(1), // Remove multihash prefix
       size: blob.size,
+    };
+  }
+
+  public async downloadAndDecryptBlob(
+    hash: Uint8Array,
+    encryptionKey: Uint8Array,
+    size: number
+  ): Promise<Uint8Array> {
+    // Download encrypted blob
+    const encryptedData = await this.api.downloadBlobAsBytes(
+      new Uint8Array([MULTIHASH_BLAKE3, ...hash])
+    );
+
+    const maxChunkSizeAsPowerOf2 = 18;
+    const maxChunkSize = 262144; // 256 KiB
+    const chunkCount = Math.ceil(size / maxChunkSize);
+
+    const decryptedChunks: Uint8Array[] = [];
+
+    // Decrypt each chunk
+    for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+      const chunkStart = chunkIndex * (maxChunkSize + 16); // +16 for poly1305 tag
+      const chunkEnd = Math.min(
+        (chunkIndex + 1) * (maxChunkSize + 16),
+        encryptedData.length
+      );
+      const encryptedChunk = encryptedData.slice(chunkStart, chunkEnd);
+
+      const decrypted = await this.api.crypto.decryptXChaCha20Poly1305(
+        encryptionKey,
+        encodeLittleEndian(chunkIndex, 24),
+        encryptedChunk
+      );
+
+      decryptedChunks.push(decrypted);
+    }
+
+    // Combine all decrypted chunks
+    const combined = new Uint8Array(
+      decryptedChunks.reduce((total, chunk) => total + chunk.length, 0)
+    );
+    let offset = 0;
+    for (const chunk of decryptedChunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // Return only the original size (remove padding)
+    return combined.slice(0, size);
+  }
+
+  /**
+   * Encrypt a blob and upload it, returning the encrypted blob's hash
+   * @param blob Blob to encrypt
+   * @param encryptionKey Encryption key (32 bytes)
+   * @returns Encrypted blob identifier with hash
+   */
+  private async _encryptAndUploadBlob(
+    blob: Blob,
+    encryptionKey: Uint8Array
+  ): Promise<{ hash: Uint8Array; size: number }> {
+    const size = blob.size;
+    const maxChunkSize = 262144; // 256 KiB
+    const chunkCount = Math.ceil(size / maxChunkSize);
+
+    let encryptedBlob = new Blob();
+
+    // Encrypt each chunk
+    for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+      const chunkStart = chunkIndex * maxChunkSize;
+      const chunkEnd = Math.min((chunkIndex + 1) * maxChunkSize, size);
+      const plaintext = new Uint8Array(
+        await blob.slice(chunkStart, chunkEnd).arrayBuffer()
+      );
+
+      const encrypted = await this.api.crypto.encryptXChaCha20Poly1305(
+        encryptionKey,
+        encodeLittleEndian(chunkIndex, 24),
+        plaintext
+      );
+
+      encryptedBlob = new Blob([encryptedBlob as BlobPart, encrypted as BlobPart]);
+    }
+
+    // Upload encrypted blob
+    const encryptedBlobIdentifier = await this.api.uploadBlob(encryptedBlob);
+
+    return {
+      hash: encryptedBlobIdentifier.hash.subarray(1), // Remove multihash prefix
+      size: encryptedBlob.size,
     };
   }
 
