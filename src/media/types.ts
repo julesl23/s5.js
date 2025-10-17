@@ -258,3 +258,43 @@ export interface WASMModule {
   /** Get count of allocated buffers (for testing) */
   getAllocatedBufferCount?(): number;
 }
+
+/**
+ * Options for thumbnail generation
+ */
+export interface ThumbnailOptions {
+  /** Maximum width in pixels (default: 256) */
+  maxWidth?: number;
+  /** Maximum height in pixels (default: 256) */
+  maxHeight?: number;
+  /** Quality 0-100 (default: 85) */
+  quality?: number;
+  /** Output format (default: 'jpeg') */
+  format?: 'jpeg' | 'webp' | 'png';
+  /** Maintain aspect ratio (default: true) */
+  maintainAspectRatio?: boolean;
+  /** Use smart cropping with edge detection (default: false) */
+  smartCrop?: boolean;
+  /** Generate progressive encoding (default: true) */
+  progressive?: boolean;
+  /** Target size in bytes (will adjust quality to meet target) */
+  targetSize?: number;
+}
+
+/**
+ * Result from thumbnail generation
+ */
+export interface ThumbnailResult {
+  /** Generated thumbnail blob */
+  blob: Blob;
+  /** Actual width of thumbnail */
+  width: number;
+  /** Actual height of thumbnail */
+  height: number;
+  /** Format used */
+  format: string;
+  /** Actual quality used (may differ from requested if targetSize specified) */
+  quality: number;
+  /** Processing time in milliseconds */
+  processingTime: number;
+}

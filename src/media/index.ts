@@ -2,9 +2,22 @@ import type { ImageMetadata, MediaOptions, InitializeOptions, WASMModule, Proces
 import { BrowserCompat } from './compat/browser.js';
 import { WASMModule as WASMModuleImpl } from './wasm/module.js';
 import { CanvasMetadataExtractor } from './fallback/canvas.js';
+import { ThumbnailGenerator } from './thumbnail/generator.js';
 
-// Export BrowserCompat for external use
+// Export types
+export type {
+  ImageMetadata,
+  MediaOptions,
+  InitializeOptions,
+  ThumbnailOptions,
+  ThumbnailResult
+} from './types.js';
+
+// Export browser compatibility checker
 export { BrowserCompat };
+
+// Export thumbnail generator
+export { ThumbnailGenerator };
 
 /**
  * Main media processing class with lazy WASM loading
