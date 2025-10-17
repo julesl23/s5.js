@@ -1921,6 +1921,516 @@ Output shows module breakdown:
 - File system: ~109KB (24KB gzipped)
 - Total bundle: ~273KB (70KB gzipped)
 
+## Advanced CID API
+
+### Overview
+
+The Advanced CID API provides direct access to Content Identifiers (CIDs) for power users who need content-addressed storage capabilities. This API is available as a separate export (`s5/advanced`) and does not affect the simplicity of the standard path-based API.
+
+**When to use the Advanced API:**
+- You need to reference content by its cryptographic hash
+- Building content-addressed storage applications
+- Implementing deduplication or content verification
+- Working with distributed systems that use CIDs
+- Need to track content independently of file paths
+
+**When to use the Path-based API:**
+- Simple file storage and retrieval (most use cases)
+- Traditional file system operations
+- When paths are more meaningful than hashes
+- Building user-facing applications
+
+### Installation
+
+```typescript
+import { S5 } from 's5';
+import { FS5Advanced, formatCID, parseCID, verifyCID } from 's5/advanced';
+```
+
+### FS5Advanced Class
+
+The `FS5Advanced` class wraps an `FS5` instance to provide CID-aware operations.
+
+#### Constructor
+
+```typescript
+const advanced = new FS5Advanced(s5.fs);
+```
+
+**Parameters:**
+- `fs5: FS5` - The FS5 instance to wrap
+
+**Throws:**
+- `Error` if fs5 is null or undefined
+
+#### pathToCID(path)
+
+Extract the CID (Content Identifier) from a file or directory path.
+
+```typescript
+async pathToCID(path: string): Promise<Uint8Array>
+```
+
+**Parameters:**
+- `path: string` - The file or directory path
+
+**Returns:**
+- `Promise<Uint8Array>` - The CID as a 32-byte Uint8Array
+
+**Throws:**
+- `Error` if path does not exist
+
+**Example:**
+
+```typescript
+const s5 = await S5.create();
+await s5.recoverIdentityFromSeedPhrase(seedPhrase);
+
+const advanced = new FS5Advanced(s5.fs);
+
+// Store a file
+await s5.fs.put('home/data.txt', 'Hello, World!');
+
+// Extract its CID
+const cid = await advanced.pathToCID('home/data.txt');
+console.log(cid); // Uint8Array(32) [...]
+
+// Format for display
+const formatted = formatCID(cid, 'base32');
+console.log(formatted); // "bafybeig..."
+```
+
+#### cidToPath(cid)
+
+Find the path for a given CID. If multiple paths have the same CID, returns the first user path found (excludes temporary `.cid/` paths).
+
+```typescript
+async cidToPath(cid: Uint8Array): Promise<string | null>
+```
+
+**Parameters:**
+- `cid: Uint8Array` - The CID to search for (must be 32 bytes)
+
+**Returns:**
+- `Promise<string | null>` - The path if found, null if not found
+
+**Throws:**
+- `Error` if CID size is invalid
+
+**Example:**
+
+```typescript
+const cid = await advanced.pathToCID('home/data.txt');
+
+// Find path from CID
+const path = await advanced.cidToPath(cid);
+console.log(path); // "home/data.txt"
+
+// Unknown CID returns null
+const unknownCID = new Uint8Array(32);
+const result = await advanced.cidToPath(unknownCID);
+console.log(result); // null
+```
+
+#### getByCID(cid)
+
+Retrieve data directly by its CID, without knowing the path.
+
+```typescript
+async getByCID(cid: Uint8Array): Promise<any>
+```
+
+**Parameters:**
+- `cid: Uint8Array` - The CID to retrieve (must be 32 bytes)
+
+**Returns:**
+- `Promise<any>` - The data associated with the CID
+
+**Throws:**
+- `Error` if CID is not found or invalid size
+
+**Example:**
+
+```typescript
+// Store data
+await s5.fs.put('home/document.txt', 'Important data');
+
+// Get CID
+const cid = await advanced.pathToCID('home/document.txt');
+
+// Later, retrieve by CID alone
+const data = await advanced.getByCID(cid);
+console.log(data); // "Important data"
+
+// Works with any data type
+await s5.fs.put('home/config.json', { setting: 'value' });
+const configCID = await advanced.pathToCID('home/config.json');
+const config = await advanced.getByCID(configCID);
+console.log(config); // { setting: 'value' }
+```
+
+#### putByCID(data)
+
+Store data in content-addressed storage and return its CID. The data is stored but not assigned a user-visible path.
+
+```typescript
+async putByCID(data: any): Promise<Uint8Array>
+```
+
+**Parameters:**
+- `data: any` - The data to store
+
+**Returns:**
+- `Promise<Uint8Array>` - The CID of the stored data
+
+**Example:**
+
+```typescript
+// Store data and get its CID
+const cid = await advanced.putByCID('Temporary content');
+console.log(formatCID(cid)); // "bafybeih..."
+
+// Retrieve it later by CID
+const data = await advanced.getByCID(cid);
+console.log(data); // "Temporary content"
+
+// Works with binary data
+const binaryData = new Uint8Array([1, 2, 3, 4, 5]);
+const binaryCID = await advanced.putByCID(binaryData);
+```
+
+#### putWithCID(path, data, options?)
+
+Store data at a path and return both the path and CID in a single operation.
+
+```typescript
+async putWithCID(
+  path: string,
+  data: any,
+  options?: PutOptions
+): Promise<{ path: string; cid: Uint8Array }>
+```
+
+**Parameters:**
+- `path: string` - The path where to store the data
+- `data: any` - The data to store
+- `options?: PutOptions` - Optional put options (encryption, media type, etc.)
+
+**Returns:**
+- `Promise<{ path: string; cid: Uint8Array }>` - Object containing both path and CID
+
+**Example:**
+
+```typescript
+// Store and get both path and CID
+const result = await advanced.putWithCID('home/file.txt', 'Content');
+console.log(result.path); // "home/file.txt"
+console.log(formatCID(result.cid)); // "bafybeif..."
+
+// With encryption
+const encrypted = await advanced.putWithCID(
+  'home/secret.txt',
+  'Secret data',
+  { encrypt: true }
+);
+
+// Can retrieve by either path or CID
+const byPath = await s5.fs.get('home/secret.txt');
+const byCID = await advanced.getByCID(encrypted.cid);
+console.log(byPath === byCID); // true
+```
+
+#### getMetadataWithCID(path)
+
+Get metadata for a file or directory along with its CID.
+
+```typescript
+async getMetadataWithCID(path: string): Promise<{
+  metadata: any;
+  cid: Uint8Array;
+}>
+```
+
+**Parameters:**
+- `path: string` - The file or directory path
+
+**Returns:**
+- `Promise<{ metadata: any; cid: Uint8Array }>` - Object containing metadata and CID
+
+**Throws:**
+- `Error` if path does not exist
+
+**Example:**
+
+```typescript
+await s5.fs.put('home/data.txt', 'Content');
+
+const result = await advanced.getMetadataWithCID('home/data.txt');
+console.log(result.metadata);
+// {
+//   type: 'file',
+//   size: 7,
+//   created: 1234567890,
+//   modified: 1234567890
+// }
+
+console.log(formatCID(result.cid)); // "bafybeih..."
+```
+
+### CID Utility Functions
+
+#### formatCID(cid, encoding?)
+
+Format a CID as a multibase-encoded string for display or transmission.
+
+```typescript
+function formatCID(
+  cid: Uint8Array,
+  encoding?: 'base32' | 'base58btc' | 'base64'
+): string
+```
+
+**Parameters:**
+- `cid: Uint8Array` - The CID to format (must be 32 bytes)
+- `encoding?: string` - The encoding to use (default: 'base32')
+  - `'base32'` - Base32 encoding (prefix: 'b')
+  - `'base58btc'` - Base58 Bitcoin encoding (prefix: 'z')
+  - `'base64'` - Base64 encoding (prefix: 'm')
+
+**Returns:**
+- `string` - The formatted CID string with multibase prefix
+
+**Throws:**
+- `Error` if CID is invalid size or encoding is unsupported
+
+**Example:**
+
+```typescript
+const cid = await advanced.pathToCID('home/file.txt');
+
+// Default base32
+const base32 = formatCID(cid);
+console.log(base32); // "bafybeig..."
+
+// Base58btc (shorter, more compact)
+const base58 = formatCID(cid, 'base58btc');
+console.log(base58); // "zb2rh..."
+
+// Base64 (URL-safe)
+const base64 = formatCID(cid, 'base64');
+console.log(base64); // "mAXASI..."
+```
+
+#### parseCID(cidString)
+
+Parse a CID string back into a Uint8Array. Automatically detects the encoding format.
+
+```typescript
+function parseCID(cidString: string): Uint8Array
+```
+
+**Parameters:**
+- `cidString: string` - The CID string to parse (with or without multibase prefix)
+
+**Returns:**
+- `Uint8Array` - The parsed CID (32 bytes)
+
+**Throws:**
+- `Error` if CID string is invalid or has wrong size after parsing
+
+**Supported formats:**
+- Base32 with prefix: `"bafybei..."`
+- Base32 without prefix: `"afybei..."`
+- Base58btc with prefix: `"zb2rh..."`
+- Base58btc without prefix: `"Qm..."`
+- Base64 with prefix: `"mAXASI..."`
+- Base64 without prefix: `"AXASI..."`
+
+**Example:**
+
+```typescript
+// Parse base32
+const cid1 = parseCID('bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi');
+
+// Parse base58btc
+const cid2 = parseCID('zb2rhk6GMPQF8p1NMJEqvJ3XFfNBqJNfiXzJaJkPiA9kMvNaJ');
+
+// Parse without prefix (auto-detect)
+const cid3 = parseCID('afybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi');
+
+// All return Uint8Array(32)
+console.log(cid1); // Uint8Array(32) [...]
+```
+
+#### verifyCID(cid, data, crypto)
+
+Verify that a CID matches the given data by recomputing the hash.
+
+```typescript
+async function verifyCID(
+  cid: Uint8Array,
+  data: Uint8Array,
+  crypto: CryptoImplementation
+): Promise<boolean>
+```
+
+**Parameters:**
+- `cid: Uint8Array` - The CID to verify (must be 32 bytes)
+- `data: Uint8Array` - The data to check
+- `crypto: CryptoImplementation` - The crypto implementation to use
+
+**Returns:**
+- `Promise<boolean>` - True if CID matches data, false otherwise
+
+**Throws:**
+- `Error` if CID size is invalid
+
+**Example:**
+
+```typescript
+import { JSCryptoImplementation } from 's5/core';
+
+const crypto = new JSCryptoImplementation();
+const data = new TextEncoder().encode('Hello, World!');
+
+// Store data
+const result = await advanced.putWithCID('home/data.txt', 'Hello, World!');
+
+// Verify CID matches
+const isValid = await verifyCID(result.cid, data, crypto);
+console.log(isValid); // true
+
+// Tampered data fails verification
+const tamperedData = new TextEncoder().encode('Goodbye, World!');
+const isInvalid = await verifyCID(result.cid, tamperedData, crypto);
+console.log(isInvalid); // false
+```
+
+#### cidToString(cid)
+
+Convert a CID to a hexadecimal string for debugging or display.
+
+```typescript
+function cidToString(cid: Uint8Array): string
+```
+
+**Parameters:**
+- `cid: Uint8Array` - The CID to convert (must be 32 bytes)
+
+**Returns:**
+- `string` - Hexadecimal representation of the CID
+
+**Throws:**
+- `Error` if CID is invalid size
+
+**Example:**
+
+```typescript
+const cid = await advanced.pathToCID('home/file.txt');
+
+const hexString = cidToString(cid);
+console.log(hexString);
+// "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b"
+
+// Useful for logging and debugging
+console.log(`File CID: ${hexString}`);
+```
+
+### Complete Example
+
+Here's a comprehensive example showing the Advanced CID API workflow:
+
+```typescript
+import { S5 } from 's5';
+import { FS5Advanced, formatCID, parseCID, verifyCID } from 's5/advanced';
+import { JSCryptoImplementation } from 's5/core';
+
+// Initialize S5
+const s5 = await S5.create();
+const seedPhrase = s5.generateSeedPhrase();
+await s5.recoverIdentityFromSeedPhrase(seedPhrase);
+
+// Create Advanced API
+const advanced = new FS5Advanced(s5.fs);
+const crypto = new JSCryptoImplementation();
+
+// 1. Store data and get CID
+const result = await advanced.putWithCID('home/document.txt', 'Important data');
+console.log(`Stored at: ${result.path}`);
+console.log(`CID: ${formatCID(result.cid, 'base32')}`);
+
+// 2. Verify the CID
+const data = new TextEncoder().encode('Important data');
+const isValid = await verifyCID(result.cid, data, crypto);
+console.log(`CID valid: ${isValid}`); // true
+
+// 3. Share the CID (as string)
+const cidString = formatCID(result.cid, 'base58btc');
+console.log(`Share this CID: ${cidString}`);
+
+// 4. Recipient: parse CID and retrieve data
+const receivedCID = parseCID(cidString);
+const retrievedData = await advanced.getByCID(receivedCID);
+console.log(`Retrieved: ${retrievedData}`); // "Important data"
+
+// 5. Find path from CID
+const foundPath = await advanced.cidToPath(receivedCID);
+console.log(`Path: ${foundPath}`); // "home/document.txt"
+
+// 6. Get metadata with CID
+const metadata = await advanced.getMetadataWithCID(foundPath);
+console.log(metadata);
+// {
+//   metadata: { type: 'file', size: 14, ... },
+//   cid: Uint8Array(32) [...]
+// }
+
+// 7. CID-only storage (no path)
+const tempCID = await advanced.putByCID('Temporary content');
+console.log(`Temp CID: ${cidToString(tempCID)}`);
+
+// Retrieve later without knowing path
+const tempData = await advanced.getByCID(tempCID);
+console.log(tempData); // "Temporary content"
+```
+
+### Bundle Size
+
+The Advanced API export is optimized for tree-shaking:
+
+- **Advanced bundle**: 59.53 KB compressed (brotli)
+- **Includes**: Core functionality + CID utilities
+- **Tree-shakeable**: Only imported functions are included
+
+```json
+{
+  "exports": {
+    "./advanced": "./dist/src/exports/advanced.js"
+  }
+}
+```
+
+### Type Definitions
+
+The Advanced API exports additional types for power users:
+
+```typescript
+import type {
+  DirV1,
+  FileRef,
+  DirRef,
+  DirLink,
+  BlobLocation,
+  HAMTShardingConfig,
+  PutOptions,
+  ListOptions,
+  GetOptions,
+  ListResult,
+  PutWithCIDResult,
+  MetadataWithCIDResult
+} from 's5/advanced';
+```
+
 ## Next Steps
 
 - Review the [test suite](https://github.com/julesl23/s5.js/tree/main/test/fs) for comprehensive usage examples
@@ -1930,4 +2440,4 @@ Output shows module breakdown:
 
 ---
 
-_This documentation covers Phases 2-5 of the Enhanced S5.js grant project. Phase 3 added automatic HAMT sharding for efficient handling of large directories. Phase 4 added the DirectoryWalker and BatchOperations utilities for recursive directory operations. Phase 5 added the media processing foundation with WASM-based image metadata extraction, Canvas fallback, browser compatibility detection, and bundle size optimization. Future phases will add thumbnail generation and progressive image loading capabilities._
+_This documentation covers Phases 2-6 of the Enhanced S5.js grant project. Phase 3 added automatic HAMT sharding for efficient handling of large directories. Phase 4 added the DirectoryWalker and BatchOperations utilities for recursive directory operations. Phase 5 added the media processing foundation with WASM-based image metadata extraction, Canvas fallback, browser compatibility detection, and bundle size optimization. Phase 6 added advanced media processing with thumbnail generation, progressive loading, FS5 integration, and the Advanced CID API for power users._

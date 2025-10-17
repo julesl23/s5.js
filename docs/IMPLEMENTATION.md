@@ -332,9 +332,11 @@
   - [x] Verify bundle size ≤ 700KB compressed (60.09 KB brotli - 10x under limit!) ✅
   - [x] Create bundle analysis report (docs/BUNDLE_ANALYSIS.md, bundle-analysis.json)
 
-### Phase 6.5: Advanced CID API (Optional Enhancement)
+### Phase 6.5: Advanced CID API (Optional Enhancement) ✅ COMPLETE (2025-10-17)
 
 **Goal**: Provide CID-level access for advanced developers without affecting path-based API simplicity
+
+**Achievement**: Clean architectural separation - advanced users get CID access via `s5/advanced` export without affecting the simplicity of the path-based API. All 74 tests passing (38 CID utils + 36 FS5Advanced).
 
 - [x] **6.5.1 Test Suite First (TDD)** ✅ COMPLETE
   - [x] Create test/fs/fs5-advanced.test.ts (~40 tests)
@@ -378,12 +380,12 @@
   - [x] Advanced export is 59.53 KB compressed (similar to core)
   - [x] Update BUNDLE_ANALYSIS.md with advanced bundle stats
 
-- [ ] **6.5.6 Documentation**
-  - [ ] Add Advanced API section to docs/API.md
-  - [ ] Create examples for CID operations
-  - [ ] Document when to use advanced vs. path-based API
-  - [ ] Add JSDoc comments to all public methods
-  - [ ] Update README with advanced import example
+- [x] **6.5.6 Documentation** ✅ COMPLETE
+  - [x] Add Advanced API section to docs/API.md (500+ lines of comprehensive documentation)
+  - [x] Create examples for CID operations (10+ code examples)
+  - [x] Document when to use advanced vs. path-based API
+  - [x] Add JSDoc comments to all public methods (done during implementation)
+  - [x] Update README with advanced import example and quick start guide
 
 ### Phase 7: Testing & Performance (Grant Month 7)
 

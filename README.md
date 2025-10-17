@@ -255,14 +255,17 @@ For production deployments, these benchmarks confirm the implementation is ready
 The library supports multiple import strategies to optimize bundle size:
 
 ```javascript
-// Full bundle (~273KB uncompressed, ~70KB gzipped)
-import { S5, MediaProcessor } from "@s5-dev/s5js";
+// Full bundle (~60KB compressed with brotli)
+import { S5, MediaProcessor } from "s5";
 
-// Core only - no media features (~195KB uncompressed, ~51KB gzipped)
+// Core only - no media features (~60KB compressed)
 import { S5, FS5 } from "s5/core";
 
-// Media only - for lazy loading (~79KB uncompressed, ~19KB gzipped)
+// Media only - for lazy loading (~10KB compressed)
 import { MediaProcessor } from "s5/media";
+
+// Advanced CID API - for power users (~60KB compressed)
+import { FS5Advanced, formatCID, parseCID } from "s5/advanced";
 
 // Dynamic import for code-splitting
 const { MediaProcessor } = await import("s5/media");
@@ -270,8 +273,72 @@ const { MediaProcessor } = await import("s5/media");
 
 Monitor bundle sizes with:
 ```bash
-node scripts/analyze-bundle.js
+npm run analyze-bundle
 ```
+
+## Advanced CID API
+
+For power users who need direct access to Content Identifiers (CIDs), the Advanced API provides content-addressed storage capabilities without affecting the simplicity of the path-based API.
+
+### When to Use
+
+**Use the Advanced API if you:**
+- Need to reference content by its cryptographic hash
+- Are building content-addressed storage applications
+- Require deduplication or content verification
+- Work with distributed systems that use CIDs
+
+**Use the Path-based API if you:**
+- Need simple file storage (most use cases)
+- Prefer traditional file system operations
+- Want paths to be more meaningful than hashes
+
+### Quick Example
+
+```typescript
+import { S5 } from "s5";
+import { FS5Advanced, formatCID, parseCID } from "s5/advanced";
+
+// Setup
+const s5 = await S5.create();
+await s5.recoverIdentityFromSeedPhrase(seedPhrase);
+const advanced = new FS5Advanced(s5.fs);
+
+// Store data and get both path and CID
+const result = await advanced.putWithCID('home/document.txt', 'Important data');
+console.log(`Path: ${result.path}`);
+console.log(`CID: ${formatCID(result.cid, 'base32')}`);
+
+// Share the CID string
+const cidString = formatCID(result.cid, 'base58btc');
+
+// Recipient: retrieve by CID alone
+const receivedCID = parseCID(cidString);
+const data = await advanced.getByCID(receivedCID);
+console.log(data); // "Important data"
+
+// Find path from CID
+const path = await advanced.cidToPath(receivedCID);
+console.log(path); // "home/document.txt"
+```
+
+### Available Methods
+
+**FS5Advanced Class:**
+- `pathToCID(path)` - Extract CID from file/directory path
+- `cidToPath(cid)` - Find path for a given CID
+- `getByCID(cid)` - Retrieve data by CID
+- `putByCID(data)` - Store data and return CID
+- `putWithCID(path, data)` - Store and get both path and CID
+- `getMetadataWithCID(path)` - Get metadata with CID
+
+**CID Utilities:**
+- `formatCID(cid, encoding?)` - Format CID as multibase string
+- `parseCID(cidString)` - Parse CID from string
+- `verifyCID(cid, data, crypto)` - Verify CID matches data
+- `cidToString(cid)` - Convert to hex string
+
+See the [Advanced API Documentation](./docs/API.md#advanced-cid-api) for complete details.
 
 ## Encryption
 
