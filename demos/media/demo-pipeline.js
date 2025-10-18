@@ -11,6 +11,9 @@
  * - Fallback handling
  */
 
+// Load Node.js browser API polyfills first
+import './node-polyfills.js';
+
 import { MediaProcessor } from '../../dist/src/media/index.js';
 import { BrowserCompat } from '../../dist/src/media/compat/browser.js';
 import { WASMLoader } from '../../dist/src/media/wasm/loader.js';

@@ -12,6 +12,9 @@
  * - All media components integrate properly
  */
 
+// Load Node.js browser API polyfills first
+import './node-polyfills.js';
+
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
