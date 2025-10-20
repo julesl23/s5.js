@@ -729,9 +729,11 @@ See [test-server-README.md](./test-server-README.md) for details.
 - ✅ Month 3: Path-cascade Optimization & HAMT - Complete
 - ✅ Month 4: Directory Utilities - Complete
 - ✅ Month 5: Media Processing Foundation - Complete
+- ✅ Month 6: Advanced Media Processing - Complete
 - ✅ **S5 Portal Integration** - Complete (100% test success rate)
-- 🚧 Month 6: Thumbnail Generation - Next
-- ⏳ Months 7-8: Progressive loading and final integration
+- ✅ **Phase 6.5**: Advanced CID API - Complete (74 tests passing)
+- ✅ Month 7: Testing & Performance - Substantially Complete (~85%)
+- 🚧 Month 8: Documentation & Upstream Integration - In Progress (~40%)
 
 See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 
@@ -742,12 +744,16 @@ See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 - **Phase 3**: HAMT Integration (auto-sharding at 1000+ entries)
 - **Phase 4**: Directory Utilities (walker, batch operations)
 - **Phase 5**: Media Processing Foundation (WASM + Canvas with browser detection)
+- **Phase 6**: Advanced Media Processing (thumbnail generation, progressive loading, FS5 integration, bundle optimization)
+- **Phase 6.5**: Advanced CID API (74 tests passing, `s5/advanced` export)
+- **Phase 7**: Testing & Performance (280+ tests, benchmarks complete)
 
-### Upcoming ⏳
+### Remaining Work ⏳
 
-- **Phase 6**: Thumbnail Generation (Month 6)
-- **Phase 7**: Progressive Image Loading (Month 7)
-- **Phase 8**: Final Integration and Testing (Month 8)
+- **Phase 8**: Documentation & Upstream Integration
+  - Community outreach (blog post, forum announcements)
+  - Upstream PR to s5-dev/s5.js
+  - Optional: Firefox/Safari browser testing
 
 ## Performance
 
