@@ -1,12 +1,18 @@
 {
-  "name": "s5",
-  "version": "0.2.0",
+  "name": "s5js",
+  "version": "0.3.0",
   "type": "module",
   "description": "Use S5",
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "sideEffects": false,
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
