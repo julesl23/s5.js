@@ -24,7 +24,7 @@ if (!global.WebSocket) {
 // - Registry propagation delays between operations (5+ seconds)
 // - Sequential execution with concurrency: 1 to avoid registry conflicts
 // - All integration scenarios:
-//   • putWithCID and dual retrieval (path + CID)
+//   • Composition pattern (put + pathToCID)
 //   • pathToCID extraction from stored files
 //   • cidToPath lookup and verification
 //   • getByCID without path knowledge
@@ -54,43 +54,6 @@ describe.skip('FS5Advanced Integration Tests', () => {
     testPath = `home/test-${Date.now()}.txt`;
   });
 
-  describe('putWithCID Integration', () => {
-    it('should store data and return both path and CID', async () => {
-      const testData = 'Integration test data';
-
-      const result = await advanced.putWithCID(testPath, testData);
-
-      expect(result.path).toBe(testPath);
-      expect(result.cid).toBeInstanceOf(Uint8Array);
-      expect(result.cid.length).toBe(32);
-
-      // Verify we can retrieve by path
-      const byPath = await s5.fs.get(testPath);
-      expect(byPath).toBe(testData);
-
-      // Verify we can retrieve by CID
-      const byCID = await advanced.getByCID(result.cid);
-      expect(byCID).toBe(testData);
-    });
-
-    it('should work with binary data', async () => {
-      const binaryData = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
-
-      const result = await advanced.putWithCID(testPath, binaryData);
-
-      const retrieved = await advanced.getByCID(result.cid);
-      expect(retrieved).toEqual(binaryData);
-    });
-
-    it('should work with JSON data', async () => {
-      const jsonData = { key: 'value', nested: { data: 123 } };
-
-      const result = await advanced.putWithCID(testPath, jsonData);
-
-      const retrieved = await advanced.getByCID(result.cid);
-      expect(retrieved).toEqual(jsonData);
-    });
-  });
 
   describe('pathToCID Integration', () => {
     it('should extract CID from stored file', async () => {
@@ -157,13 +120,14 @@ describe.skip('FS5Advanced Integration Tests', () => {
       const userPath = 'home/userfile.txt';
 
       // Store at user path
-      const result = await advanced.putWithCID(userPath, testData);
+      await s5.fs.put(userPath, testData);
+      const userCid = await advanced.pathToCID(userPath);
 
       // Also store via putByCID (creates .cid/ path)
       await advanced.putByCID(testData);
 
       // cidToPath should return user path, not .cid/ path
-      const foundPath = await advanced.cidToPath(result.cid);
+      const foundPath = await advanced.cidToPath(userCid);
 
       expect(foundPath).toBe(userPath);
       expect(foundPath).not.toContain('.cid/');
@@ -173,10 +137,11 @@ describe.skip('FS5Advanced Integration Tests', () => {
   describe('getByCID Integration', () => {
     it('should retrieve data without knowing path', async () => {
       const testData = 'Retrieve by CID test';
-      const result = await advanced.putWithCID(testPath, testData);
+      await s5.fs.put(testPath, testData);
+      const cid = await advanced.pathToCID(testPath);
 
       // Retrieve without using path
-      const retrieved = await advanced.getByCID(result.cid);
+      const retrieved = await advanced.getByCID(cid);
 
       expect(retrieved).toBe(testData);
     });
@@ -188,46 +153,21 @@ describe.skip('FS5Advanced Integration Tests', () => {
     });
   });
 
-  describe('getMetadataWithCID Integration', () => {
-    it('should return metadata and CID for file', async () => {
-      const testData = 'Metadata test';
-      await s5.fs.put(testPath, testData);
-
-      const result = await advanced.getMetadataWithCID(testPath);
-
-      expect(result.metadata).toBeDefined();
-      expect(result.metadata.type).toBe('file');
-      expect(result.metadata.size).toBeGreaterThan(0);
-      expect(result.cid).toBeInstanceOf(Uint8Array);
-      expect(result.cid.length).toBe(32);
-    });
-
-    it('should return metadata and CID for directory', async () => {
-      const dirPath = 'home/metadir';
-      await s5.fs.put(`${dirPath}/file.txt`, 'content');
-
-      const result = await advanced.getMetadataWithCID(dirPath);
-
-      expect(result.metadata).toBeDefined();
-      expect(result.metadata.type).toBe('directory');
-      expect(result.cid).toBeInstanceOf(Uint8Array);
-      expect(result.cid.length).toBe(32);
-    });
-  });
 
   describe('CID Utilities Integration', () => {
     it('should format and parse CID correctly', async () => {
       const testData = 'Format parse test';
-      const result = await advanced.putWithCID(testPath, testData);
+      await s5.fs.put(testPath, testData);
+      const cid = await advanced.pathToCID(testPath);
 
       // Format CID
-      const formatted = formatCID(result.cid, 'base32');
+      const formatted = formatCID(cid, 'base32');
       expect(formatted).toBeTypeOf('string');
       expect(formatted.length).toBeGreaterThan(0);
 
       // Parse it back
       const parsed = parseCID(formatted);
-      expect(parsed).toEqual(result.cid);
+      expect(parsed).toEqual(cid);
 
       // Should be able to retrieve with parsed CID
       const retrieved = await advanced.getByCID(parsed);
@@ -235,17 +175,18 @@ describe.skip('FS5Advanced Integration Tests', () => {
     });
 
     it('should work with different encoding formats', async () => {
-      const result = await advanced.putWithCID(testPath, 'Encoding test');
+      await s5.fs.put(testPath, 'Encoding test');
+      const cid = await advanced.pathToCID(testPath);
 
       // Test all three encodings
-      const base32 = formatCID(result.cid, 'base32');
-      const base58 = formatCID(result.cid, 'base58btc');
-      const base64 = formatCID(result.cid, 'base64');
+      const base32 = formatCID(cid, 'base32');
+      const base58 = formatCID(cid, 'base58btc');
+      const base64 = formatCID(cid, 'base64');
 
       // All should parse back to same CID
-      expect(parseCID(base32)).toEqual(result.cid);
-      expect(parseCID(base58)).toEqual(result.cid);
-      expect(parseCID(base64)).toEqual(result.cid);
+      expect(parseCID(base32)).toEqual(cid);
+      expect(parseCID(base58)).toEqual(cid);
+      expect(parseCID(base64)).toEqual(cid);
     });
   });
 
@@ -254,18 +195,19 @@ describe.skip('FS5Advanced Integration Tests', () => {
       const sensitiveData = 'Secret information';
 
       // Store with encryption
-      const result = await advanced.putWithCID(testPath, sensitiveData, {
+      await s5.fs.put(testPath, sensitiveData, {
         encryption: { algorithm: 'xchacha20-poly1305' },
       });
+      const cid = await advanced.pathToCID(testPath);
 
-      expect(result.cid).toBeInstanceOf(Uint8Array);
+      expect(cid).toBeInstanceOf(Uint8Array);
 
       // Should be able to retrieve by CID (will auto-decrypt)
-      const retrieved = await advanced.getByCID(result.cid);
+      const retrieved = await advanced.getByCID(cid);
       expect(retrieved).toBe(sensitiveData);
 
       // Should find path from CID
-      const foundPath = await advanced.cidToPath(result.cid);
+      const foundPath = await advanced.cidToPath(cid);
       expect(foundPath).toBe(testPath);
     });
 
@@ -275,15 +217,18 @@ describe.skip('FS5Advanced Integration Tests', () => {
       const path2 = 'home/encrypted2.txt';
 
       // Store with different encryption keys
-      const result1 = await advanced.putWithCID(path1, content, {
+      await s5.fs.put(path1, content, {
         encryption: { algorithm: 'xchacha20-poly1305' }
       });
-      const result2 = await advanced.putWithCID(path2, content, {
+      const cid1 = await advanced.pathToCID(path1);
+
+      await s5.fs.put(path2, content, {
         encryption: { algorithm: 'xchacha20-poly1305' }
       });
+      const cid2 = await advanced.pathToCID(path2);
 
       // Encrypted files should have different CIDs (different keys = different ciphertext)
-      expect(result1.cid).not.toEqual(result2.cid);
+      expect(cid1).not.toEqual(cid2);
     });
   });
 
@@ -292,7 +237,8 @@ describe.skip('FS5Advanced Integration Tests', () => {
       const originalData = 'Complete workflow test';
 
       // 1. Store data and get CID
-      const { path, cid } = await advanced.putWithCID(testPath, originalData);
+      await s5.fs.put(testPath, originalData);
+      const cid = await advanced.pathToCID(testPath);
 
       // 2. Format CID for sharing
       const cidString = formatCID(cid, 'base58btc');
@@ -306,12 +252,14 @@ describe.skip('FS5Advanced Integration Tests', () => {
 
       // 5. Recipient: find path from CID
       const foundPath = await advanced.cidToPath(receivedCID);
-      expect(foundPath).toBe(path);
+      expect(foundPath).toBe(testPath);
 
-      // 6. Verify metadata includes CID
+      // 6. Verify metadata and CID match
       if (foundPath) {
-        const metadata = await advanced.getMetadataWithCID(foundPath);
-        expect(metadata.cid).toEqual(cid);
+        const metadata = await s5.fs.getMetadata(foundPath);
+        const metaCid = await advanced.pathToCID(foundPath);
+        expect(metaCid).toEqual(cid);
+        expect(metadata).toBeDefined();
       }
     });
   });

@@ -135,8 +135,6 @@ describe('FS5Advanced', () => {
       expect(fs5Advanced).toHaveProperty('cidToPath');
       expect(fs5Advanced).toHaveProperty('getByCID');
       expect(fs5Advanced).toHaveProperty('putByCID');
-      expect(fs5Advanced).toHaveProperty('putWithCID');
-      expect(fs5Advanced).toHaveProperty('getMetadataWithCID');
     });
 
     test('should throw error if FS5 instance is null', () => {
@@ -359,128 +357,6 @@ describe('FS5Advanced', () => {
     });
   });
 
-  describe('putWithCID', () => {
-    test('should store at path and return both path and CID', async () => {
-      const testData = 'Store with path and CID';
-
-      const result = await fs5Advanced.putWithCID('home/test.txt', testData);
-
-      expect(result).toHaveProperty('path');
-      expect(result).toHaveProperty('cid');
-      expect(result.path).toBe('home/test.txt');
-      expect(result.cid).toBeInstanceOf(Uint8Array);
-      expect(result.cid.length).toBe(32);
-    });
-
-    test('should match CID from pathToCID after storage', async () => {
-      const testData = 'Verify CID consistency';
-
-      const result = await fs5Advanced.putWithCID('home/verify.txt', testData);
-
-      // Get CID using pathToCID
-      const cidFromPath = await fs5Advanced.pathToCID('home/verify.txt');
-
-      // Both should be the same
-      expect(result.cid).toEqual(cidFromPath);
-    });
-
-    test('should allow retrieval by both path and CID', async () => {
-      const testData = 'Dual access test';
-
-      const result = await fs5Advanced.putWithCID('home/dual.txt', testData);
-
-      // Retrieve by path (normal FS5 API)
-      const dataByPath = await fs5.get('home/dual.txt');
-      expect(dataByPath).toBe(testData);
-
-      // Retrieve by CID (advanced API)
-      const dataByCID = await fs5Advanced.getByCID(result.cid);
-      expect(dataByCID).toBe(testData);
-    });
-
-    test('should accept PutOptions', async () => {
-      const testData = 'With options';
-
-      const result = await fs5Advanced.putWithCID('home/withopt.txt', testData, {
-        mediaType: 'text/plain',
-        timestamp: Date.now()
-      });
-
-      expect(result).toHaveProperty('path');
-      expect(result).toHaveProperty('cid');
-
-      // Verify metadata
-      const metadata = await fs5.getMetadata('home/withopt.txt');
-      expect(metadata?.mediaType).toBe('text/plain');
-    });
-
-    test('should handle nested paths', async () => {
-      const testData = 'Nested path data';
-
-      const result = await fs5Advanced.putWithCID('home/level1/level2/file.txt', testData);
-
-      expect(result.path).toBe('home/level1/level2/file.txt');
-      expect(result.cid).toBeInstanceOf(Uint8Array);
-
-      // Verify file exists
-      const retrieved = await fs5.get('home/level1/level2/file.txt');
-      expect(retrieved).toBe(testData);
-    });
-  });
-
-  describe('getMetadataWithCID', () => {
-    test('should return metadata with CID for files', async () => {
-      const testData = 'File with metadata';
-      await fs5.put('home/metafile.txt', testData, {
-        mediaType: 'text/plain',
-        timestamp: Date.now()
-      });
-
-      const result = await fs5Advanced.getMetadataWithCID('home/metafile.txt');
-
-      expect(result).toHaveProperty('metadata');
-      expect(result).toHaveProperty('cid');
-      expect(result.cid).toBeInstanceOf(Uint8Array);
-      expect(result.metadata).toHaveProperty('type', 'file');
-      expect(result.metadata).toHaveProperty('mediaType');
-    });
-
-    test('should return metadata with CID for directories', async () => {
-      await fs5.put('home/mydir/file.txt', 'content');
-
-      const result = await fs5Advanced.getMetadataWithCID('home/mydir');
-
-      expect(result).toHaveProperty('metadata');
-      expect(result).toHaveProperty('cid');
-      expect(result.metadata).toHaveProperty('type', 'directory');
-    });
-
-    test('should throw error for non-existent path', async () => {
-      await expect(fs5Advanced.getMetadataWithCID('home/nonexistent.txt'))
-        .rejects.toThrow();
-    });
-
-    test('should include FileRef hash for files', async () => {
-      await fs5.put('home/hashtest.txt', 'test hash');
-
-      const result = await fs5Advanced.getMetadataWithCID('home/hashtest.txt');
-
-      expect(result.cid).toBeInstanceOf(Uint8Array);
-      expect(result.cid.length).toBe(32);
-
-      // Verify CID matches pathToCID
-      const directCID = await fs5Advanced.pathToCID('home/hashtest.txt');
-      expect(result.cid).toEqual(directCID);
-    });
-
-    test('should handle root directory', async () => {
-      const result = await fs5Advanced.getMetadataWithCID('');
-
-      expect(result).toHaveProperty('metadata');
-      expect(result).toHaveProperty('cid');
-      expect(result.metadata).toHaveProperty('type', 'directory');
-    });
-  });
 
   describe('integration tests', () => {
     test('should maintain data integrity across CID and path operations', async () => {
@@ -514,8 +390,9 @@ describe('FS5Advanced', () => {
       expect(retrieved).toBe(data);
 
       // 3. Store at path with same CID result
-      const result = await fs5Advanced.putWithCID('home/linked.txt', data);
-      expect(result.cid).toEqual(cid);
+      await fs5.put('home/linked.txt', data);
+      const cid2 = await fs5Advanced.pathToCID('home/linked.txt');
+      expect(cid2).toEqual(cid);
 
       // 4. Find path from CID
       const foundPath = await fs5Advanced.cidToPath(cid);
@@ -525,28 +402,33 @@ describe('FS5Advanced', () => {
     test('should work with different data types', async () => {
       // String
       const stringData = 'string test';
-      const stringResult = await fs5Advanced.putWithCID('home/string.txt', stringData);
-      expect(stringResult.cid).toBeInstanceOf(Uint8Array);
+      await fs5.put('home/string.txt', stringData);
+      const stringCid = await fs5Advanced.pathToCID('home/string.txt');
+      expect(stringCid).toBeInstanceOf(Uint8Array);
 
       // Binary
       const binaryData = new Uint8Array([1, 2, 3]);
-      const binaryResult = await fs5Advanced.putWithCID('home/binary.bin', binaryData);
-      expect(binaryResult.cid).toBeInstanceOf(Uint8Array);
+      await fs5.put('home/binary.bin', binaryData);
+      const binaryCid = await fs5Advanced.pathToCID('home/binary.bin');
+      expect(binaryCid).toBeInstanceOf(Uint8Array);
 
       // JSON object
       const objectData = { key: 'value' };
-      const objectResult = await fs5Advanced.putWithCID('home/object.json', objectData);
-      expect(objectResult.cid).toBeInstanceOf(Uint8Array);
+      await fs5.put('home/object.json', objectData);
+      const objectCid = await fs5Advanced.pathToCID('home/object.json');
+      expect(objectCid).toBeInstanceOf(Uint8Array);
 
       // All should be retrievable
-      expect(await fs5Advanced.getByCID(stringResult.cid)).toBe(stringData);
-      expect(await fs5Advanced.getByCID(binaryResult.cid)).toEqual(binaryData);
-      expect(await fs5Advanced.getByCID(objectResult.cid)).toEqual(objectData);
+      expect(await fs5Advanced.getByCID(stringCid)).toBe(stringData);
+      expect(await fs5Advanced.getByCID(binaryCid)).toEqual(binaryData);
+      expect(await fs5Advanced.getByCID(objectCid)).toEqual(objectData);
     });
 
     test('should not affect existing FS5 API functionality', async () => {
-      // Use advanced API
-      await fs5Advanced.putWithCID('home/advanced.txt', 'advanced data');
+      // Use composition of FS5 + Advanced API
+      await fs5.put('home/advanced.txt', 'advanced data');
+      const advancedCid = await fs5Advanced.pathToCID('home/advanced.txt');
+      expect(advancedCid).toBeInstanceOf(Uint8Array);
 
       // Use regular FS5 API
       await fs5.put('home/regular.txt', 'regular data');

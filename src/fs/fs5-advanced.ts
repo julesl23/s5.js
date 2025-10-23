@@ -14,36 +14,19 @@
  *
  * const advanced = new FS5Advanced(s5.fs);
  *
- * // Get CID for a file
- * const cid = await advanced.pathToCID('home/data.txt');
+ * // Store content and get CID
+ * await s5.fs.put('home/file.txt', 'content');
+ * const cid = await advanced.pathToCID('home/file.txt');
  *
  * // Retrieve by CID
  * const data = await advanced.getByCID(cid);
  *
- * // Store with both path and CID
- * const result = await advanced.putWithCID('home/file.txt', 'content');
- * console.log(result.path, result.cid);
+ * // Store content-only (without path)
+ * const cidOnly = await advanced.putByCID('anonymous content');
  * ```
  */
 
 import type { FS5 } from './fs5.js';
-import type { PutOptions } from './dirv1/types.js';
-
-/**
- * Result of putWithCID operation
- */
-export interface PutWithCIDResult {
-  path: string;
-  cid: Uint8Array;
-}
-
-/**
- * Result of getMetadataWithCID operation
- */
-export interface MetadataWithCIDResult {
-  metadata: any;
-  cid: Uint8Array;
-}
 
 /**
  * Advanced CID-aware file system operations
@@ -178,8 +161,8 @@ export class FS5Advanced {
   /**
    * Store data and return its CID
    *
-   * Note: This stores the data in the content-addressed storage but does not
-   * assign it a path. Use putWithCID if you want both a path and CID.
+   * Stores data in content-addressed storage without requiring a user-specified path.
+   * Useful for content-only storage where you only care about the CID.
    *
    * @param data - The data to store
    * @returns The CID of the stored data
@@ -204,69 +187,6 @@ export class FS5Advanced {
     const cid = await this.pathToCID(tempPath);
 
     return cid;
-  }
-
-  /**
-   * Store data at path and return both path and CID
-   *
-   * @param path - The path where to store the data
-   * @param data - The data to store
-   * @param options - Optional put options
-   * @returns Object containing both path and CID
-   *
-   * @example
-   * ```typescript
-   * const result = await advanced.putWithCID('home/file.txt', 'content');
-   * console.log(result.path); // 'home/file.txt'
-   * console.log(result.cid);  // Uint8Array(32) [...]
-   * ```
-   */
-  async putWithCID(
-    path: string,
-    data: any,
-    options?: PutOptions
-  ): Promise<PutWithCIDResult> {
-    // Store using path-based API
-    await this.fs5.put(path, data, options);
-
-    // Extract CID
-    const cid = await this.pathToCID(path);
-
-    return {
-      path,
-      cid,
-    };
-  }
-
-  /**
-   * Get metadata with CID for a file or directory
-   *
-   * @param path - The file or directory path
-   * @returns Object containing metadata and CID
-   * @throws Error if path does not exist
-   *
-   * @example
-   * ```typescript
-   * const result = await advanced.getMetadataWithCID('home/file.txt');
-   * console.log(result.metadata); // { type: 'file', size: 123, ... }
-   * console.log(result.cid);      // Uint8Array(32) [...]
-   * ```
-   */
-  async getMetadataWithCID(path: string): Promise<MetadataWithCIDResult> {
-    // Get metadata using path-based API
-    const metadata = await this.fs5.getMetadata(path);
-
-    if (!metadata) {
-      throw new Error(`Path not found: ${path}`);
-    }
-
-    // Extract CID
-    const cid = await this.pathToCID(path);
-
-    return {
-      metadata,
-      cid,
-    };
   }
 
   // Private helper methods

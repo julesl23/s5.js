@@ -304,13 +304,13 @@ const s5 = await S5.create();
 await s5.recoverIdentityFromSeedPhrase(seedPhrase);
 const advanced = new FS5Advanced(s5.fs);
 
-// Store data and get both path and CID
-const result = await advanced.putWithCID('home/document.txt', 'Important data');
-console.log(`Path: ${result.path}`);
-console.log(`CID: ${formatCID(result.cid, 'base32')}`);
+// Store data and get CID
+await s5.fs.put('home/document.txt', 'Important data');
+const cid = await advanced.pathToCID('home/document.txt');
+console.log(`CID: ${formatCID(cid, 'base32')}`);
 
 // Share the CID string
-const cidString = formatCID(result.cid, 'base58btc');
+const cidString = formatCID(cid, 'base58btc');
 
 // Recipient: retrieve by CID alone
 const receivedCID = parseCID(cidString);
@@ -324,13 +324,15 @@ console.log(path); // "home/document.txt"
 
 ### Available Methods
 
-**FS5Advanced Class:**
+**FS5Advanced Class (4 essential methods):**
 - `pathToCID(path)` - Extract CID from file/directory path
 - `cidToPath(cid)` - Find path for a given CID
-- `getByCID(cid)` - Retrieve data by CID
-- `putByCID(data)` - Store data and return CID
-- `putWithCID(path, data)` - Store and get both path and CID
-- `getMetadataWithCID(path)` - Get metadata with CID
+- `getByCID(cid)` - Retrieve data by CID directly
+- `putByCID(data)` - Store content-only and return CID
+
+**Composition Pattern:**
+- For path + CID: Use `fs.put(path, data)` then `advanced.pathToCID(path)`
+- For metadata + CID: Use `fs.getMetadata(path)` then `advanced.pathToCID(path)`
 
 **CID Utilities:**
 - `formatCID(cid, encoding?)` - Format CID as multibase string
