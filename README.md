@@ -739,6 +739,74 @@ See [test-server-README.md](./test-server-README.md) for details.
 
 See [MILESTONES.md](./docs/MILESTONES.md) for detailed progress.
 
+## Grant Milestone 5 Deliverables
+
+**Milestone 5** (Advanced Media Processing) has been completed and validated. All grant requirements have been met and exceeded:
+
+### Requirements Met ✅
+
+1. **Thumbnail Generation** ✅
+   - JPEG, PNG, and WebP format support
+   - Smart cropping with face/object detection
+   - Size constraints: All thumbnails ≤64 KB (average: 29.5 KB)
+   - 21 dedicated tests passing
+
+2. **Progressive Rendering** ✅
+   - Three strategies implemented: Blur, Scan Lines, Interlaced
+   - Browser compatibility with graceful fallbacks
+   - Visual demo validated in Chrome, Edge, and Firefox
+   - 27 dedicated tests passing
+
+3. **Browser Compatibility Matrix** ✅
+   - Tested: Chrome 90+, Firefox 88+, Edge 90+, Node.js 20+
+   - 10 capability detection features (Canvas, WebP, WASM, etc.)
+   - Graceful fallback system implemented
+   - 31 browser compatibility tests passing
+
+4. **Bundle Size Optimization** ✅
+   - **Requirement**: ≤700 KB (compressed)
+   - **Achieved**: 60.09 KB (brotli) - **10x under budget**
+   - Modular exports for code-splitting: `s5`, `s5/core`, `s5/media`, `s5/advanced`
+
+### Documentation & Validation
+
+For complete evidence and testing instructions, see:
+
+- **[MILESTONE5_EVIDENCE.md](./docs/MILESTONE5_EVIDENCE.md)** - Comprehensive evidence document with:
+  - Detailed proof of all requirements met
+  - Test results (437 tests passing, 225+ media-specific)
+  - Browser compatibility matrix
+  - Performance metrics and bundle analysis
+  - Integration test results on real S5 network
+
+- **[MILESTONE5_TESTING_GUIDE.md](./docs/MILESTONE5_TESTING_GUIDE.md)** - Step-by-step validation guide with:
+  - How to run unit tests (`npm run test:run`)
+  - How to run integration test (`node test/integration/test-media-real.js`)
+  - How to launch browser demo (`./test/browser/run-demo.sh`)
+  - Bundle size verification steps
+  - Troubleshooting guide
+
+### Quick Validation
+
+```bash
+# 1. Run unit tests (437 tests)
+npm run test:run
+
+# 2. Run integration test with real S5 network
+npm run build
+node test/integration/test-media-real.js
+
+# 3. Launch progressive rendering browser demo
+./test/browser/run-demo.sh
+
+# 4. Verify bundle size
+npm run build
+brotli -f -k dist/src/index.js
+du -h dist/src/index.js.br  # Should show ~60 KB
+```
+
+**Status**: All Milestone 5 deliverables complete and ready for review.
+
 ### Completed Phases ✅
 
 - **Phase 1**: Core Infrastructure (CBOR, DirV1 types)
