@@ -32,11 +32,19 @@ npm run test:run
 ✓ test/media/browser-compat.test.ts (31 tests) 7ms
 ✓ test/media/canvas-enhanced.test.ts (19 tests) 5188ms
 ... (30 test files)
+↓ test/fs/fs5-advanced.integration.test.ts (13 tests | 13 skipped)
+↓ test/fs/media-extensions.integration.test.ts (14 tests | 14 skipped)
 
 Test Files  30 passed | 2 skipped (32)
 Tests  437 passed | 27 skipped (464)
 Duration  5.61s
 ```
+
+**Note on Skipped Tests:**
+- 27 integration tests are intentionally skipped (2 test files)
+- These require real S5 portal with registry propagation delays (5+ seconds)
+- Not suitable for automated test suites - designed for standalone scripts
+- Full integration testing: `node test/integration/test-media-real.js` and `node test/integration/test-advanced-cid-real.js`
 
 ### Run Media-Specific Tests Only
 
@@ -58,10 +66,18 @@ npm run test:run -- media
 ✓ test/media/wasm-progress.test.ts (2 tests)
 ✓ test/media/real-images.test.ts (25 tests)
 ✓ test/media/types.test.ts (8 tests)
+✓ test/fs/media-extensions.test.ts (29 tests)
+↓ test/fs/media-extensions.integration.test.ts (14 tests | 14 skipped)
 
-Test Files  12 passed
-Tests  196 passed
+Test Files  13 passed | 1 skipped (14)
+Tests  233 passed | 14 skipped (247)
 ```
+
+**Note on Skipped Tests:**
+- 14 integration tests are intentionally skipped (`describe.skip()`)
+- These tests require real S5 portal with network delays and sequential execution
+- Not suitable for automated CI/CD pipelines
+- Full integration validation uses: `node test/integration/test-media-real.js`
 
 **Validates:**
 - ✅ Thumbnail generation (JPEG/PNG/WebP)
