@@ -32,7 +32,6 @@
 
 // Core advanced API class
 export { FS5Advanced } from '../fs/fs5-advanced.js';
-export type { PutWithCIDResult, MetadataWithCIDResult } from '../fs/fs5-advanced.js';
 
 // CID utility functions
 export {
