@@ -60,6 +60,7 @@ logs
 # Miscellaneous
 docs/design/
 docs/grant/
+screenshots/
 
 # Docker
 .dockerignore
