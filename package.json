@@ -10,7 +10,8 @@
   "files": [
     "dist/",
     "README.md",
-    "LICENSE",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
     "package.json"
   ],
   "exports": {
@@ -63,7 +64,7 @@
     "redsolver",
     "Lume Web"
   ],
-  "license": "MIT",
+  "license": "(MIT OR Apache-2.0)",
   "bugs": {
     "url": "https://github.com/s5-dev/s5.js/issues"
   },
