@@ -1,14 +1,14 @@
 {
-  "timestamp": "2025-10-17T22:26:16.144Z",
+  "timestamp": "2025-10-27T14:13:58.865Z",
   "bundles": [
     {
       "name": "Core",
       "description": "File system operations without media processing",
       "entryPoint": "dist/src/exports/core.js",
       "sizes": {
-        "raw": 219872,
-        "gzipped": 73475,
-        "brotli": 61044
+        "raw": 219933,
+        "gzipped": 73494,
+        "brotli": 61008
       },
       "metadata": {
         "inputs": 295,
@@ -34,12 +34,12 @@
       "description": "Advanced CID-aware API with core functionality",
       "entryPoint": "dist/src/exports/advanced.js",
       "sizes": {
-        "raw": 220078,
-        "gzipped": 73067,
-        "brotli": 60954
+        "raw": 223937,
+        "gzipped": 74646,
+        "brotli": 62056
       },
       "metadata": {
-        "inputs": 295,
+        "inputs": 298,
         "modules": 1
       }
     },
@@ -48,9 +48,9 @@
       "description": "Complete SDK with all features",
       "entryPoint": "dist/src/index.js",
       "sizes": {
-        "raw": 222363,
-        "gzipped": 74107,
-        "brotli": 61537
+        "raw": 222424,
+        "gzipped": 74124,
+        "brotli": 61567
       },
       "metadata": {
         "inputs": 295,
@@ -59,16 +59,16 @@
     }
   ],
   "treeShaking": {
-    "coreSize": 61044,
+    "coreSize": 61008,
     "mediaSize": 10028,
-    "fullSize": 61537,
-    "combined": 71072,
-    "savings": 9535,
-    "efficiency": 13.415972534894191
+    "fullSize": 61567,
+    "combined": 71036,
+    "savings": 9469,
+    "efficiency": 13.329860915592096
   },
   "compliance": {
     "target": 716800,
-    "actual": 61537,
+    "actual": 61567,
     "status": true
   }
 }

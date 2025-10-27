@@ -1,13 +1,12 @@
 /**
  * Advanced S5.js API - CID-aware operations for power users
  *
- * This module provides low-level CID (Content Identifier) operations for advanced
- * developers who need content-addressed storage capabilities.
+ * This module includes all core functionality plus CID (Content Identifier)
+ * operations for advanced developers who need content-addressed storage capabilities.
  *
  * @example
  * ```typescript
- * import { S5 } from 's5';
- * import { FS5Advanced, formatCID, parseCID } from 's5/advanced';
+ * import { S5, FS5Advanced, formatCID, parseCID, DirectoryWalker } from 's5/advanced';
  *
  * const s5 = await S5.create();
  * await s5.recoverIdentityFromSeedPhrase(seedPhrase);
@@ -30,7 +29,10 @@
  * ```
  */
 
-// Core advanced API class
+// Re-export all core functionality (S5, FS5, DirectoryWalker, BatchOperations, etc.)
+export * from './core.js';
+
+// Advanced API class for CID-aware operations
 export { FS5Advanced } from '../fs/fs5-advanced.js';
 
 // CID utility functions
@@ -41,20 +43,8 @@ export {
   cidToString,
 } from '../fs/cid-utils.js';
 
-// DirV1 types for advanced users
+// Additional types for advanced users (not in core)
 export type {
-  DirV1,
-  FileRef,
-  DirRef,
-  DirLink,
   BlobLocation,
   HAMTShardingConfig,
-  PutOptions,
-  ListOptions,
-  GetOptions,
-  ListResult,
 } from '../fs/dirv1/types.js';
-
-// Re-export core S5 for convenience
-export { S5 } from '../s5.js';
-export { FS5 } from '../fs/fs5.js';
