@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-10-27T14:13:58.865Z",
+  "timestamp": "2025-10-27T15:42:51.851Z",
   "bundles": [
     {
       "name": "Core",
@@ -48,12 +48,12 @@
       "description": "Complete SDK with all features",
       "entryPoint": "dist/src/index.js",
       "sizes": {
-        "raw": 222424,
-        "gzipped": 74124,
-        "brotli": 61567
+        "raw": 226428,
+        "gzipped": 75247,
+        "brotli": 62607
       },
       "metadata": {
-        "inputs": 295,
+        "inputs": 297,
         "modules": 1
       }
     }
@@ -61,14 +61,14 @@
   "treeShaking": {
     "coreSize": 61008,
     "mediaSize": 10028,
-    "fullSize": 61567,
+    "fullSize": 62607,
     "combined": 71036,
-    "savings": 9469,
-    "efficiency": 13.329860915592096
+    "savings": 8429,
+    "efficiency": 11.865814516583141
   },
   "compliance": {
     "target": 716800,
-    "actual": 61567,
+    "actual": 62607,
     "status": true
   }
 }

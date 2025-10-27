@@ -11,6 +11,10 @@ export { JSCryptoImplementation } from './api/crypto/js.js';
 export { DirectoryWalker } from './fs/utils/walker.js';
 export { BatchOperations } from './fs/utils/batch.js';
 
+// Export advanced CID-aware API
+export { FS5Advanced } from './fs/fs5-advanced.js';
+export { formatCID, parseCID, verifyCID, cidToString } from './fs/cid-utils.js';
+
 // Export media processing classes
 export { MediaProcessor } from './media/index.js';
 export { CanvasMetadataExtractor } from './media/fallback/canvas.js';
@@ -24,6 +28,8 @@ export type {
   FileRef,
   DirRef,
   DirLink,
+  BlobLocation,
+  HAMTShardingConfig,
   PutOptions,
   GetOptions,
   ListOptions,
