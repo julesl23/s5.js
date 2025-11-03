@@ -39,26 +39,18 @@ export class S5APIWithIdentity implements S5APIInterface {
     }
 
     /**
-     * Get HTTP client with environment-specific fetch and FormData.
-     * Uses undici in Node.js (proven to work) and native APIs in browser.
+     * Get HTTP client with native fetch and FormData.
+     * Uses globalThis APIs available in both Node.js 18+ and browsers.
      */
     private async getHttpClient() {
         if (this.httpClientCache) return this.httpClientCache;
-        
-        if (typeof window === 'undefined') {
-            // Node.js environment - use undici for compatibility with S5 portals
-            const undici = await import('undici');
-            this.httpClientCache = { 
-                fetch: undici.fetch, 
-                FormData: undici.FormData 
-            };
-        } else {
-            // Browser environment - use native web APIs
-            this.httpClientCache = { 
-                fetch: globalThis.fetch, 
-                FormData: globalThis.FormData 
-            };
-        }
+
+        // Use native fetch API (available in Node.js 18+ and all modern browsers)
+        this.httpClientCache = {
+            fetch: globalThis.fetch,
+            FormData: globalThis.FormData
+        };
+
         return this.httpClientCache;
     }
 
