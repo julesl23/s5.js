@@ -1,21 +1,34 @@
-# WASM Foundation & Media Processing Demos
+# Enhanced s5.js - Media Processing Demos
 
-This directory contains comprehensive demonstrations of the S5.js Media Processing capabilities, showcasing the WASM foundation, code-splitting, image metadata extraction, and performance benchmarking.
+This directory contains comprehensive demonstrations of Enhanced s5.js Media Processing capabilities, showcasing the WASM foundation, code-splitting, image metadata extraction, and performance benchmarking.
+
+## Installation
+
+Install the Enhanced s5.js package:
+
+```bash
+npm install @julesl23/s5js@beta
+```
 
 ## Prerequisites
 
-Before running the demos, ensure you have:
+- Node.js 20 or higher
+- Test image fixtures (optional, for metadata extraction demo)
 
-1. Built the project:
+To generate test fixtures (if not already present):
 ```bash
 cd ../..  # Go to project root
-npm run build
-```
-
-2. Generated test fixtures (if not already present):
-```bash
 node test/fixtures/generate-test-images.mjs
 ```
+
+## What These Demos Show
+
+These demos prove that Enhanced s5.js delivers production-ready media processing:
+- Client-side thumbnail generation
+- Metadata extraction from multiple image formats
+- WASM-powered image processing with Canvas fallback
+- Bundle size optimization through code-splitting
+- Performance benchmarking and optimization
 
 ## Available Demos
 
@@ -138,17 +151,19 @@ To run all demos in sequence:
 
 ```bash
 # From demos/media directory
-npm run build  # Ensure latest build
 
 # Run each demo
-node benchmark-media.js
-node demo-pipeline.js
 node demo-metadata.js
+node demo-pipeline.js
+node benchmark-media.js
 node test-media-integration.js
 
 # Open HTML demo in browser
-open demo-splitting.html
+open demo-splitting.html  # macOS
+xdg-open demo-splitting.html  # Linux
 ```
+
+**Note:** These demos use the published npm package `@julesl23/s5js@beta`. Make sure you've installed it first with `npm install @julesl23/s5js@beta`.
 
 ## Understanding the Results
 
@@ -183,26 +198,32 @@ The demos detect and utilize:
 
 ## Troubleshooting
 
+### Module Not Found
+
+If you get "Cannot find module '@julesl23/s5js'":
+1. Install the package: `npm install @julesl23/s5js@beta`
+2. Ensure you're using Node.js 20 or higher: `node --version`
+
 ### WASM Module Not Loading
 
 If WASM fails to load:
-1. Check that WASM files exist in `src/media/wasm/`
-2. Ensure the project is built (`npm run build`)
-3. Check browser console for CORS issues if running HTML demo
+1. Ensure the package is installed correctly
+2. Check browser console for CORS issues if running HTML demo
+3. Verify WebAssembly is supported in your environment
 
 ### Image Processing Fails
 
 If images fail to process:
-1. Verify test fixtures exist in `test/fixtures/images/`
-2. Run `node test/fixtures/generate-test-images.mjs` to regenerate
-3. Check that MediaProcessor is initialized
+1. Verify test fixtures exist in `../../test/fixtures/images/`
+2. Run `node ../../test/fixtures/generate-test-images.mjs` to regenerate
+3. Check that MediaProcessor is initialized properly
 
 ### HTML Demo Not Working
 
 For the HTML demo:
-1. Serve from a local server to avoid CORS issues
-2. Ensure built files exist in `dist/` directory
-3. Check browser console for module loading errors
+1. Serve from a local server to avoid CORS issues: `npx http-server . -p 8080`
+2. Check browser console for module loading errors
+3. Ensure your browser supports ES modules and WebAssembly
 
 ## What These Demos Prove
 

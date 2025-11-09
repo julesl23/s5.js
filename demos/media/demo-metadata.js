@@ -17,8 +17,8 @@ import './node-polyfills.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { MediaProcessor } from '../../dist/src/media/index.js';
-import { BrowserCompat } from '../../dist/src/media/compat/browser.js';
+import { MediaProcessor } from '@julesl23/s5js/media';
+import { BrowserCompat } from '@julesl23/s5js/media';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
