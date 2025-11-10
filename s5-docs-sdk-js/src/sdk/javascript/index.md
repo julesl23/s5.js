@@ -15,7 +15,7 @@ Enhanced s5.js is a comprehensive TypeScript SDK for building S5 applications in
 ## Package Information
 
 - **npm**: [@s5-dev/s5js](https://www.npmjs.com/package/@s5-dev/s5js)
-- **GitHub**: [julesl23/s5.js](https://github.com/s5-dev/s5.js)
+- **GitHub**: [s5-dev/s5.js](https://github.com/s5-dev/s5.js)
 - **License**: MIT OR Apache-2.0
 - **Version**: 0.9.0-beta.1
 
