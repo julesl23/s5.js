@@ -111,8 +111,7 @@ Documentation is derived from:
 
 For questions about the SDK or documentation:
 - GitHub Issues: https://github.com/s5-dev/s5.js/issues
-- S5 Protocol Discord: https://discord.gg/s5protocol
-- Email: [contact info]
+- S5 Community Discord: https://discord.gg/Pdutsp5jqR
 
 ## Maintenance
 

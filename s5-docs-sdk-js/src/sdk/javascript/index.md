@@ -94,7 +94,7 @@ Enhanced s5.js uses modular exports for optimal bundle sizes:
 1. **[Install the package](./installation.md)** - npm installation and setup
 2. **[Follow the Quick Start](./quick-start.md)** - Build your first S5 app
 3. **[Explore the API](./path-api.md)** - Learn the core operations
-4. **[Join the Community](https://discord.gg/s5protocol)** - Get help and share feedback
+4. **[Join the Community](https://discord.gg/Pdutsp5jqR)** - Get help and share feedback
 
 ## Implementation Status
 
