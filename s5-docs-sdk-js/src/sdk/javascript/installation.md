@@ -309,4 +309,4 @@ Creating S5 instance...
 
 - **[Quick Start Tutorial](./quick-start.md)** - Build your first S5 app in 5 minutes
 - **[Path-based API](./path-api.md)** - Learn core file operations
-- **[Examples on GitHub](https://github.com/julesl23/s5.js/tree/main/demos)** - Working code examples
+- **[Examples on GitHub](https://github.com/s5-dev/s5.js/tree/main/demos)** - Working code examples

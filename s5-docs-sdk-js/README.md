@@ -103,14 +103,14 @@ Documentation is derived from:
 ## Package Information
 
 - **npm**: [@s5-dev/s5js](https://www.npmjs.com/package/@s5-dev/s5js)
-- **GitHub**: [julesl23/s5.js](https://github.com/julesl23/s5.js)
+- **GitHub**: [julesl23/s5.js](https://github.com/s5-dev/s5.js)
 - **Version**: 0.9.0-beta.1
 - **License**: MIT OR Apache-2.0
 
 ## Questions?
 
 For questions about the SDK or documentation:
-- GitHub Issues: https://github.com/julesl23/s5.js/issues
+- GitHub Issues: https://github.com/s5-dev/s5.js/issues
 - S5 Protocol Discord: https://discord.gg/s5protocol
 - Email: [contact info]
 

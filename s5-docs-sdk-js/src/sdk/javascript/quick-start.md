@@ -277,7 +277,7 @@ do {
 
 ## Example Projects
 
-Check out the [demos folder](https://github.com/julesl23/s5.js/tree/main/demos) for more examples:
+Check out the [demos folder](https://github.com/s5-dev/s5.js/tree/main/demos) for more examples:
 - Complete tutorial with all features
 - Media processing demos
 - Performance benchmarks

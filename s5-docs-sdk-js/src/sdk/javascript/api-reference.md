@@ -339,4 +339,4 @@ import { FS5Advanced, formatCID } from '@s5-dev/s5js/advanced';
 - **[Path-based API](./path-api.md)** - Core file operations
 - **[Media Processing](./media.md)** - Image processing
 - **[Advanced CID API](./advanced-cid.md)** - Content-addressed storage
-- **[GitHub Repository](https://github.com/julesl23/s5.js)** - Source code and examples
+- **[GitHub Repository](https://github.com/s5-dev/s5.js)** - Source code and examples

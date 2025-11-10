@@ -25,7 +25,7 @@ Enhanced s5.js implements HAMT (Hash Array Mapped Trie) sharding for efficient h
 | 100,000 entries | ~10,000ms | ~35ms |
 | 1,000,000 entries | ❌ Impractical | ~50ms ✅ |
 
-> Benchmark performed with real S5 portal. See [BENCHMARKS.md](https://github.com/julesl23/s5.js/blob/main/docs/BENCHMARKS.md) for details.
+> Benchmark performed with real S5 portal. See [BENCHMARKS.md](https://github.com/s5-dev/s5.js/blob/main/docs/BENCHMARKS.md) for details.
 
 ## Cursor Pagination
 
@@ -219,7 +219,7 @@ From real S5 portal testing (Month 7):
 - Deterministic: same cursor = same results
 - Efficient: O(1) memory regardless of directory size
 
-See [docs/BENCHMARKS.md](https://github.com/julesl23/s5.js/blob/main/docs/BENCHMARKS.md) for complete results.
+See [docs/BENCHMARKS.md](https://github.com/s5-dev/s5.js/blob/main/docs/BENCHMARKS.md) for complete results.
 
 ## Performance Testing
 
@@ -241,4 +241,4 @@ node test/integration/test-pagination-real.js
 - **[Directory Utilities](./utilities.md)** - Batch operations and recursive traversal
 - **[Path-based API](./path-api.md)** - Core file operations
 - **[Media Processing](./media.md)** - Optimize image galleries
-- **[Benchmarks](https://github.com/julesl23/s5.js/blob/main/docs/BENCHMARKS.md)** - Complete performance data
+- **[Benchmarks](https://github.com/s5-dev/s5.js/blob/main/docs/BENCHMARKS.md)** - Complete performance data

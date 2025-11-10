@@ -405,4 +405,4 @@ interface ImageUploadOptions {
 - **[Advanced CID API](./advanced-cid.md)** - Content-addressed storage for media
 - **[Performance & Scaling](./performance.md)** - Optimize large image galleries
 - **[Directory Utilities](./utilities.md)** - Batch process image directories
-- **[GitHub Demos](https://github.com/julesl23/s5.js/tree/main/demos/media)** - Working examples
+- **[GitHub Demos](https://github.com/s5-dev/s5.js/tree/main/demos/media)** - Working examples

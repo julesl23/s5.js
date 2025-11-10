@@ -375,4 +375,4 @@ interface BatchOptions {
 
 - **[Path-based API](./path-api.md)** - Core file operations
 - **[Performance](./performance.md)** - Optimize for large directories
-- **[GitHub Examples](https://github.com/julesl23/s5.js/tree/main/test/integration)** - More examples
+- **[GitHub Examples](https://github.com/s5-dev/s5.js/tree/main/test/integration)** - More examples
