@@ -81,7 +81,7 @@ async function runIntegrationTests() {
 
   // Test 1: Browser Compatibility Detection
   await runTest('Browser Compatibility Detection', async () => {
-    const { BrowserCompat } = await import('../../dist/src/media/compat/browser.js');
+    const { BrowserCompat } = await import('@julesl23/s5js/media');
     const capabilities = await BrowserCompat.checkCapabilities();
 
     assert(typeof capabilities === 'object', 'Capabilities should be an object');
@@ -97,7 +97,7 @@ async function runIntegrationTests() {
 
   // Test 2: MediaProcessor Initialization
   await runTest('MediaProcessor Initialization', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     let progressCalled = false;
     await MediaProcessor.initialize({
@@ -113,7 +113,7 @@ async function runIntegrationTests() {
 
   // Test 3: WASM Module Loading
   await runTest('WASM Module Loading', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     // Reset and reinitialize to test WASM loading
     MediaProcessor.reset();
@@ -128,7 +128,7 @@ async function runIntegrationTests() {
 
   // Test 4: Canvas Fallback
   await runTest('Canvas Fallback Functionality', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     // Force Canvas fallback
     const testBlob = new Blob(['test'], { type: 'image/jpeg' });
@@ -140,7 +140,7 @@ async function runIntegrationTests() {
 
   // Test 5: Real Image Processing - JPEG
   await runTest('Process Real JPEG Image', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const jpegPath = path.join(fixturesDir, '1x1-red.jpg');
     if (fs.existsSync(jpegPath)) {
@@ -157,7 +157,7 @@ async function runIntegrationTests() {
 
   // Test 6: Real Image Processing - PNG
   await runTest('Process Real PNG Image', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const pngPath = path.join(fixturesDir, '1x1-red.png');
     if (fs.existsSync(pngPath)) {
@@ -172,7 +172,7 @@ async function runIntegrationTests() {
 
   // Test 7: Real Image Processing - WebP
   await runTest('Process Real WebP Image', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const webpPath = path.join(fixturesDir, '1x1-red.webp');
     if (fs.existsSync(webpPath)) {
@@ -186,7 +186,7 @@ async function runIntegrationTests() {
 
   // Test 8: Performance Metrics Recording
   await runTest('Performance Metrics Recording', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const testBlob = new Blob(['test'], { type: 'image/jpeg' });
     const metadata = await MediaProcessor.extractMetadata(testBlob);
@@ -200,7 +200,7 @@ async function runIntegrationTests() {
 
   // Test 9: Dominant Color Extraction
   await runTest('Dominant Color Extraction', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const pngPath = path.join(fixturesDir, '100x100-gradient.png');
     if (fs.existsSync(pngPath)) {
@@ -244,7 +244,7 @@ async function runIntegrationTests() {
 
   // Test 12: Invalid Image Handling
   await runTest('Invalid Image Handling', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const invalidBlob = new Blob(['not an image'], { type: 'text/plain' });
     const metadata = await MediaProcessor.extractMetadata(invalidBlob);
@@ -255,7 +255,7 @@ async function runIntegrationTests() {
 
   // Test 13: Timeout Option
   await runTest('Timeout Option', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const testBlob = new Blob(['test'], { type: 'image/jpeg' });
 
@@ -266,7 +266,7 @@ async function runIntegrationTests() {
 
   // Test 14: Memory Management
   await runTest('Memory Management', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const initialMemory = process.memoryUsage().heapUsed;
 
@@ -286,7 +286,7 @@ async function runIntegrationTests() {
 
   // Test 15: All Image Formats
   await runTest('All Supported Image Formats', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const formats = ['jpg', 'png', 'webp', 'gif', 'bmp'];
     const results = {};
@@ -308,7 +308,7 @@ async function runIntegrationTests() {
 
   // Test 16: Aspect Ratio Detection
   await runTest('Aspect Ratio Detection', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const testBlob = new Blob(['test'], { type: 'image/jpeg' });
     const metadata = await MediaProcessor.extractMetadata(testBlob);
@@ -362,7 +362,7 @@ async function runIntegrationTests() {
 
   // Test 19: Error Recovery
   await runTest('Error Recovery', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     // Process invalid data
     const invalidBlob = new Blob([new Uint8Array([0, 1, 2, 3])], { type: 'image/jpeg' });
@@ -379,7 +379,7 @@ async function runIntegrationTests() {
 
   // Test 20: Concurrent Processing
   await runTest('Concurrent Image Processing', async () => {
-    const { MediaProcessor } = await import('../../dist/src/media/index.js');
+    const { MediaProcessor } = await import('@julesl23/s5js/media');
 
     const imageFiles = fs.readdirSync(fixturesDir)
       .filter(f => /\.(jpg|png|webp|gif|bmp)$/i.test(f))

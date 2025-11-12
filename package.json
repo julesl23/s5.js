@@ -1,5 +1,5 @@
 {
-  "name": "@julesl23/s5js",
+  "name": "@s5-dev/s5js",
   "version": "0.9.0-beta.1",
   "type": "module",
   "description": "Enhanced TypeScript SDK for S5 decentralized storage with path-based API, media processing, and directory utilities",
@@ -54,7 +54,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/julesl23/s5.js.git"
+    "url": "git+https://github.com/s5-dev/s5.js.git"
   },
   "keywords": [
     "s5",
@@ -71,9 +71,9 @@
   ],
   "license": "(MIT OR Apache-2.0)",
   "bugs": {
-    "url": "https://github.com/julesl23/s5.js/issues"
+    "url": "https://github.com/s5-dev/s5.js/issues"
   },
-  "homepage": "https://github.com/julesl23/s5.js#readme",
+  "homepage": "https://github.com/s5-dev/s5.js#readme",
   "dependencies": {
     "@noble/ciphers": "^1.0.0",
     "@noble/ed25519": "^2.1.0",

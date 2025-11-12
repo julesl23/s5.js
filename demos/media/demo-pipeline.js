@@ -14,10 +14,7 @@
 // Load Node.js browser API polyfills first
 import './node-polyfills.js';
 
-import { MediaProcessor } from '../../dist/src/media/index.js';
-import { BrowserCompat } from '../../dist/src/media/compat/browser.js';
-import { WASMLoader } from '../../dist/src/media/wasm/loader.js';
-import { CanvasMetadataExtractor } from '../../dist/src/media/fallback/canvas.js';
+import { MediaProcessor, BrowserCompat, WASMLoader, CanvasMetadataExtractor } from '@julesl23/s5js/media';
 
 console.log('🚀 Media Processing Pipeline Setup Demo\n');
 console.log('=========================================\n');

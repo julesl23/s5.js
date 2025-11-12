@@ -26,6 +26,7 @@ npm run test:run
 ```
 
 **Expected Output:**
+
 ```
 ✓ test/media/thumbnail-generator.test.ts (21 tests) 30ms
 ✓ test/media/progressive-loader.test.ts (27 tests) 2012ms
@@ -41,6 +42,7 @@ Duration  5.61s
 ```
 
 **Note on Skipped Tests:**
+
 - 27 integration tests are intentionally skipped (2 test files)
 - These require real S5 portal with registry propagation delays (5+ seconds)
 - Not suitable for automated test suites - designed for standalone scripts
@@ -53,6 +55,7 @@ npm run test:run -- media
 ```
 
 **Expected Output:**
+
 ```
 ✓ test/media/thumbnail-generator.test.ts (21 tests)
 ✓ test/media/progressive-loader.test.ts (27 tests)
@@ -74,12 +77,14 @@ Tests  233 passed | 14 skipped (247)
 ```
 
 **Note on Skipped Tests:**
+
 - 14 integration tests are intentionally skipped (`describe.skip()`)
 - These tests require real S5 portal with network delays and sequential execution
 - Not suitable for automated CI/CD pipelines
 - Full integration validation uses: `node test/integration/test-media-real.js`
 
 **Validates:**
+
 - ✅ Thumbnail generation (JPEG/PNG/WebP)
 - ✅ Progressive rendering (3 strategies)
 - ✅ Browser compatibility detection
@@ -153,6 +158,7 @@ Duration: 142.8s
 ```
 
 **Validates:**
+
 - ✅ Real S5 network connectivity
 - ✅ Thumbnail generation on real portal
 - ✅ Size constraints in production environment
@@ -162,14 +168,17 @@ Duration: 142.8s
 ### Troubleshooting
 
 **If portal is unreachable:**
+
 ```
 ❌ Error: Cannot connect to s5.vup.cx
 ```
+
 - Check network connection
 - Verify portal is online
 - Try alternative portal if needed
 
 **If build fails:**
+
 ```bash
 npm run build
 # Verify dist/ directory contains compiled files
@@ -190,6 +199,7 @@ cd /home/developer/s5.js
 ```
 
 The script will:
+
 - ✅ Start HTTP server automatically (port 8080 or 8081)
 - ✅ Open the demo in your default browser
 - ✅ Display helpful instructions
@@ -213,6 +223,7 @@ npx http-server test/browser -p 8080
 3. **Click "Load Image with Progressive Rendering"**
 
 4. **Observe three rendering strategies:**
+
    - **Blur Strategy**: Image appears blurred, gradually sharpens
    - **Scan Lines**: Image reveals from top to bottom
    - **Interlaced**: Image appears with alternating lines
@@ -225,30 +236,35 @@ npx http-server test/browser -p 8080
 ### What to Verify
 
 ✅ **Blur Strategy**
-   - Starts with strong blur effect
-   - Gradually becomes sharp over multiple scans
-   - Final image is crystal clear
+
+- Starts with strong blur effect
+- Gradually becomes sharp over multiple scans
+- Final image is crystal clear
 
 ✅ **Scan Lines Strategy**
-   - Image reveals vertically (top-to-bottom)
-   - Each scan reveals more of the image
-   - Final image is complete
+
+- Image reveals vertically (top-to-bottom)
+- Each scan reveals more of the image
+- Final image is complete
 
 ✅ **Interlaced Strategy**
-   - Image appears with varying opacity
-   - Each scan increases clarity
-   - Simulates classic interlaced rendering
+
+- Image appears with varying opacity
+- Each scan increases clarity
+- Simulates classic interlaced rendering
 
 ✅ **Browser Compatibility**
-   - Test in multiple browsers:
-     - Chrome/Chromium
-     - Firefox
-     - Safari (if on macOS)
-     - Edge
+
+- Test in multiple browsers:
+  - Chrome/Chromium
+  - Firefox
+  - Safari (if on macOS)
+  - Edge
 
 ### Screenshot Locations (for grant submission)
 
 Save screenshots showing:
+
 1. Demo page loaded (before image)
 2. All three strategies mid-rendering (scan 2/5)
 3. All three strategies completed (scan 5/5)
@@ -273,6 +289,7 @@ du -h dist/src/index.js.br
 ```
 
 **Expected Output:**
+
 ```
 60.09 KB    dist/src/index.js.br
 ```
@@ -291,8 +308,6 @@ ls -lh dist/src/exports/
 
 ### Bundle Analysis Report
 
-See `CLAUDE.md` lines 185-191 for detailed breakdown:
-
 ```
 Full bundle:  60.09 KB (brotli)  ✅ 639.91 KB under 700 KB budget
 Core only:    59.61 KB
@@ -301,6 +316,7 @@ Advanced:     59.53 KB
 ```
 
 **Validates:**
+
 - ✅ Bundle ≤700 KB requirement
 - ✅ 10x under budget (60.09 KB vs 700 KB)
 - ✅ Modular architecture with tree-shaking
@@ -324,36 +340,43 @@ code docs/MILESTONE5_EVIDENCE.md
 The comprehensive evidence document includes:
 
 1. **Executive Summary**
+
    - All 4 grant requirements met
    - Achievement highlights
 
 2. **Thumbnail Generation Evidence**
+
    - Implementation details
    - Format support (JPEG/PNG/WebP)
    - Size optimization features
    - Test evidence
 
 3. **Progressive Rendering Evidence**
+
    - Three strategies implemented
    - Test coverage (27 tests)
    - Browser demo reference
 
 4. **Browser Compatibility Matrix**
+
    - 10 capabilities tested
    - 4 browsers/environments tested
    - Graceful fallback system
 
 5. **Bundle Size Analysis**
+
    - 60.09 KB vs 700 KB requirement
    - Modular architecture
    - 10x under budget
 
 6. **Test Suite Summary**
+
    - 437 tests passing
    - 225+ media-specific tests
    - Integration test details
 
 7. **Performance Metrics**
+
    - Thumbnail generation times
    - Average sizes (29.5 KB average)
    - Progressive loading performance
@@ -369,12 +392,12 @@ The comprehensive evidence document includes:
 
 Test in the following browsers to verify compatibility:
 
-| Browser          | Version | Priority | Test Focus                | Status |
-| ---------------- | ------- | -------- | ------------------------- | ------ |
-| Chrome/Chromium  | 90+     | High     | Full feature set          | ✅ Tested |
-| Firefox          | 88+     | High     | WASM + WebP               | ✅ Tested |
-| Edge             | 90+     | High     | Windows compatibility     | ✅ Tested |
-| Node.js          | 20+     | High     | Server-side rendering     | ✅ Tested |
+| Browser         | Version | Priority | Test Focus            | Status    |
+| --------------- | ------- | -------- | --------------------- | --------- |
+| Chrome/Chromium | 90+     | High     | Full feature set      | ✅ Tested |
+| Firefox         | 88+     | High     | WASM + WebP           | ✅ Tested |
+| Edge            | 90+     | High     | Windows compatibility | ✅ Tested |
+| Node.js         | 20+     | High     | Server-side rendering | ✅ Tested |
 
 ### Quick Browser Test
 
@@ -387,6 +410,7 @@ Test in the following browsers to verify compatibility:
 ### Expected Results
 
 All tested browsers should:
+
 - ✅ Load the demo page without errors
 - ✅ Accept image file uploads
 - ✅ Render all three progressive strategies
@@ -394,6 +418,7 @@ All tested browsers should:
 - ✅ Show final sharp images
 
 Some browsers may have minor differences in:
+
 - Blur rendering quality (WebGL vs. filter)
 - Progressive animation smoothness
 - Initial load times
@@ -405,17 +430,21 @@ Some browsers may have minor differences in:
 ### Files to Include in Grant Submission
 
 1. **Evidence Document**
+
    - `docs/MILESTONE5_EVIDENCE.md`
 
 2. **Test Results**
+
    - Terminal output from `npm run test:run`
    - Output from `node test/integration/test-media-real.js`
 
 3. **Browser Screenshots**
+
    - Progressive rendering demo in different browsers
    - Before/during/after progressive loading
 
 4. **Bundle Analysis**
+
    - Output from bundle size verification
    - Comparison to 700 KB requirement
 
@@ -489,6 +518,7 @@ du -h dist/src/index.js.br
 **Phase**: Advanced Media Processing
 
 **For issues:**
+
 1. Check test output for specific errors
 2. Review `docs/MILESTONE5_EVIDENCE.md` for context
 3. Verify all dependencies installed (`npm install`)
