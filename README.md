@@ -38,43 +38,38 @@ See the [API Documentation](./docs/API.md) for detailed usage examples.
 
 ## Installation
 
-The enhanced path-based API features are currently in development as part of a Sia Foundation grant project.
-
-**Prerequisites:**
-
-- **Node.js** v20+ (for development and testing)
-- **Python 3** (required for browser tests - used to run local HTTP server)
-- **npm** (comes with Node.js)
-
-**For production use:**
+Install the enhanced S5.js SDK with npm:
 
 ```bash
 npm install @s5-dev/s5js
 ```
 
-**To try the enhanced features:**
+**Prerequisites:**
+
+- **Node.js** v20+ (for Node.js environments)
+- Modern browser with ES2022 support (for browser environments)
+
+**For development:**
 
 ```bash
 # Clone the repository
-git clone https://github.com/julesl23/s5.js
+git clone https://github.com/s5-dev/s5.js
 cd s5.js
 
-# Install dependencies (includes TypeScript)
+# Install dependencies
 npm install
 
 # Build the project
 npm run build
 
-# Run tests with real S5 portal
+# Run tests
 npm test
 ```
-
-**Status**: These features are pending review and have not been merged into the main S5.js repository.
 
 ## Quick Start
 
 ```typescript
-import { S5 } from "./dist/src/index.js";
+import { S5 } from "@s5-dev/s5js";
 
 // Create S5 instance and connect to real S5 portal
 const s5 = await S5.create({
@@ -114,7 +109,7 @@ for await (const item of s5.fs.list("home/documents")) {
 ### Advanced Usage
 
 ```typescript
-import { DirectoryWalker, BatchOperations, MediaProcessor } from "./dist/src/index.js";
+import { DirectoryWalker, BatchOperations, MediaProcessor } from "@s5-dev/s5js";
 
 // Recursive directory traversal
 const walker = new DirectoryWalker(s5.fs, '/');
