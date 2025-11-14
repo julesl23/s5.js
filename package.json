@@ -89,6 +89,7 @@
     "multiformats": "^13.3.1",
     "node-fetch": "^3.3.2",
     "rxjs": "^7.8.1",
+    "undici": "^7.12.0",
     "ws": "^8.18.3",
     "xxhash-wasm": "^1.1.0"
   },
