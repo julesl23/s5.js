@@ -66,7 +66,7 @@ export class S5RegistryService {
             this.streams.get(key)!.next(entry);
         }
 
-        this.db.put(entry.pk, serializeRegistryEntry(entry));
+        await this.db.put(entry.pk, serializeRegistryEntry(entry));
         if (trusted) {
             this.broadcastEntry(entry);
         }
