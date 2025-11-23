@@ -116,7 +116,6 @@ export function validatePhrase(phrase: string, crypto: CryptoImplementation): [b
 
         i++;
     }
-    console.log(seedWords);
 
     // Validate checksum.
     const checksumWords = generateChecksumWordsFromSeedWords(seedWords, crypto);

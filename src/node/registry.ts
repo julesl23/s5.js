@@ -105,7 +105,6 @@ export class S5RegistryService {
         }
 
         if (this.subs.has(key)) {
-            console.debug(`[registry] get (subbed) ${key}`);
             const res = this.getFromDB(pk);
             if (res) {
                 return res;
@@ -122,13 +121,11 @@ export class S5RegistryService {
             }
 
             if ((await this.getFromDB(pk)) === undefined) {
-                console.debug(`[registry] get (clean) ${key}`);
                 for (let i = 0; i < 500; i++) {
                     await this.delay(5);
                     if (await this.getFromDB(pk)) break;
                 }
             } else {
-                console.debug(`[registry] get (cached) ${key}`);
                 await this.delay(250);
             }
 
