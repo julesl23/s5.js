@@ -130,6 +130,14 @@ export class DirectoryWalker {
           listOptions.cursor = state.dirCursor;
         }
 
+        console.log('[Enhanced S5.js] DirectoryWalker: Traversing', {
+          currentPath: state.path,
+          depth: state.depth,
+          pendingDirs: state.pendingStack.length,
+          recursive: recursive,
+          cursor: state.dirCursor ? 'resuming' : 'fresh'
+        });
+
         let hasMore = false;
         for await (const result of this.fs.list(state.path, listOptions)) {
           const { name, type, cursor: nextCursor } = result;

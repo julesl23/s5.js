@@ -41,6 +41,12 @@ export class S5Node implements S5APIInterface {
         this.p2p.sendHashRequest(hash, [3, 5]);
         const hashStr = base64UrlNoPaddingEncode(hash);
 
+        console.log('[Enhanced S5.js] Portal: Download requested', {
+            hash: hashStr.slice(0, 16) + '...',
+            network: 'P2P',
+            discovering: true
+        });
+
         let urlsAlreadyTried: Set<string> = new Set([]);
         while (true) {
             for (const location of this.p2p.blobLocations.get(hashStr) ?? []) {
@@ -53,6 +59,12 @@ export class S5Node implements S5APIInterface {
                             const bytes = new Uint8Array(await res.arrayBuffer())
                             const bytesHash = await this.crypto.hashBlake3(bytes);
                             if (areArraysEqual(bytesHash, hash.subarray(1))) {
+                                console.log('[Enhanced S5.js] Portal: Download complete', {
+                                    url: url,
+                                    size: bytes.length,
+                                    verified: true,
+                                    hashMatch: 'blake3'
+                                });
                                 return bytes;
                             }
                         }

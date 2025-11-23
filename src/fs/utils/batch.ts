@@ -113,6 +113,15 @@ export class BatchOperations {
         state.lastCursor = walkCursor;
 
         try {
+          console.log('[Enhanced S5.js] BatchOperations: Copy progress', {
+            operation: 'copy',
+            from: path,
+            to: targetPath,
+            type: type,
+            processed: state.success,
+            failed: state.failed
+          });
+
           if (type === 'directory') {
             // It's a directory - create it
             await this._ensureDirectory(targetPath);

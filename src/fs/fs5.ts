@@ -154,7 +154,12 @@ export class FS5 {
     path: string,
     options?: GetOptions
   ): Promise<any | undefined> {
+    const startTime = performance.now();
     path = normalizePath(path);
+    console.log('[Enhanced S5.js] Path API: GET', {
+      path: path,
+      operation: 'read'
+    });
     const segments = path.split("/").filter((s) => s);
 
     if (segments.length === 0) {
@@ -201,6 +206,13 @@ export class FS5 {
         new Uint8Array([MULTIHASH_BLAKE3, ...fileRef.hash])
       );
     }
+
+    console.log('[Enhanced S5.js] Download complete', {
+      path: path,
+      size: data.length,
+      mediaType: fileRef.media_type,
+      encrypted: !!(fileRef.extra?.has && fileRef.extra.has('encryption'))
+    });
 
     // Check if this is binary data based on media type
     const isBinaryType =
@@ -256,6 +268,14 @@ export class FS5 {
           return data;
         }
       }
+    } finally {
+      const duration = performance.now() - startTime;
+      console.log('[Enhanced S5.js] Performance: GET operation', {
+        path: path,
+        duration: duration.toFixed(2) + 'ms',
+        size: data?.length || 0,
+        throughput: data ? ((data.length / 1024) / (duration / 1000)).toFixed(2) + ' KB/s' : 'N/A'
+      });
     }
   }
 
@@ -270,6 +290,7 @@ export class FS5 {
     data: any,
     options?: PutOptions
   ): Promise<void> {
+    const startTime = performance.now();
     path = normalizePath(path);
     const segments = path.split("/").filter((s) => s);
 
@@ -295,16 +316,43 @@ export class FS5 {
         mediaType ||
         getMediaTypeFromExtension(fileName) ||
         "application/octet-stream";
+      console.log('[Enhanced S5.js] Binary data detected', {
+        path: path,
+        size: encodedData.length,
+        mediaType: mediaType,
+        encoding: 'raw binary'
+      });
     } else if (typeof data === "string") {
       encodedData = new TextEncoder().encode(data);
       mediaType =
         mediaType || getMediaTypeFromExtension(fileName) || "text/plain";
+      console.log('[Enhanced S5.js] Text data detected', {
+        path: path,
+        size: encodedData.length,
+        mediaType: mediaType,
+        encoding: 'UTF-8'
+      });
     } else {
       // Use CBOR for objects
       encodedData = encodeS5(data);
       mediaType =
         mediaType || getMediaTypeFromExtension(fileName) || "application/cbor";
+      console.log('[Enhanced S5.js] Object data detected', {
+        path: path,
+        size: encodedData.length,
+        mediaType: mediaType,
+        encoding: 'CBOR',
+        objectKeys: Object.keys(data || {}).length
+      });
     }
+
+    console.log('[Enhanced S5.js] Path API: PUT', {
+      path: path,
+      dataType: data instanceof Uint8Array ? 'binary' : typeof data,
+      size: encodedData.length,
+      mediaType: mediaType,
+      willEncrypt: !!options?.encryption
+    });
 
     // Upload the blob (with or without encryption)
     const blob = new Blob([encodedData as BlobPart]);
@@ -334,6 +382,14 @@ export class FS5 {
       hash = result.hash;
       size = result.size;
     }
+
+    console.log('[Enhanced S5.js] Upload complete', {
+      path: path,
+      hash: Array.from(hash.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(''),
+      size: size,
+      encrypted: !!options?.encryption,
+      portalUpload: true
+    });
 
     // Create FileRef with encryption metadata if applicable
     const fileRef: FileRef = {
@@ -388,6 +444,14 @@ export class FS5 {
 
       return dir;
     });
+
+    const duration = performance.now() - startTime;
+    console.log('[Enhanced S5.js] Performance: PUT operation', {
+      path: path,
+      duration: duration.toFixed(2) + 'ms',
+      size: size,
+      throughput: ((size / 1024) / (duration / 1000)).toFixed(2) + ' KB/s'
+    });
   }
 
   /**
@@ -408,6 +472,13 @@ export class FS5 {
 
       const oldestTimestamp = this._getOldestTimestamp(dir);
       const newestTimestamp = this._getNewestTimestamp(dir);
+
+      console.log('[Enhanced S5.js] Path API: METADATA', {
+        path: 'root',
+        type: 'directory',
+        sharded: !!dir.header.sharding,
+        entries: dir.header.sharding?.root?.totalEntries || (dir.files.size + dir.dirs.size)
+      });
 
       return {
         type: "directory",
@@ -487,6 +558,10 @@ export class FS5 {
    */
   public async delete(path: string): Promise<boolean> {
     path = normalizePath(path);
+    console.log('[Enhanced S5.js] Path API: DELETE', {
+      path: path,
+      operation: 'remove'
+    });
     const segments = path.split("/").filter((s) => s);
 
     if (segments.length === 0) {
@@ -556,6 +631,11 @@ export class FS5 {
         if (dir.files.has(itemName)) {
           dir.files.delete(itemName);
           deleted = true;
+          console.log('[Enhanced S5.js] Delete complete', {
+            path: path,
+            type: 'file',
+            deleted: true
+          });
           return dir;
         }
 
@@ -570,6 +650,11 @@ export class FS5 {
           ) {
             dir.dirs.delete(itemName);
             deleted = true;
+            console.log('[Enhanced S5.js] Delete complete', {
+              path: path,
+              type: 'directory',
+              deleted: true
+            });
             return dir;
           }
         }
@@ -596,6 +681,14 @@ export class FS5 {
     if (!dir) {
       return; // Directory doesn't exist - return empty iterator
     }
+
+    console.log('[Enhanced S5.js] Path API: LIST', {
+      path: path,
+      isSharded: !!(dir.header.sharding?.root?.cid),
+      withCursor: !!options?.cursor,
+      limit: options?.limit,
+      totalEntries: dir.header.sharding?.root?.totalEntries || (dir.files.size + dir.dirs.size)
+    });
 
     // Check if this is a sharded directory
     if (dir.header.sharding?.root?.cid) {
@@ -1424,10 +1517,20 @@ export class FS5 {
         const dir = await this._loadDirectory(currentPath);
         if (!dir) {
           // Create this directory
+          console.log('[Enhanced S5.js] Resilience: Auto-creating parent directory', {
+            path: currentPath,
+            reason: 'intermediate directory missing',
+            autoCreate: true
+          });
           await this.createDirectory(parentPath, dirName);
         }
       } catch (error) {
         // Directory doesn't exist, create it
+        console.log('[Enhanced S5.js] Resilience: Retrying directory creation', {
+          path: currentPath,
+          attempt: 'retry',
+          reason: 'concurrent creation possible'
+        });
         await this.createDirectory(parentPath, dirName);
       }
     }
@@ -1680,7 +1783,24 @@ export class FS5 {
   private async _checkAndConvertToSharded(dir: DirV1): Promise<DirV1> {
     const totalEntries = dir.files.size + dir.dirs.size;
 
+    // Log warning when approaching threshold
+    if (!dir.header.sharding && totalEntries >= 950) {
+      console.log('[Enhanced S5.js] HAMT: Approaching shard threshold', {
+        currentEntries: totalEntries,
+        threshold: 1000,
+        willShard: totalEntries >= 1000
+      });
+    }
+
     if (!dir.header.sharding && totalEntries >= 1000) {
+      console.log('[Enhanced S5.js] HAMT: Converting to sharded directory', {
+        totalEntries: totalEntries,
+        filesCount: dir.files.size,
+        dirsCount: dir.dirs.size,
+        bitsPerLevel: 5,
+        maxInlineEntries: 1000,
+        hashFunction: 'xxhash64'
+      });
       // Create new HAMT
       const hamt = new HAMT(this.api, {
         bitsPerLevel: 5,
@@ -1719,6 +1839,13 @@ export class FS5 {
       // Clear inline maps
       dir.files.clear();
       dir.dirs.clear();
+
+      console.log('[Enhanced S5.js] HAMT: Shard complete', {
+        cidHash: Array.from(hash.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(''),
+        totalEntries: totalEntries,
+        depth: await hamt.getDepth(),
+        structure: '32-way branching tree'
+      });
     }
 
     return dir;
