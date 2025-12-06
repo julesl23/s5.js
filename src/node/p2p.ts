@@ -34,7 +34,7 @@ export class P2P {
         if (this.peers.has(uri)) return;
         const ws = new WebSocket(uri);
         ws.binaryType = 'arraybuffer';
-        const peer = new WebSocketPeer(ws, this);
+        const peer = new WebSocketPeer(ws, this, uri);
         this.peers.set(uri, peer);
     }
 
@@ -61,6 +61,14 @@ export class P2P {
         array.push(location);
         this.blobLocations.set(base64UrlNoPaddingEncode(hash), array);
     }
+
+    /**
+     * Notifies all connection listeners of the current connection status.
+     * Stub implementation - will be fully implemented in Phase 3.
+     */
+    notifyConnectionChange(): void {
+        // TODO: Implement in Phase 3 (Sub-phase 3.3)
+    }
 }
 
 interface StorageLocation {
@@ -76,13 +84,15 @@ class WebSocketPeer {
     displayName: string;
     nodePubKey!: Uint8Array;
     isConnected: boolean = false;
+    private uri: string;
 
     p2p: P2P;
     challenge!: Uint8Array;
 
 
-    constructor(public socket: WebSocket, p2p: P2P) {
+    constructor(public socket: WebSocket, p2p: P2P, uri: string) {
         this.p2p = p2p;
+        this.uri = uri;
         this.displayName = socket.url;
         socket.onmessage = async (event) => {
             const buffer: ArrayBuffer = event.data;
@@ -98,6 +108,14 @@ class WebSocketPeer {
             ]).subarray(1);
             this.challenge = p2pChallenge;
             this.send(initialAuthPayload);
+        };
+        socket.onclose = () => {
+            this.isConnected = false;
+            this.p2p.notifyConnectionChange();
+        };
+        socket.onerror = () => {
+            this.isConnected = false;
+            this.p2p.notifyConnectionChange();
         };
     }
 
@@ -170,6 +188,7 @@ class WebSocketPeer {
                 }
                 this.nodePubKey = nodePublicKey;
                 this.isConnected = true;
+                this.p2p.notifyConnectionChange();
             }
 
         }

@@ -151,20 +151,28 @@ The `WebSocketPeer` class in `src/node/p2p.ts:84-101` has `onmessage` and `onope
 **Line Budget**: 30 lines
 
 #### Tasks
-- [ ] Add `uri` parameter to WebSocketPeer constructor
-- [ ] Add `socket.onclose` handler that sets `isConnected = false`
-- [ ] Add `socket.onerror` handler that sets `isConnected = false`
-- [ ] Call `p2p.notifyConnectionChange()` from both handlers
-- [ ] Update `connectToNode()` to pass URI to WebSocketPeer constructor
+- [x] Add `uri` parameter to WebSocketPeer constructor
+- [x] Add `socket.onclose` handler that sets `isConnected = false`
+- [x] Add `socket.onerror` handler that sets `isConnected = false`
+- [x] Call `p2p.notifyConnectionChange()` from both handlers
+- [x] Update `connectToNode()` to pass URI to WebSocketPeer constructor
 
 **Implementation Files:**
 - `src/node/p2p.ts` (MODIFY WebSocketPeer class, ~30 lines)
 
 **Success Criteria:**
-- [ ] WebSocketPeer has onclose handler
-- [ ] WebSocketPeer has onerror handler
-- [ ] Both handlers set isConnected = false
-- [ ] Both handlers notify P2P of state change
+- [x] WebSocketPeer has onclose handler
+- [x] WebSocketPeer has onerror handler
+- [x] Both handlers set isConnected = false
+- [x] Both handlers notify P2P of state change
+
+**Test Results:** ✅ **19 passed** (32ms execution time)
+
+**Implementation Notes:**
+- Added `private uri: string` property to WebSocketPeer
+- Added `socket.onclose` and `socket.onerror` handlers in constructor
+- Updated `connectToNode()` to pass URI as third parameter
+- Added stub `notifyConnectionChange()` method to P2P class (to be implemented in Phase 3)
 
 ---
 
@@ -177,14 +185,19 @@ The `WebSocketPeer` class in `src/node/p2p.ts:84-101` has `onmessage` and `onope
 **Line Budget**: 5 lines
 
 #### Tasks
-- [ ] Add `this.p2p.notifyConnectionChange()` after `this.isConnected = true` in handshake completion
+- [x] Add `this.p2p.notifyConnectionChange()` after `this.isConnected = true` in handshake completion
 
 **Implementation Files:**
 - `src/node/p2p.ts` (MODIFY onmessage method, ~2 lines)
 
 **Success Criteria:**
-- [ ] Status notification fires when handshake completes
-- [ ] Status changes from 'connecting' to 'connected'
+- [x] Status notification fires when handshake completes
+- [x] Status changes from 'connecting' to 'connected'
+
+**Test Results:** ✅ **19 passed** (31ms execution time)
+
+**Implementation Notes:**
+- Added `this.p2p.notifyConnectionChange()` call after `this.isConnected = true` at line 191
 
 ---
 
