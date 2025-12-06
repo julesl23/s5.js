@@ -8,6 +8,14 @@ import { mkeyEd25519, RECORD_TYPE_REGISTRY_ENTRY, RECORD_TYPE_STORAGE_LOCATION }
 import { S5RegistryService } from './registry.js';
 import * as msgpackr from 'msgpackr';
 
+/**
+ * Connection status for the S5 network.
+ * - 'connected': At least one peer has completed handshake
+ * - 'connecting': At least one peer socket is open but handshake not complete
+ * - 'disconnected': No peers or all sockets closed
+ */
+export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
+
 export class P2P {
     crypto!: CryptoImplementation;
     keyPair!: KeyPairEd25519;
@@ -15,12 +23,41 @@ export class P2P {
     peers: Map<string, WebSocketPeer> = new Map();
     registry!: S5RegistryService;
 
+    // Connection state management
+    private connectionListeners: Set<(status: ConnectionStatus) => void> = new Set();
+    private initialPeerUris: string[] = [];
+    private reconnectLock: boolean = false;
+
     public get isConnectedToNetwork(): boolean {
         for (const [_, peer] of this.peers) {
             if (peer.isConnected) return true;
         }
         return false;
     };
+
+    /**
+     * Get the current connection status to the S5 network.
+     * @returns 'connected' if at least one peer has completed handshake,
+     *          'connecting' if at least one peer socket is open but handshake not complete,
+     *          'disconnected' if no peers or all sockets closed
+     */
+    getConnectionStatus(): ConnectionStatus {
+        // Check if any peer is fully connected (handshake complete)
+        if (this.isConnectedToNetwork) {
+            return 'connected';
+        }
+
+        // Check if any peer is in the process of connecting
+        for (const peer of this.peers.values()) {
+            const state = peer.socket.readyState;
+            // WebSocket.CONNECTING = 0, WebSocket.OPEN = 1
+            if (state === 0 || state === 1) {
+                return 'connecting';
+            }
+        }
+
+        return 'disconnected';
+    }
 
     public static async create(crypto: CryptoImplementation) {
         const p2p = new P2P();
@@ -31,6 +68,10 @@ export class P2P {
     }
 
     connectToNode(uri: string) {
+        // Store URI for reconnection
+        if (!this.initialPeerUris.includes(uri)) {
+            this.initialPeerUris.push(uri);
+        }
         if (this.peers.has(uri)) return;
         const ws = new WebSocket(uri);
         ws.binaryType = 'arraybuffer';
@@ -63,11 +104,81 @@ export class P2P {
     }
 
     /**
+     * Subscribe to connection status changes.
+     * @param callback Called when connection status changes. Also called immediately with current status.
+     * @returns Unsubscribe function
+     */
+    onConnectionChange(callback: (status: ConnectionStatus) => void): () => void {
+        this.connectionListeners.add(callback);
+
+        // Call immediately with current status
+        try {
+            callback(this.getConnectionStatus());
+        } catch (error) {
+            // Ignore errors from listener during initial call
+        }
+
+        // Return unsubscribe function
+        return () => {
+            this.connectionListeners.delete(callback);
+        };
+    }
+
+    /**
      * Notifies all connection listeners of the current connection status.
-     * Stub implementation - will be fully implemented in Phase 3.
      */
     notifyConnectionChange(): void {
-        // TODO: Implement in Phase 3 (Sub-phase 3.3)
+        const status = this.getConnectionStatus();
+        for (const listener of this.connectionListeners) {
+            try {
+                listener(status);
+            } catch (error) {
+                // Isolate listener errors - don't break other listeners
+            }
+        }
+    }
+
+    /**
+     * Force reconnection to the S5 network.
+     * Closes all existing connections and re-establishes them.
+     * @throws Error if reconnection fails after 10 second timeout
+     */
+    async reconnect(): Promise<void> {
+        // Prevent concurrent reconnection attempts
+        if (this.reconnectLock) {
+            // Wait for existing reconnect to complete
+            while (this.reconnectLock) {
+                await new Promise(r => setTimeout(r, 50));
+            }
+            return;
+        }
+
+        this.reconnectLock = true;
+        try {
+            // Close all existing sockets
+            for (const peer of this.peers.values()) {
+                peer.socket.close();
+            }
+            this.peers.clear();
+
+            // Reconnect to all initial peers
+            for (const uri of this.initialPeerUris) {
+                this.connectToNode(uri);
+            }
+            this.notifyConnectionChange(); // Now 'connecting'
+
+            // Wait for connection with 10s timeout
+            const timeout = 10000;
+            const start = Date.now();
+            while (!this.isConnectedToNetwork) {
+                if (Date.now() - start > timeout) {
+                    throw new Error('Reconnection timeout: failed to connect within 10 seconds');
+                }
+                await new Promise(r => setTimeout(r, 100));
+            }
+        } finally {
+            this.reconnectLock = false;
+        }
     }
 }
 

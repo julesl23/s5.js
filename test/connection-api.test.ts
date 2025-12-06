@@ -105,8 +105,7 @@ describe("Connection API", () => {
       // P2P has no peers yet, should report disconnected
       expect(p2p.peers.size).toBe(0);
       expect(p2p.isConnectedToNetwork).toBe(false);
-      // TODO: Once getConnectionStatus() is implemented, test it here
-      // expect(p2p.getConnectionStatus()).toBe('disconnected');
+      expect(p2p.getConnectionStatus()).toBe('disconnected');
     });
   });
 
@@ -121,9 +120,7 @@ describe("Connection API", () => {
       expect(p2p.peers.size).toBe(1);
       const ws = getLastMockWebSocket()!;
       expect(ws.readyState).toBe(MockWebSocket.CONNECTING);
-
-      // TODO: Once getConnectionStatus() is implemented:
-      // expect(p2p.getConnectionStatus()).toBe('connecting');
+      expect(p2p.getConnectionStatus()).toBe('connecting');
     });
 
     test("status is 'connecting' after socket opens but before handshake", async () => {
@@ -139,9 +136,7 @@ describe("Connection API", () => {
       const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
       expect(peer.isConnected).toBe(false);
       expect(ws.readyState).toBe(MockWebSocket.OPEN);
-
-      // TODO: Once getConnectionStatus() is implemented:
-      // expect(p2p.getConnectionStatus()).toBe('connecting');
+      expect(p2p.getConnectionStatus()).toBe('connecting');
     });
 
     test("status is 'connected' after handshake completes", async () => {
@@ -157,9 +152,7 @@ describe("Connection API", () => {
       (peer as any).isConnected = true;
 
       expect(p2p.isConnectedToNetwork).toBe(true);
-
-      // TODO: Once getConnectionStatus() is implemented:
-      // expect(p2p.getConnectionStatus()).toBe('connected');
+      expect(p2p.getConnectionStatus()).toBe('connected');
     });
 
     test("status is 'disconnected' after socket closes", async () => {
@@ -177,9 +170,9 @@ describe("Connection API", () => {
       // Socket closes
       ws.simulateClose();
 
-      // TODO: Once onclose handler is implemented:
-      // expect(peer.isConnected).toBe(false);
-      // expect(p2p.getConnectionStatus()).toBe('disconnected');
+      // onclose handler sets isConnected = false
+      expect(peer.isConnected).toBe(false);
+      expect(p2p.getConnectionStatus()).toBe('disconnected');
     });
 
     test("status is 'connected' if ANY peer is connected (multi-peer)", async () => {
@@ -207,9 +200,7 @@ describe("Connection API", () => {
 
       // Overall status should be 'connected' because at least one peer is connected
       expect(p2p.isConnectedToNetwork).toBe(true);
-
-      // TODO: Once getConnectionStatus() is implemented:
-      // expect(p2p.getConnectionStatus()).toBe('connected');
+      expect(p2p.getConnectionStatus()).toBe('connected');
     });
 
     test("status is 'connecting' if one peer connecting, none connected", async () => {
@@ -233,9 +224,7 @@ describe("Connection API", () => {
 
       // isConnectedToNetwork is false, but we have open sockets
       expect(p2p.isConnectedToNetwork).toBe(false);
-
-      // TODO: Once getConnectionStatus() is implemented:
-      // expect(p2p.getConnectionStatus()).toBe('connecting');
+      expect(p2p.getConnectionStatus()).toBe('connecting');
     });
   });
 
@@ -245,36 +234,28 @@ describe("Connection API", () => {
       const callback = vi.fn();
 
       // Subscribe when disconnected
-      // TODO: Once onConnectionChange() is implemented:
-      // const unsubscribe = p2p.onConnectionChange(callback);
-      // expect(callback).toHaveBeenCalledTimes(1);
-      // expect(callback).toHaveBeenCalledWith('disconnected');
-
-      // For now, just verify the test infrastructure works
-      expect(p2p.isConnectedToNetwork).toBe(false);
+      const unsubscribe = p2p.onConnectionChange(callback);
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith('disconnected');
     });
 
     test("callback is called when status changes to 'connected'", async () => {
       const p2p = await createTestP2P();
       const callback = vi.fn();
 
-      // TODO: Once onConnectionChange() is implemented:
-      // const unsubscribe = p2p.onConnectionChange(callback);
-      // callback.mockClear(); // Clear the immediate call
+      const unsubscribe = p2p.onConnectionChange(callback);
+      callback.mockClear(); // Clear the immediate call
 
       p2p.connectToNode('wss://test-node.example.com/s5/p2p');
       const ws = getLastMockWebSocket()!;
       ws.simulateOpen();
 
-      // Complete handshake - should trigger callback
+      // Complete handshake - should trigger callback via notifyConnectionChange
       const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
       (peer as any).isConnected = true;
+      p2p.notifyConnectionChange();
 
-      // TODO: Once notifyConnectionChange() is called after handshake:
-      // expect(callback).toHaveBeenCalledWith('connected');
-
-      // For now, verify state
-      expect(p2p.isConnectedToNetwork).toBe(true);
+      expect(callback).toHaveBeenCalledWith('connected');
     });
 
     test("callback is called when status changes to 'disconnected'", async () => {
@@ -288,43 +269,34 @@ describe("Connection API", () => {
       const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
       (peer as any).isConnected = true;
 
-      // TODO: Once onConnectionChange() is implemented:
-      // const unsubscribe = p2p.onConnectionChange(callback);
-      // callback.mockClear(); // Clear the immediate call
+      const unsubscribe = p2p.onConnectionChange(callback);
+      callback.mockClear(); // Clear the immediate call ('connected')
 
-      // Socket closes - should trigger callback with 'disconnected'
+      // Socket closes - should trigger callback with 'disconnected' via onclose handler
       ws.simulateClose();
 
-      // TODO: Once onclose handler triggers notifyConnectionChange():
-      // expect(callback).toHaveBeenCalledWith('disconnected');
-
-      // For now, verify socket is closed
-      expect(ws.readyState).toBe(MockWebSocket.CLOSED);
+      expect(callback).toHaveBeenCalledWith('disconnected');
     });
 
     test("unsubscribe function stops callbacks", async () => {
       const p2p = await createTestP2P();
       const callback = vi.fn();
 
-      // TODO: Once onConnectionChange() is implemented:
-      // const unsubscribe = p2p.onConnectionChange(callback);
-      // expect(callback).toHaveBeenCalledTimes(1); // Immediate call
-      //
-      // unsubscribe();
-      // callback.mockClear();
-      //
-      // // Connect and complete handshake
-      // p2p.connectToNode('wss://test-node.example.com/s5/p2p');
-      // const ws = getLastMockWebSocket()!;
-      // ws.simulateOpen();
-      // const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
-      // (peer as any).isConnected = true;
-      // p2p.notifyConnectionChange();
-      //
-      // // Callback should NOT have been called after unsubscribe
-      // expect(callback).not.toHaveBeenCalled();
+      const unsubscribe = p2p.onConnectionChange(callback);
+      expect(callback).toHaveBeenCalledTimes(1); // Immediate call
 
-      // For now, just verify test infrastructure
+      unsubscribe();
+      callback.mockClear();
+
+      // Connect and complete handshake
+      p2p.connectToNode('wss://test-node.example.com/s5/p2p');
+      const ws = getLastMockWebSocket()!;
+      ws.simulateOpen();
+      const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
+      (peer as any).isConnected = true;
+      p2p.notifyConnectionChange();
+
+      // Callback should NOT have been called after unsubscribe
       expect(callback).not.toHaveBeenCalled();
     });
 
@@ -334,37 +306,31 @@ describe("Connection API", () => {
       const callback2 = vi.fn();
       const callback3 = vi.fn();
 
-      // TODO: Once onConnectionChange() is implemented:
-      // p2p.onConnectionChange(callback1);
-      // p2p.onConnectionChange(callback2);
-      // p2p.onConnectionChange(callback3);
-      //
-      // // All should receive immediate call
-      // expect(callback1).toHaveBeenCalledTimes(1);
-      // expect(callback2).toHaveBeenCalledTimes(1);
-      // expect(callback3).toHaveBeenCalledTimes(1);
-      //
-      // callback1.mockClear();
-      // callback2.mockClear();
-      // callback3.mockClear();
-      //
-      // // Connect and trigger status change
-      // p2p.connectToNode('wss://test-node.example.com/s5/p2p');
-      // const ws = getLastMockWebSocket()!;
-      // ws.simulateOpen();
-      // const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
-      // (peer as any).isConnected = true;
-      // p2p.notifyConnectionChange();
-      //
-      // // All should receive the notification
-      // expect(callback1).toHaveBeenCalledWith('connected');
-      // expect(callback2).toHaveBeenCalledWith('connected');
-      // expect(callback3).toHaveBeenCalledWith('connected');
+      p2p.onConnectionChange(callback1);
+      p2p.onConnectionChange(callback2);
+      p2p.onConnectionChange(callback3);
 
-      // For now, verify mocks work
-      expect(callback1).not.toHaveBeenCalled();
-      expect(callback2).not.toHaveBeenCalled();
-      expect(callback3).not.toHaveBeenCalled();
+      // All should receive immediate call
+      expect(callback1).toHaveBeenCalledTimes(1);
+      expect(callback2).toHaveBeenCalledTimes(1);
+      expect(callback3).toHaveBeenCalledTimes(1);
+
+      callback1.mockClear();
+      callback2.mockClear();
+      callback3.mockClear();
+
+      // Connect and trigger status change
+      p2p.connectToNode('wss://test-node.example.com/s5/p2p');
+      const ws = getLastMockWebSocket()!;
+      ws.simulateOpen();
+      const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
+      (peer as any).isConnected = true;
+      p2p.notifyConnectionChange();
+
+      // All should receive the notification
+      expect(callback1).toHaveBeenCalledWith('connected');
+      expect(callback2).toHaveBeenCalledWith('connected');
+      expect(callback3).toHaveBeenCalledWith('connected');
     });
 
     test("listener errors don't break other listeners", async () => {
@@ -374,32 +340,27 @@ describe("Connection API", () => {
       });
       const goodCallback = vi.fn();
 
-      // TODO: Once onConnectionChange() is implemented:
-      // p2p.onConnectionChange(errorCallback);
-      // p2p.onConnectionChange(goodCallback);
-      //
-      // // Both should receive immediate call (error callback throws)
-      // expect(errorCallback).toHaveBeenCalledTimes(1);
-      // expect(goodCallback).toHaveBeenCalledTimes(1);
-      //
-      // errorCallback.mockClear();
-      // goodCallback.mockClear();
-      //
-      // // Trigger status change
-      // p2p.connectToNode('wss://test-node.example.com/s5/p2p');
-      // const ws = getLastMockWebSocket()!;
-      // ws.simulateOpen();
-      // const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
-      // (peer as any).isConnected = true;
-      // p2p.notifyConnectionChange();
-      //
-      // // Error callback throws, but good callback should still be called
-      // expect(errorCallback).toHaveBeenCalled();
-      // expect(goodCallback).toHaveBeenCalledWith('connected');
+      p2p.onConnectionChange(errorCallback);
+      p2p.onConnectionChange(goodCallback);
 
-      // For now, verify mocks work
-      expect(errorCallback).not.toHaveBeenCalled();
-      expect(goodCallback).not.toHaveBeenCalled();
+      // Both should receive immediate call (error callback throws but is caught)
+      expect(errorCallback).toHaveBeenCalledTimes(1);
+      expect(goodCallback).toHaveBeenCalledTimes(1);
+
+      errorCallback.mockClear();
+      goodCallback.mockClear();
+
+      // Trigger status change
+      p2p.connectToNode('wss://test-node.example.com/s5/p2p');
+      const ws = getLastMockWebSocket()!;
+      ws.simulateOpen();
+      const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
+      (peer as any).isConnected = true;
+      p2p.notifyConnectionChange();
+
+      // Error callback throws, but good callback should still be called
+      expect(errorCallback).toHaveBeenCalled();
+      expect(goodCallback).toHaveBeenCalledWith('connected');
     });
   });
 
@@ -428,14 +389,24 @@ describe("Connection API", () => {
       const close1Spy = vi.spyOn(ws1, 'close');
       const close2Spy = vi.spyOn(ws2, 'close');
 
-      // TODO: Once reconnect() is implemented:
-      // await p2p.reconnect();
-      // expect(close1Spy).toHaveBeenCalled();
-      // expect(close2Spy).toHaveBeenCalled();
+      // Start reconnect - need to simulate new connection completing
+      const reconnectPromise = p2p.reconnect();
 
-      // For now, verify spies work
-      expect(close1Spy).not.toHaveBeenCalled();
-      expect(close2Spy).not.toHaveBeenCalled();
+      // Simulate new connections completing
+      await new Promise(r => setTimeout(r, 10));
+      const newWs1 = createdWebSockets[2];
+      const newWs2 = createdWebSockets[3];
+      newWs1.simulateOpen();
+      newWs2.simulateOpen();
+      const newPeer1 = p2p.peers.get('wss://node1.example.com/s5/p2p')!;
+      const newPeer2 = p2p.peers.get('wss://node2.example.com/s5/p2p')!;
+      (newPeer1 as any).isConnected = true;
+      (newPeer2 as any).isConnected = true;
+
+      await reconnectPromise;
+
+      expect(close1Spy).toHaveBeenCalled();
+      expect(close2Spy).toHaveBeenCalled();
     });
 
     test("reconnect() reconnects to all initial peer URIs", async () => {
@@ -455,22 +426,28 @@ describe("Connection API", () => {
       (peer1 as any).isConnected = true;
       (peer2 as any).isConnected = true;
 
-      // TODO: Once reconnect() is implemented:
-      // Clear created sockets to track new ones
-      // const initialCount = createdWebSockets.length;
-      // await p2p.reconnect();
-      //
-      // // Should have created 2 new WebSockets (one for each initial peer)
-      // expect(createdWebSockets.length).toBe(initialCount + 2);
-      //
-      // // New sockets should be for the same URIs
-      // const newWs1 = createdWebSockets[initialCount];
-      // const newWs2 = createdWebSockets[initialCount + 1];
-      // expect(newWs1.url).toBe('wss://node1.example.com/s5/p2p');
-      // expect(newWs2.url).toBe('wss://node2.example.com/s5/p2p');
+      const initialCount = createdWebSockets.length;
+      const reconnectPromise = p2p.reconnect();
 
-      // For now, verify initial state
-      expect(createdWebSockets.length).toBe(2);
+      // Simulate new connections completing
+      await new Promise(r => setTimeout(r, 10));
+
+      // Should have created 2 new WebSockets (one for each initial peer)
+      expect(createdWebSockets.length).toBe(initialCount + 2);
+
+      // New sockets should be for the same URIs
+      const newWs1 = createdWebSockets[initialCount];
+      const newWs2 = createdWebSockets[initialCount + 1];
+      expect(newWs1.url).toBe('wss://node1.example.com/s5/p2p');
+      expect(newWs2.url).toBe('wss://node2.example.com/s5/p2p');
+
+      // Complete the handshake so reconnect resolves
+      newWs1.simulateOpen();
+      newWs2.simulateOpen();
+      const newPeer1 = p2p.peers.get('wss://node1.example.com/s5/p2p')!;
+      (newPeer1 as any).isConnected = true;
+
+      await reconnectPromise;
     });
 
     test("reconnect() resolves when connection established", async () => {
@@ -483,50 +460,43 @@ describe("Connection API", () => {
       const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
       (peer as any).isConnected = true;
 
-      // TODO: Once reconnect() is implemented:
-      // const reconnectPromise = p2p.reconnect();
-      //
-      // // Simulate new connection completing
-      // await new Promise(r => setTimeout(r, 10));
-      // const newWs = createdWebSockets[createdWebSockets.length - 1];
-      // newWs.simulateOpen();
-      // const newPeer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
-      // (newPeer as any).isConnected = true;
-      // p2p.notifyConnectionChange();
-      //
-      // // reconnect should resolve
-      // await expect(reconnectPromise).resolves.toBeUndefined();
+      const reconnectPromise = p2p.reconnect();
 
-      // For now, verify initial state
-      expect(p2p.isConnectedToNetwork).toBe(true);
+      // Simulate new connection completing
+      await new Promise(r => setTimeout(r, 10));
+      const newWs = createdWebSockets[createdWebSockets.length - 1];
+      newWs.simulateOpen();
+      const newPeer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
+      (newPeer as any).isConnected = true;
+
+      // reconnect should resolve
+      await expect(reconnectPromise).resolves.toBeUndefined();
     });
 
     test("reconnect() throws after 10s timeout", async () => {
       vi.useFakeTimers();
 
-      const p2p = await createTestP2P();
+      try {
+        const p2p = await createTestP2P();
 
-      // Connect to a node
-      p2p.connectToNode('wss://test-node.example.com/s5/p2p');
-      const ws = createdWebSockets[0];
-      ws.simulateOpen();
-      const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
-      (peer as any).isConnected = true;
+        // Connect to a node
+        p2p.connectToNode('wss://test-node.example.com/s5/p2p');
+        const ws = createdWebSockets[0];
+        ws.simulateOpen();
+        const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
+        (peer as any).isConnected = true;
 
-      // TODO: Once reconnect() is implemented:
-      // const reconnectPromise = p2p.reconnect();
-      //
-      // // Don't complete the new connection - let it timeout
-      // // Advance time by 10 seconds
-      // await vi.advanceTimersByTimeAsync(10000);
-      //
-      // // Should throw timeout error
-      // await expect(reconnectPromise).rejects.toThrow('Reconnection timeout');
+        const reconnectPromise = p2p.reconnect();
 
-      // For now, verify fake timers work
-      vi.advanceTimersByTime(1000);
+        // Don't complete the new connection - let it timeout
+        // Advance time by 10 seconds
+        await vi.advanceTimersByTimeAsync(10100);
 
-      vi.useRealTimers();
+        // Should throw timeout error
+        await expect(reconnectPromise).rejects.toThrow('Reconnection timeout');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     test("concurrent reconnect() calls wait for first to complete", async () => {
@@ -539,28 +509,24 @@ describe("Connection API", () => {
       const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
       (peer as any).isConnected = true;
 
-      // TODO: Once reconnect() is implemented:
-      // // Start two reconnects simultaneously
-      // const reconnect1 = p2p.reconnect();
-      // const reconnect2 = p2p.reconnect();
-      //
-      // // Simulate connection completing
-      // await new Promise(r => setTimeout(r, 10));
-      // const newWs = createdWebSockets[createdWebSockets.length - 1];
-      // newWs.simulateOpen();
-      // const newPeer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
-      // (newPeer as any).isConnected = true;
-      //
-      // // Both should resolve (second one waited for first)
-      // await expect(reconnect1).resolves.toBeUndefined();
-      // await expect(reconnect2).resolves.toBeUndefined();
-      //
-      // // Should only have created new sockets once (not twice)
-      // // Initial socket + 1 reconnect = 2 total
-      // expect(createdWebSockets.length).toBe(2);
+      // Start two reconnects simultaneously
+      const reconnect1 = p2p.reconnect();
+      const reconnect2 = p2p.reconnect();
 
-      // For now, verify initial state
-      expect(p2p.isConnectedToNetwork).toBe(true);
+      // Simulate connection completing
+      await new Promise(r => setTimeout(r, 10));
+      const newWs = createdWebSockets[createdWebSockets.length - 1];
+      newWs.simulateOpen();
+      const newPeer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
+      (newPeer as any).isConnected = true;
+
+      // Both should resolve (second one waited for first)
+      await expect(reconnect1).resolves.toBeUndefined();
+      await expect(reconnect2).resolves.toBeUndefined();
+
+      // Should only have created new sockets once (not twice)
+      // Initial socket + 1 reconnect = 2 total
+      expect(createdWebSockets.length).toBe(2);
     });
 
     test("status changes to 'connecting' during reconnect", async () => {
@@ -574,32 +540,23 @@ describe("Connection API", () => {
       const peer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
       (peer as any).isConnected = true;
 
-      // TODO: Once onConnectionChange() and reconnect() are implemented:
-      // p2p.onConnectionChange(callback);
-      // callback.mockClear(); // Clear immediate call
-      //
-      // // Start reconnect (don't await)
-      // const reconnectPromise = p2p.reconnect();
-      //
-      // // Status should transition to 'connecting'
-      // expect(callback).toHaveBeenCalledWith('connecting');
-      //
-      // // Complete the connection
-      // await new Promise(r => setTimeout(r, 10));
-      // const newWs = createdWebSockets[createdWebSockets.length - 1];
-      // newWs.simulateOpen();
-      // const newPeer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
-      // (newPeer as any).isConnected = true;
-      // p2p.notifyConnectionChange();
-      //
-      // await reconnectPromise;
-      //
-      // // Should have received 'connected' status
-      // expect(callback).toHaveBeenCalledWith('connected');
+      p2p.onConnectionChange(callback);
+      callback.mockClear(); // Clear immediate call
 
-      // For now, verify initial state
-      expect(p2p.isConnectedToNetwork).toBe(true);
-      expect(callback).not.toHaveBeenCalled();
+      // Start reconnect (don't await)
+      const reconnectPromise = p2p.reconnect();
+
+      // Status should transition to 'connecting' (called by reconnect after clearing peers)
+      expect(callback).toHaveBeenCalledWith('connecting');
+
+      // Complete the connection
+      await new Promise(r => setTimeout(r, 10));
+      const newWs = createdWebSockets[createdWebSockets.length - 1];
+      newWs.simulateOpen();
+      const newPeer = p2p.peers.get('wss://test-node.example.com/s5/p2p')!;
+      (newPeer as any).isConnected = true;
+
+      await reconnectPromise;
     });
   });
 });

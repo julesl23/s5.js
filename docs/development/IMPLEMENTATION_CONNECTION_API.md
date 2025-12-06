@@ -212,19 +212,21 @@ The `WebSocketPeer` class in `src/node/p2p.ts:84-101` has `onmessage` and `onope
 **Line Budget**: 20 lines
 
 #### Tasks
-- [ ] Add `ConnectionStatus` type: `'connected' | 'connecting' | 'disconnected'`
-- [ ] Add `connectionListeners: Set<(status: ConnectionStatus) => void>` property
-- [ ] Add `initialPeerUris: string[]` property
-- [ ] Add `reconnectLock: boolean` property
-- [ ] Modify `connectToNode()` to store URI in `initialPeerUris`
+- [x] Add `ConnectionStatus` type: `'connected' | 'connecting' | 'disconnected'`
+- [x] Add `connectionListeners: Set<(status: ConnectionStatus) => void>` property
+- [x] Add `initialPeerUris: string[]` property
+- [x] Add `reconnectLock: boolean` property
+- [x] Modify `connectToNode()` to store URI in `initialPeerUris`
 
 **Implementation Files:**
 - `src/node/p2p.ts` (MODIFY P2P class, ~20 lines)
 
 **Success Criteria:**
-- [ ] ConnectionStatus type defined
-- [ ] Properties added to P2P class
-- [ ] initialPeerUris populated when connecting
+- [x] ConnectionStatus type defined
+- [x] Properties added to P2P class
+- [x] initialPeerUris populated when connecting
+
+**Test Results:** ✅ **19 passed** (32ms execution time)
 
 ---
 
@@ -237,19 +239,21 @@ The `WebSocketPeer` class in `src/node/p2p.ts:84-101` has `onmessage` and `onope
 **Line Budget**: 25 lines
 
 #### Tasks
-- [ ] Implement `getConnectionStatus(): ConnectionStatus` method
-- [ ] Return 'connected' if any peer has `isConnected === true`
-- [ ] Return 'connecting' if any peer socket is OPEN/CONNECTING but not handshaked
-- [ ] Return 'disconnected' if no peers or all closed
-- [ ] Handle edge case: check `socket.readyState` for accurate state
+- [x] Implement `getConnectionStatus(): ConnectionStatus` method
+- [x] Return 'connected' if any peer has `isConnected === true`
+- [x] Return 'connecting' if any peer socket is OPEN/CONNECTING but not handshaked
+- [x] Return 'disconnected' if no peers or all closed
+- [x] Handle edge case: check `socket.readyState` for accurate state
 
 **Implementation Files:**
 - `src/node/p2p.ts` (ADD method, ~25 lines)
 
 **Success Criteria:**
-- [ ] Method returns correct status for all states
-- [ ] Multi-peer logic correctly aggregates status
-- [ ] Tests from Sub-phase 1.2 pass
+- [x] Method returns correct status for all states
+- [x] Multi-peer logic correctly aggregates status
+- [x] Tests from Sub-phase 1.2 pass
+
+**Test Results:** ✅ **19 passed** (32ms execution time)
 
 ---
 
@@ -262,23 +266,25 @@ The `WebSocketPeer` class in `src/node/p2p.ts:84-101` has `onmessage` and `onope
 **Line Budget**: 35 lines
 
 #### Tasks
-- [ ] Implement `onConnectionChange(callback): () => void` method
-- [ ] Add callback to `connectionListeners` set
-- [ ] Call callback immediately with current status
-- [ ] Return unsubscribe function that removes from set
-- [ ] Implement `notifyConnectionChange()` private method
-- [ ] Calculate status and call all listeners
-- [ ] Wrap each listener call in try-catch to isolate errors
+- [x] Implement `onConnectionChange(callback): () => void` method
+- [x] Add callback to `connectionListeners` set
+- [x] Call callback immediately with current status
+- [x] Return unsubscribe function that removes from set
+- [x] Implement `notifyConnectionChange()` private method
+- [x] Calculate status and call all listeners
+- [x] Wrap each listener call in try-catch to isolate errors
 
 **Implementation Files:**
 - `src/node/p2p.ts` (ADD methods, ~35 lines)
 
 **Success Criteria:**
-- [ ] onConnectionChange adds listener and returns unsubscribe
-- [ ] Callback called immediately on subscribe
-- [ ] notifyConnectionChange calls all listeners
-- [ ] Listener errors don't break other listeners
-- [ ] Tests from Sub-phase 1.3 pass
+- [x] onConnectionChange adds listener and returns unsubscribe
+- [x] Callback called immediately on subscribe
+- [x] notifyConnectionChange calls all listeners
+- [x] Listener errors don't break other listeners
+- [x] Tests from Sub-phase 1.3 pass
+
+**Test Results:** ✅ **19 passed** (32ms execution time)
 
 ---
 
@@ -291,25 +297,27 @@ The `WebSocketPeer` class in `src/node/p2p.ts:84-101` has `onmessage` and `onope
 **Line Budget**: 50 lines
 
 #### Tasks
-- [ ] Implement `reconnect(): Promise<void>` method
-- [ ] Check `reconnectLock` - if true, wait for existing reconnect
-- [ ] Set `reconnectLock = true` at start
-- [ ] Close all existing sockets with `peer.socket.close()`
-- [ ] Clear `peers` Map
-- [ ] Reconnect to all URIs in `initialPeerUris`
-- [ ] Wait for `isConnectedToNetwork` with polling loop
-- [ ] Throw error after 10 second timeout
-- [ ] Set `reconnectLock = false` in finally block
+- [x] Implement `reconnect(): Promise<void>` method
+- [x] Check `reconnectLock` - if true, wait for existing reconnect
+- [x] Set `reconnectLock = true` at start
+- [x] Close all existing sockets with `peer.socket.close()`
+- [x] Clear `peers` Map
+- [x] Reconnect to all URIs in `initialPeerUris`
+- [x] Wait for `isConnectedToNetwork` with polling loop
+- [x] Throw error after 10 second timeout
+- [x] Set `reconnectLock = false` in finally block
 
 **Implementation Files:**
 - `src/node/p2p.ts` (ADD method, ~50 lines)
 
 **Success Criteria:**
-- [ ] reconnect() closes existing connections
-- [ ] reconnect() re-establishes to initial peers
-- [ ] 10s timeout throws error
-- [ ] Concurrent calls wait for first to complete
-- [ ] Tests from Sub-phase 1.4 pass
+- [x] reconnect() closes existing connections
+- [x] reconnect() re-establishes to initial peers
+- [x] 10s timeout throws error
+- [x] Concurrent calls wait for first to complete
+- [x] Tests from Sub-phase 1.4 pass
+
+**Test Results:** ✅ **19 passed** (585ms execution time)
 
 ---
 

@@ -9,6 +9,7 @@ import { S5UserIdentity } from './identity/identity.js';
 import { S5APIWithIdentity } from './identity/api.js';
 import { generatePhrase } from './identity/seed_phrase/seed_phrase.js';
 import { utf8ToBytes } from '@noble/ciphers/utils';
+import { ConnectionStatus } from './node/p2p.js';
 
 export class S5 {
   private readonly node: S5Node;
