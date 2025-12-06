@@ -172,8 +172,6 @@ class WebSocketPeer {
                 this.isConnected = true;
             }
 
-        } else {
-            // console.debug('onmessage unknown', data);
         }
 
     }

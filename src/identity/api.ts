@@ -201,6 +201,13 @@ export class S5APIWithIdentity implements S5APIInterface {
         const expectedBlobIdentifier = new BlobIdentifier(concatBytes(new Uint8Array([MULTIHASH_BLAKE3]), blake3Hash), blob.size);
 
         const portals = Object.values(this.accountConfigs);
+        console.log('[Enhanced S5.js] Portal: Starting upload', {
+            blobSize: blob.size,
+            portalsAvailable: portals.length,
+            retriesPerPortal: 3,
+            expectedHash: Array.from(blake3Hash.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join('')
+        });
+
         for (const portal of portals.concat(portals, portals)) {
             try {
                 // Get environment-appropriate HTTP client
@@ -235,8 +242,19 @@ export class S5APIWithIdentity implements S5APIInterface {
                 if (bid.toHex() !== expectedBlobIdentifier.toHex()) {
                     throw `Integrity check for blob upload to ${portal.host} failed (got ${bid}, expected ${expectedBlobIdentifier})`;
                 }
+                console.log('[Enhanced S5.js] Portal: Upload successful', {
+                    portal: portal.host,
+                    status: res.status,
+                    verified: true,
+                    hash: bid.toHex().slice(0, 16) + '...'
+                });
                 return expectedBlobIdentifier;
             } catch (e) {
+                console.log('[Enhanced S5.js] Portal: Upload retry', {
+                    portal: portal.host,
+                    error: (e as Error).message?.slice(0, 100) || String(e).slice(0, 100),
+                    remainingAttempts: 'trying next portal'
+                });
                 console.error(`Failed to upload blob to ${portal.host}`, e);
             }
         }

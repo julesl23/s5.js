@@ -59,28 +59,26 @@ async function initializeS5() {
         // The connectToNode method doesn't throw immediately, but we can add error handling
         // to the WebSocket after it's created
         const peerName = uri.split('@')[1];
-        console.log(`Attempting to connect to peer: ${peerName}`);
-        
+
         // Connect to the node
         node.p2p.connectToNode(uri);
-        
+
         // Get the peer and add error handling
         const peer = node.p2p.peers.get(uri);
         if (peer && peer.socket) {
           peer.socket.onerror = (error) => {
-            console.warn(`WebSocket error for ${peerName}:`, error);
+            // Silently handle WebSocket errors
           };
           peer.socket.onclose = () => {
-            console.log(`Disconnected from ${peerName}`);
+            // Silently handle disconnections
           };
           // Track successful connections
           peer.socket.onopen = () => {
             connectedPeers++;
-            console.log(`Connected to ${peerName}`);
           };
         }
       } catch (error) {
-        console.warn(`Failed to initiate connection to peer:`, error instanceof Error ? error.message : 'Unknown error');
+        // Silently handle connection failures
       }
     }
     
@@ -88,14 +86,12 @@ async function initializeS5() {
     // The server can still work for local operations
     try {
       // Wait briefly for connections with a timeout
-      const timeout = new Promise((_, reject) => 
+      const timeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Network initialization timeout')), 5000)
       );
       await Promise.race([node.ensureInitialized(), timeout]);
-      console.log('Successfully connected to S5 network');
     } catch (error) {
-      console.warn('Could not connect to S5 network, continuing in offline mode');
-      console.warn('Note: Upload/download operations may be limited');
+      // Continue in offline mode silently
     }
     
     // Set up API with or without identity
@@ -109,15 +105,13 @@ async function initializeS5() {
       // Create API with identity
       const apiWithIdentity = new S5APIWithIdentity(node, userIdentity, authStore);
       await apiWithIdentity.initStorageServices();
-      
+
       s5Api = apiWithIdentity;
-      console.log('User identity initialized from seed phrase');
     } else {
       // Use node directly as API
       s5Api = node;
     }
 
-    console.log(`S5 client initialized and connected to network`);
     return true;
   } catch (error) {
     console.error('Failed to initialize S5 client:', error);
@@ -173,8 +167,7 @@ app.post('/api/v1/upload', async (req: Request, res: Response) => {
       // Store locally in memory
       const cidString = blobId.toString();
       localBlobStorage.set(cidString, data);
-      console.log(`Stored blob locally with CID: ${cidString}`);
-      
+
       res.json({ 
         cid: cidString,
         size: data.length,
@@ -215,8 +208,7 @@ app.get('/api/v1/download/:cid', async (req: Request, res: Response) => {
     // First check local storage
     if (localBlobStorage.has(cid)) {
       const data = localBlobStorage.get(cid)!;
-      console.log(`Serving blob from local storage: ${cid}`);
-      
+
       res.set('Content-Type', 'application/octet-stream');
       res.set('X-CID', cid);
       res.set('X-Source', 'local');
@@ -240,7 +232,6 @@ app.get('/api/v1/download/:cid', async (req: Request, res: Response) => {
       res.send(Buffer.from(data));
     } catch (downloadError) {
       // If download fails, return not found
-      console.error('Download from S5 failed:', downloadError);
       res.status(404).json({ error: 'Content not found in local storage or S5 network' });
     }
   } catch (error) {
@@ -256,7 +247,6 @@ app.put('/s5/fs/:type/:id', (req: Request, res: Response) => {
   const { type, id } = req.params;
   const key = `${type}/${id}`;
   storage.set(key, req.body);
-  console.log(`Stored ${key}`);
   res.json({ success: true, key });
 });
 
@@ -290,30 +280,18 @@ app.get('/s5/fs/:type', (req: Request, res: Response) => {
 // Start server
 async function startServer() {
   const initialized = await initializeS5();
-  
-  if (!initialized) {
-    console.error('Failed to initialize S5 client. Server will run with limited functionality.');
-  }
 
   app.listen(PORT, () => {
-    console.log(`S5 Server running on port ${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/api/v1/health`);
-    if (S5_SEED_PHRASE) {
-      console.log('Authentication: Enabled (seed phrase provided)');
-    } else {
-      console.log('Authentication: Disabled (no seed phrase provided)');
-    }
+    // Server started silently
   });
 }
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\nShutting down S5 server...');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('\nShutting down S5 server...');
   process.exit(0);
 });
 

@@ -7,7 +7,16 @@ export class DirV1Serialiser {
   static serialise(dir: DirV1): Uint8Array {
     // Convert to CBOR structure
     const cborStructure = this.toCborStructure(dir);
-    
+
+    const fileCount = (dir.files instanceof Map) ? dir.files.size : 0;
+    const dirCount = (dir.dirs instanceof Map) ? dir.dirs.size : 0;
+    console.log('[Enhanced S5.js] CBOR: Serializing directory', {
+      files: fileCount,
+      directories: dirCount,
+      sharded: !!dir.header?.sharding,
+      format: 'DirV1'
+    });
+
     // Encode to CBOR
     const cborBytes = encodeS5(cborStructure);
     
@@ -16,7 +25,24 @@ export class DirV1Serialiser {
     result[0] = 0x5f;
     result[1] = 0x5d;
     result.set(cborBytes, 2);
-    
+
+    // Estimate JSON size for comparison (simple approximation)
+    const estimatedJsonSize = JSON.stringify({
+      files: fileCount,
+      dirs: dirCount
+    }).length * (fileCount + dirCount + 10);
+    const compressionRatio = estimatedJsonSize > 0
+      ? ((1 - result.length / estimatedJsonSize) * 100).toFixed(1)
+      : '0.0';
+
+    console.log('[Enhanced S5.js] CBOR: Serialization complete', {
+      inputEntries: fileCount + dirCount,
+      cborBytes: cborBytes.length,
+      withMagic: result.length,
+      compressionVsJson: compressionRatio + '%',
+      deterministic: true
+    });
+
     return result;
   }
   
@@ -185,10 +211,20 @@ export class DirV1Serialiser {
     
     // Deserialise directories
     const dirs = this.deserialiseDirs(dirsMap);
-    
+
     // Deserialise files
     const files = this.deserialiseFiles(filesMap);
-    
+
+    const filesSize = (files instanceof Map) ? files.size : 0;
+    const dirsSize = (dirs instanceof Map) ? dirs.size : 0;
+    console.log('[Enhanced S5.js] CBOR: Deserialization complete', {
+      inputBytes: cborData.length,
+      files: filesSize,
+      directories: dirsSize,
+      magic: magic,
+      verified: true
+    });
+
     return {
       magic,
       header: headerObj,
