@@ -7,6 +7,9 @@ export { S5APIInterface } from './api/s5.js';
 export { CryptoImplementation } from './api/crypto.js';
 export { JSCryptoImplementation } from './api/crypto/js.js';
 
+// Export connection types
+export type { ConnectionStatus } from './node/p2p.js';
+
 // Export utility classes
 export { DirectoryWalker } from './fs/utils/walker.js';
 export { BatchOperations } from './fs/utils/batch.js';

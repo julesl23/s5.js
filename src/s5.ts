@@ -9,6 +9,7 @@ import { S5UserIdentity } from './identity/identity.js';
 import { S5APIWithIdentity } from './identity/api.js';
 import { generatePhrase } from './identity/seed_phrase/seed_phrase.js';
 import { utf8ToBytes } from '@noble/ciphers/utils';
+import { ConnectionStatus } from './node/p2p.js';
 
 export class S5 {
   private readonly node: S5Node;
@@ -129,5 +130,33 @@ export class S5 {
       url,
       inviteCode,
     );
+  }
+
+  /**
+   * Get the current connection status to the S5 network.
+   * @returns 'connected' if at least one peer has completed handshake,
+   *          'connecting' if at least one peer socket is open but handshake not complete,
+   *          'disconnected' if no peers or all sockets closed
+   */
+  getConnectionStatus(): ConnectionStatus {
+    return this.node.p2p.getConnectionStatus();
+  }
+
+  /**
+   * Subscribe to connection status changes.
+   * @param callback Called when connection status changes. Also called immediately with current status.
+   * @returns Unsubscribe function
+   */
+  onConnectionChange(callback: (status: ConnectionStatus) => void): () => void {
+    return this.node.p2p.onConnectionChange(callback);
+  }
+
+  /**
+   * Force reconnection to the S5 network.
+   * Closes all existing connections and re-establishes them.
+   * @throws Error if reconnection fails after 10 second timeout
+   */
+  async reconnect(): Promise<void> {
+    await this.node.p2p.reconnect();
   }
 }
