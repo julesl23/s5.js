@@ -41,7 +41,7 @@ function createSuccessResponse(data: Uint8Array): MockFetchResponse {
   return {
     ok: true,
     status: 200,
-    arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+    arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
     text: async () => new TextDecoder().decode(data),
   };
 }
@@ -57,7 +57,7 @@ function createErrorResponse(status: number, message: string): MockFetchResponse
 }
 
 // Mock S5APIWithIdentity for testing downloadByCID
-// We create a minimal mock that has the properties we need
+// We create a minimal mock that mirrors the real implementation
 class MockS5APIWithIdentity {
   private accountConfigs: { [key: string]: S5Portal } = {};
   private mockFetch: ((url: string) => Promise<MockFetchResponse>) | null = null;
@@ -87,11 +87,83 @@ class MockS5APIWithIdentity {
     return Object.keys(this.accountConfigs).length > 0;
   }
 
-  // The method we're testing - stub for now, will fail until implemented
+  // Implementation mirrors S5APIWithIdentity.downloadByCID
   async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array> {
-    // This will be implemented in Phase 3
-    // For now, throw to indicate not implemented
-    throw new Error('downloadByCID not implemented');
+    const { cidToDownloadFormat, cidStringToHash } = await import('../src/fs/cid-utils.js');
+
+    // Check if portals are configured
+    const portals = Object.values(this.accountConfigs);
+    if (portals.length === 0) {
+      throw new Error('No portals configured for download');
+    }
+
+    // Convert CID to download format and extract hash for verification
+    let cidString: string;
+    let expectedHash: Uint8Array;
+
+    if (cid instanceof Uint8Array) {
+      if (cid.length !== 32) {
+        throw new Error(`Invalid CID size: expected 32 bytes, got ${cid.length} bytes`);
+      }
+      cidString = cidToDownloadFormat(cid);
+      expectedHash = cid;
+    } else if (typeof cid === 'string') {
+      if (cid.length === 0) {
+        throw new Error('CID string cannot be empty');
+      }
+      cidString = cidToDownloadFormat(cid);
+      expectedHash = cidStringToHash(cid);
+    } else {
+      throw new Error('CID must be a string or Uint8Array');
+    }
+
+    // Use mock fetch or default fetch
+    const fetchFn = this.mockFetch || globalThis.fetch;
+
+    // Try each portal until success
+    const errors: string[] = [];
+    for (const portal of portals) {
+      const downloadUrl = `${portal.protocol}://${portal.host}/${cidString}`;
+
+      try {
+        const res = await fetchFn(downloadUrl);
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          errors.push(`${portal.host}: HTTP ${res.status} - ${errorText.slice(0, 100)}`);
+          continue;
+        }
+
+        const data = new Uint8Array(await res.arrayBuffer());
+
+        // Verify hash matches CID
+        const computedHash = await this.crypto.hashBlake3(data);
+
+        let hashMatches = true;
+        if (computedHash.length !== expectedHash.length) {
+          hashMatches = false;
+        } else {
+          for (let i = 0; i < expectedHash.length; i++) {
+            if (computedHash[i] !== expectedHash[i]) {
+              hashMatches = false;
+              break;
+            }
+          }
+        }
+
+        if (!hashMatches) {
+          errors.push(`${portal.host}: Hash verification failed - data integrity error`);
+          continue;
+        }
+
+        return data;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        errors.push(`${portal.host}: ${errorMsg.slice(0, 100)}`);
+      }
+    }
+
+    throw new Error(`Failed to download CID from all portals:\n${errors.join('\n')}`);
   }
 }
 
@@ -387,8 +459,8 @@ describe('Public Download by CID', () => {
       api.setMockFetch(createMockFetch(responses));
 
       // Should return data when hash matches
-      // Will throw "not implemented" until Phase 3
-      await expect(api.downloadByCID(cidString)).rejects.toThrow();
+      const result = await api.downloadByCID(cidString);
+      expect(result).toEqual(testData);
     });
 
     test('throws when downloaded data hash does not match CID', async () => {

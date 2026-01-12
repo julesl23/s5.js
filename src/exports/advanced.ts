@@ -41,7 +41,13 @@ export {
   parseCID,
   verifyCID,
   cidToString,
+  detectCIDFormat,
+  cidStringToHash,
+  cidToDownloadFormat,
 } from '../fs/cid-utils.js';
+
+// CID types
+export type { CIDFormat } from '../fs/cid-utils.js';
 
 // Additional types for advanced users (not in core)
 export type {

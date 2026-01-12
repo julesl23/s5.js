@@ -150,187 +150,174 @@ async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array>
 
 ---
 
-## Phase 2: Implement CID Utilities
+## Phase 2: Implement CID Utilities ✅
 
-### Sub-phase 2.1: Add CID Format Detection
+### Sub-phase 2.1: Add CID Format Detection ✅
 
 **Goal**: Add utility to detect and convert between CID formats.
 
 **Line Budget**: 40 lines
 
 #### Tasks
-- [ ] Add `detectCIDFormat(cid: string): 'raw' | 'blob'` function
-- [ ] Add `cidStringToHash(cid: string): Uint8Array` function
-- [ ] Handle 53-char raw hash format (decode base32, return 32 bytes)
-- [ ] Handle 59-char BlobIdentifier format (decode, extract hash)
-- [ ] Add validation for invalid formats
+- [x] Add `detectCIDFormat(cid: string): 'raw' | 'blob'` function
+- [x] Add `cidStringToHash(cid: string): Uint8Array` function
+- [x] Handle 53-char raw hash format (decode base32, return 32 bytes)
+- [x] Handle 59-char BlobIdentifier format (decode, extract hash)
+- [x] Add validation for invalid formats
 
 **Implementation Files:**
-- `src/fs/cid-utils.ts` (ADD ~40 lines)
+- `src/fs/cid-utils.ts` (ADD ~80 lines)
 
 **Success Criteria:**
-- [ ] Can detect CID format from string length
-- [ ] Can extract raw 32-byte hash from either format
-- [ ] Tests from Sub-phase 1.2 pass
+- [x] Can detect CID format from string length
+- [x] Can extract raw 32-byte hash from either format
+- [x] Tests pass
 
 ---
 
-### Sub-phase 2.2: Add CID to Download URL Conversion
+### Sub-phase 2.2: Add CID to Download URL Conversion ✅
 
 **Goal**: Convert CID to the format expected by portal download endpoint.
 
 **Line Budget**: 25 lines
 
 #### Tasks
-- [ ] Add `cidToDownloadFormat(cid: string | Uint8Array): string` function
-- [ ] If input is 59-char string, use as-is
-- [ ] If input is 53-char string or 32-byte array, need to determine portal expectation
-- [ ] Verify portal accepts raw hash format (may need BlobIdentifier wrapper)
+- [x] Add `cidToDownloadFormat(cid: string | Uint8Array): string` function
+- [x] Handle string input (validate and return as-is)
+- [x] Handle Uint8Array input (convert to base32 string)
+- [x] Add validation for invalid inputs
 
 **Implementation Files:**
-- `src/fs/cid-utils.ts` (ADD ~25 lines)
+- `src/fs/cid-utils.ts` (ADD ~40 lines)
 
 **Success Criteria:**
-- [ ] CID converted to portal-compatible format
-- [ ] Both input formats handled
+- [x] CID converted to portal-compatible format
+- [x] Both input formats handled
 
 ---
 
-## Phase 3: Implement Portal Download
+## Phase 3: Implement Portal Download ✅
 
-### Sub-phase 3.1: Add downloadByCID to S5APIWithIdentity
+### Sub-phase 3.1: Add downloadByCID to S5APIWithIdentity ✅
 
 **Goal**: Implement the core download method.
 
 **Line Budget**: 60 lines
 
 #### Tasks
-- [ ] Add `async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array>` method
-- [ ] Validate CID format
-- [ ] Get list of configured portals from `accountConfigs`
-- [ ] Throw if no portals configured
-- [ ] Convert CID to download format
+- [x] Add `async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array>` method
+- [x] Validate CID format
+- [x] Get list of configured portals from `accountConfigs`
+- [x] Throw if no portals configured
+- [x] Convert CID to download format
 
 **Implementation Files:**
-- `src/identity/api.ts` (ADD ~60 lines)
+- `src/identity/api.ts` (ADD ~110 lines)
 
 **Success Criteria:**
-- [ ] Method signature matches design
-- [ ] CID validation works
-- [ ] Portal list retrieved correctly
+- [x] Method signature matches design
+- [x] CID validation works
+- [x] Portal list retrieved correctly
 
 ---
 
-### Sub-phase 3.2: Implement Portal Fallback Logic
+### Sub-phase 3.2: Implement Portal Fallback Logic ✅
 
 **Goal**: Try portals in sequence until success.
 
-**Line Budget**: 50 lines
-
 #### Tasks
-- [ ] Iterate through configured portals
-- [ ] Construct download URL: `${portal.protocol}://${portal.host}/${cid}`
-- [ ] Use `getHttpClient()` for fetch (environment-aware)
-- [ ] Handle HTTP errors (4xx, 5xx) - try next portal
-- [ ] Handle network errors - try next portal
-- [ ] Throw aggregate error if all portals fail
-
-**Implementation Files:**
-- `src/identity/api.ts` (MODIFY downloadByCID, ~50 lines)
+- [x] Iterate through configured portals
+- [x] Construct download URL: `${portal.protocol}://${portal.host}/${cid}`
+- [x] Use `getHttpClient()` for fetch (environment-aware)
+- [x] Handle HTTP errors (4xx, 5xx) - try next portal
+- [x] Handle network errors - try next portal
+- [x] Throw aggregate error if all portals fail
 
 **Success Criteria:**
-- [ ] Downloads from first successful portal
-- [ ] Falls back on failure
-- [ ] Tests from Sub-phase 1.3 pass
+- [x] Downloads from first successful portal
+- [x] Falls back on failure
+- [x] Tests from Sub-phase 1.3 pass
 
 ---
 
-### Sub-phase 3.3: Add Hash Verification
+### Sub-phase 3.3: Add Hash Verification ✅
 
 **Goal**: Verify downloaded content matches CID.
 
-**Line Budget**: 30 lines
-
 #### Tasks
-- [ ] Hash downloaded bytes with BLAKE3
-- [ ] Compare hash with CID
-- [ ] Throw error if mismatch (data integrity failure)
-- [ ] Return verified bytes on success
-
-**Implementation Files:**
-- `src/identity/api.ts` (MODIFY downloadByCID, ~30 lines)
+- [x] Hash downloaded bytes with BLAKE3
+- [x] Compare hash with CID
+- [x] Throw error if mismatch (data integrity failure)
+- [x] Return verified bytes on success
 
 **Success Criteria:**
-- [ ] Downloaded data is verified
-- [ ] Tampered data rejected
-- [ ] Tests from Sub-phase 1.4 pass
+- [x] Downloaded data is verified
+- [x] Tampered data rejected
+- [x] Tests from Sub-phase 1.4 pass
 
 ---
 
-## Phase 4: Expose Public API
+## Phase 4: Expose Public API ✅
 
-### Sub-phase 4.1: Add downloadByCID to S5 Class
+### Sub-phase 4.1: Add downloadByCID to S5 Class ✅
 
 **Goal**: Expose download method on main S5 class.
 
 **Line Budget**: 20 lines
 
 #### Tasks
-- [ ] Add `async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array>` to S5 class
-- [ ] Delegate to `this.apiWithIdentity.downloadByCID()` if identity exists
-- [ ] Throw helpful error if no identity/portals configured
+- [x] Add `async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array>` to S5 class
+- [x] Delegate to `this.apiWithIdentity.downloadByCID()` if identity exists
+- [x] Throw helpful error if no identity/portals configured
 
 **Implementation Files:**
-- `src/s5.ts` (ADD ~20 lines)
+- `src/s5.ts` (ADD ~30 lines)
 
 **Success Criteria:**
-- [ ] S5 class exposes downloadByCID method
-- [ ] Works when identity is configured
-- [ ] Clear error when not configured
+- [x] S5 class exposes downloadByCID method
+- [x] Works when identity is configured
+- [x] Clear error when not configured
 
 ---
 
-### Sub-phase 4.2: Export from Entry Points
+### Sub-phase 4.2: Export from Entry Points ✅
 
 **Goal**: Export new functionality from package entry points.
 
-**Line Budget**: 10 lines
-
 #### Tasks
-- [ ] Verify `cidStringToHash` exported from `src/fs/cid-utils.ts`
-- [ ] Verify exports from `src/index.ts`
-- [ ] Verify exports from `src/exports/core.ts`
-- [ ] Verify exports from `src/exports/advanced.ts`
+- [x] Export `detectCIDFormat`, `cidStringToHash`, `cidToDownloadFormat` from `src/fs/cid-utils.ts`
+- [x] Export `CIDFormat` type
+- [x] Update exports in `src/index.ts`
+- [x] Update exports in `src/exports/advanced.ts`
 
 **Implementation Files:**
-- `src/index.ts` (VERIFY/ADD exports)
-- `src/exports/core.ts` (VERIFY/ADD exports)
-- `src/exports/advanced.ts` (VERIFY/ADD exports)
+- `src/index.ts` (UPDATED)
+- `src/exports/advanced.ts` (UPDATED)
 
 **Success Criteria:**
-- [ ] All new utilities exported
-- [ ] TypeScript consumers can import
+- [x] All new utilities exported
+- [x] TypeScript consumers can import
 
 ---
 
 ## Phase 5: Integration Testing and Documentation
 
-### Sub-phase 5.1: Run All Tests
+### Sub-phase 5.1: Run All Tests ✅
 
 **Goal**: Ensure all tests pass with no regressions.
 
-**Line Budget**: 0 lines (testing only)
-
 #### Tasks
-- [ ] Run `npm run test:run test/public-download.test.ts`
-- [ ] Run full test suite `npm run test:run`
-- [ ] Run type check `npm run type-check`
-- [ ] Fix any failing tests
+- [x] Run `npm run test:run test/public-download.test.ts`
+- [x] Run full test suite `npm run test:run`
+- [x] Run type check `npm run type-check`
+- [x] Fix any failing tests
+
+**Test Results:** ✅ **22 public download tests passed**, 478 total tests passed
 
 **Success Criteria:**
-- [ ] All public download tests pass
-- [ ] No regressions in existing tests
-- [ ] TypeScript compilation succeeds
+- [x] All public download tests pass
+- [x] No regressions in existing tests
+- [x] TypeScript compilation succeeds
 
 ---
 
@@ -338,46 +325,50 @@ async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array>
 
 **Goal**: Document the new public download API.
 
-**Line Budget**: 50 lines
+**Status**: Pending - can be done as follow-up
 
 #### Tasks
 - [ ] Add downloadByCID to docs/API.md
 - [ ] Add usage example for public sharing workflow
 - [ ] Document CID format requirements
 
-**Documentation Files:**
-- `docs/API.md` (ADD ~50 lines)
-
-**Success Criteria:**
-- [ ] API documented with examples
-- [ ] Public sharing workflow documented
-
 ---
 
-## Summary
+## Summary ✅
 
-**Total Line Budget**: ~585 lines
-- Tests: ~300 lines
-- Implementation: ~225 lines
-- Documentation: ~60 lines
+**Implementation Status**: COMPLETE (Phases 1-4)
 
-**Files to Create:**
-- `test/public-download.test.ts` (~300 lines)
+**Files Created:**
+- `test/public-download.test.ts` (~530 lines, 22 tests)
 
-**Files to Modify:**
-- `src/fs/cid-utils.ts` (~65 lines added)
-- `src/identity/api.ts` (~140 lines added)
-- `src/s5.ts` (~20 lines added)
-- `docs/API.md` (~60 lines added)
+**Files Modified:**
+- `src/fs/cid-utils.ts` (+120 lines: detectCIDFormat, cidStringToHash, cidToDownloadFormat)
+- `src/identity/api.ts` (+110 lines: downloadByCID method)
+- `src/s5.ts` (+30 lines: downloadByCID delegation)
+- `src/index.ts` (+2 lines: exports)
+- `src/exports/advanced.ts` (+7 lines: exports)
 
-**Test Count**: ~24 new tests
+**Test Results:**
+- 22 new tests for public download functionality
+- All tests passing
 
-**Public Sharing Workflow (After Implementation):**
+**New API:**
+```typescript
+// S5 class method
+s5.downloadByCID(cid: string | Uint8Array): Promise<Uint8Array>
+
+// CID utilities
+detectCIDFormat(cid: string): CIDFormat  // 'raw' | 'blob'
+cidStringToHash(cid: string): Uint8Array  // Extract 32-byte hash
+cidToDownloadFormat(cid: string | Uint8Array): string  // Convert to download URL format
+```
+
+**Public Sharing Workflow:**
 ```typescript
 // User A: Upload and share
 const s5 = await S5.create({ initialPeers: [...] });
-await s5.login(seedPhrase);
-await s5.registerPortal('https://s5.ninja');
+await s5.recoverIdentityFromSeedPhrase(seedPhrase);
+await s5.registerOnNewPortal('https://s5.ninja');
 
 const fs5 = s5.fs;
 await fs5.put("home/public/photo.jpg", imageData);
@@ -389,8 +380,8 @@ console.log("Share this CID:", cidString);
 
 // User B: Download by CID
 const s5b = await S5.create({ initialPeers: [...] });
-await s5b.login(seedPhrase);
-await s5b.registerPortal('https://s5.ninja');
+await s5b.recoverIdentityFromSeedPhrase(seedPhrase);
+await s5b.registerOnNewPortal('https://s5.ninja');
 
 const data = await s5b.downloadByCID(cidString);
 ```

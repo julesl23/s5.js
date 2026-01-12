@@ -16,7 +16,8 @@ export { BatchOperations } from './fs/utils/batch.js';
 
 // Export advanced CID-aware API
 export { FS5Advanced } from './fs/fs5-advanced.js';
-export { formatCID, parseCID, verifyCID, cidToString } from './fs/cid-utils.js';
+export { formatCID, parseCID, verifyCID, cidToString, detectCIDFormat, cidStringToHash, cidToDownloadFormat } from './fs/cid-utils.js';
+export type { CIDFormat } from './fs/cid-utils.js';
 
 // Export media processing classes
 export { MediaProcessor } from './media/index.js';

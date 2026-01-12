@@ -159,4 +159,34 @@ export class S5 {
   async reconnect(): Promise<void> {
     await this.node.p2p.reconnect();
   }
+
+  /**
+   * Download content by CID from S5 portals
+   *
+   * This method provides public download functionality, allowing users to download
+   * content that has been shared via CID. It tries each configured portal until
+   * one succeeds, then verifies the downloaded data matches the CID hash.
+   *
+   * @param cid - The CID as string (53-char or 59-char format) or 32-byte Uint8Array
+   * @returns The downloaded content as Uint8Array
+   * @throws Error if no identity/portals configured, all portals fail, or hash verification fails
+   *
+   * @example
+   * ```typescript
+   * // User A: Upload and share
+   * await fs5.put("home/public/photo.jpg", imageData);
+   * const cid = await advanced.pathToCID("home/public/photo.jpg");
+   * const cidString = formatCID(cid);
+   * console.log("Share this CID:", cidString);
+   *
+   * // User B: Download by CID
+   * const data = await s5.downloadByCID(cidString);
+   * ```
+   */
+  async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array> {
+    if (!this.apiWithIdentity) {
+      throw new Error('No identity configured. Call recoverIdentityFromSeedPhrase() and registerOnNewPortal() first.');
+    }
+    return this.apiWithIdentity.downloadByCID(cid);
+  }
 }

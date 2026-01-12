@@ -272,6 +272,118 @@ export class S5APIWithIdentity implements S5APIInterface {
     downloadBlobAsBytes(hash: Uint8Array): Promise<Uint8Array> {
         return this.node.downloadBlobAsBytes(hash);
     }
+
+    /**
+     * Download content by CID from S5 portals
+     *
+     * This method provides public download functionality, allowing users to download
+     * content that has been shared via CID. It tries each configured portal until
+     * one succeeds, then verifies the downloaded data matches the CID hash.
+     *
+     * @param cid - The CID as string (53-char or 59-char format) or 32-byte Uint8Array
+     * @returns The downloaded content as Uint8Array
+     * @throws Error if no portals configured, all portals fail, or hash verification fails
+     *
+     * @example
+     * ```typescript
+     * // Download by CID string
+     * const data = await api.downloadByCID('baaaa...');
+     *
+     * // Download by raw hash
+     * const data = await api.downloadByCID(hash);
+     * ```
+     */
+    async downloadByCID(cid: string | Uint8Array): Promise<Uint8Array> {
+        // Import CID utilities
+        const { cidToDownloadFormat, cidStringToHash } = await import('../fs/cid-utils.js');
+
+        // Check if portals are configured
+        const portals = Object.values(this.accountConfigs);
+        if (portals.length === 0) {
+            throw new Error('No portals configured for download');
+        }
+
+        // Convert CID to download format and extract hash for verification
+        let cidString: string;
+        let expectedHash: Uint8Array;
+
+        if (cid instanceof Uint8Array) {
+            if (cid.length !== 32) {
+                throw new Error(`Invalid CID size: expected 32 bytes, got ${cid.length} bytes`);
+            }
+            cidString = cidToDownloadFormat(cid);
+            expectedHash = cid;
+        } else if (typeof cid === 'string') {
+            if (cid.length === 0) {
+                throw new Error('CID string cannot be empty');
+            }
+            cidString = cidToDownloadFormat(cid);
+            expectedHash = cidStringToHash(cid);
+        } else {
+            throw new Error('CID must be a string or Uint8Array');
+        }
+
+        // Get HTTP client
+        const { fetch } = await this.getHttpClient();
+
+        // Try each portal until success
+        const errors: string[] = [];
+        for (const portal of portals) {
+            const downloadUrl = `${portal.protocol}://${portal.host}/${cidString}`;
+
+            try {
+                console.log('[Enhanced S5.js] Portal: Download attempt', {
+                    portal: portal.host,
+                    cid: cidString.slice(0, 20) + '...'
+                });
+
+                const res = await fetch(downloadUrl);
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    errors.push(`${portal.host}: HTTP ${res.status} - ${errorText.slice(0, 100)}`);
+                    continue;
+                }
+
+                const data = new Uint8Array(await res.arrayBuffer());
+
+                // Verify hash matches CID
+                const computedHash = await this.crypto.hashBlake3(data);
+
+                let hashMatches = true;
+                if (computedHash.length !== expectedHash.length) {
+                    hashMatches = false;
+                } else {
+                    for (let i = 0; i < expectedHash.length; i++) {
+                        if (computedHash[i] !== expectedHash[i]) {
+                            hashMatches = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (!hashMatches) {
+                    errors.push(`${portal.host}: Hash verification failed - data integrity error`);
+                    continue;
+                }
+
+                console.log('[Enhanced S5.js] Portal: Download successful', {
+                    portal: portal.host,
+                    size: data.length,
+                    verified: true
+                });
+
+                return data;
+            } catch (e) {
+                const errorMsg = e instanceof Error ? e.message : String(e);
+                errors.push(`${portal.host}: ${errorMsg.slice(0, 100)}`);
+                console.error(`[Enhanced S5.js] Portal: Download failed from ${portal.host}`, e);
+            }
+        }
+
+        throw new Error(`Failed to download CID from all portals:\n${errors.join('\n')}`);
+    }
+
     registryGet(pk: Uint8Array): Promise<RegistryEntry | undefined> {
         return this.node.registryGet(pk);
     }
