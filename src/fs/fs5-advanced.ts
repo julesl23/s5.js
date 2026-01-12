@@ -94,6 +94,50 @@ export class FS5Advanced {
   }
 
   /**
+   * Get the full BlobIdentifier CID for a file path (for portal downloads)
+   *
+   * Unlike pathToCID which returns just the raw 32-byte hash, this method
+   * returns the full BlobIdentifier string that includes the file size,
+   * which is required by S5 portals for downloading.
+   *
+   * @param path - The file path
+   * @returns The BlobIdentifier CID as a base32 string (59 chars)
+   * @throws Error if path does not exist or is not a file
+   *
+   * @example
+   * ```typescript
+   * const blobCID = await advanced.pathToBlobCID('home/photo.jpg');
+   * console.log(blobCID); // "uaah6c..." (59 chars)
+   *
+   * // Use with downloadByCID
+   * const data = await s5.downloadByCID(blobCID);
+   * ```
+   */
+  async pathToBlobCID(path: string): Promise<string> {
+    // Get metadata for the path
+    const metadata = await this.fs5.getMetadata(path);
+
+    if (!metadata) {
+      throw new Error(`Path not found: ${path}`);
+    }
+
+    if (metadata.type !== 'file') {
+      throw new Error(`pathToBlobCID only works for files, not directories: ${path}`);
+    }
+
+    // Get FileRef which contains both hash and size
+    const fileRef = await this._getFileRef(path);
+    if (!fileRef || !fileRef.hash) {
+      throw new Error(`Failed to extract CID for file: ${path}`);
+    }
+
+    // Import BlobIdentifier and create the full CID with size
+    const { BlobIdentifier } = await import('../identifier/blob.js');
+    const blobId = new BlobIdentifier(fileRef.hash, Number(fileRef.size));
+    return blobId.toString();
+  }
+
+  /**
    * Find path for a given CID
    *
    * @param cid - The CID to search for (32 bytes)

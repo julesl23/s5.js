@@ -116,19 +116,27 @@ export function cidStringToHash(cid: string): Uint8Array {
 /**
  * Convert a CID (string or Uint8Array) to the format expected by portal download endpoints
  *
- * Portals accept CID strings directly in the URL path. This function ensures the CID
- * is in the correct string format for download URLs.
+ * S5 portals require BlobIdentifier CIDs (which include file size) for downloads.
+ * String CIDs (both raw hash and BlobIdentifier formats) are returned unchanged.
+ * Uint8Array (32-byte raw hash) is converted to base32 string.
  *
- * @param cid - The CID as string or 32-byte Uint8Array
+ * Note: For downloads, use `pathToBlobCID()` which returns BlobIdentifier format with size.
+ * Raw hash format may not work with all portal endpoints.
+ *
+ * @param cid - The CID as string (raw or BlobIdentifier) or 32-byte Uint8Array
  * @returns CID string suitable for portal download URL
  *
  * @example
  * ```typescript
- * // From string CID
+ * // BlobIdentifier CID (59+ chars) - returned as-is (preferred for downloads)
+ * const downloadCID = cidToDownloadFormat('blobb4qvvwvlw3o7y...');
+ * const url = `https://s5.ninja/${downloadCID}`;
+ *
+ * // Raw hash CID (53 chars) - returned as-is
  * const downloadCID = cidToDownloadFormat('baaaa...');
  * const url = `https://s5.ninja/${downloadCID}`;
  *
- * // From Uint8Array (raw 32-byte hash)
+ * // From Uint8Array (raw 32-byte hash) - converted to base32
  * const downloadCID = cidToDownloadFormat(hash);
  * const url = `https://s5.ninja/${downloadCID}`;
  * ```
@@ -146,10 +154,17 @@ export function cidToDownloadFormat(cid: string | Uint8Array): string {
     if (cid.length === 0) {
       throw new Error('CID string cannot be empty');
     }
-    // Validate the CID format by attempting to detect it
-    detectCIDFormat(cid);
-    // Return as-is - portal accepts CID strings directly
-    return cid;
+
+    const format = detectCIDFormat(cid);
+
+    if (format === 'raw') {
+      // Raw hash format - return as-is
+      return cid;
+    } else {
+      // BlobIdentifier format - return as-is (portal requires BlobIdentifier with size)
+      // DO NOT convert to raw hash - portal returns 500 UnimplementedError for raw hash CIDs
+      return cid;
+    }
   }
 
   throw new Error('CID must be a string or Uint8Array');

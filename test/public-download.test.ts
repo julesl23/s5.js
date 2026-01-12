@@ -123,7 +123,7 @@ class MockS5APIWithIdentity {
     // Try each portal until success
     const errors: string[] = [];
     for (const portal of portals) {
-      const downloadUrl = `${portal.protocol}://${portal.host}/${cidString}`;
+      const downloadUrl = `${portal.protocol}://${portal.host}/s5/blob/${cidString}`;
 
       try {
         const res = await fetchFn(downloadUrl);
@@ -248,8 +248,13 @@ describe('Public Download by CID', () => {
       expect(validCID[0]).toBe('b'); // multibase prefix
 
       // The downloadByCID should accept this format
-      // Will throw "not implemented" for now, but validates the CID format
       api.addPortal('test', 'https', 's5.ninja');
+
+      // Mock fetch to return 404 - validates CID format is accepted
+      const responses = new Map<string, MockFetchResponse | Error>();
+      responses.set(`https://s5.ninja/s5/blob/${validCID}`, createErrorResponse(404, 'Not found'));
+      api.setMockFetch(createMockFetch(responses));
+
       await expect(api.downloadByCID(validCID)).rejects.toThrow();
     });
 
@@ -271,6 +276,12 @@ describe('Public Download by CID', () => {
 
       // The downloadByCID should accept this format
       api.addPortal('test', 'https', 's5.ninja');
+
+      // Mock fetch to return 404 - validates CID format is accepted
+      const responses = new Map<string, MockFetchResponse | Error>();
+      responses.set(`https://s5.ninja/s5/blob/${blobCID}`, createErrorResponse(404, 'Not found'));
+      api.setMockFetch(createMockFetch(responses));
+
       await expect(api.downloadByCID(blobCID)).rejects.toThrow();
     });
 
@@ -280,6 +291,14 @@ describe('Public Download by CID', () => {
 
       // The downloadByCID should accept Uint8Array input
       api.addPortal('test', 'https', 's5.ninja');
+
+      // Mock fetch - Uint8Array is converted to base32 string
+      const { base32 } = await import('multiformats/bases/base32');
+      const cidString = base32.encode(validHash);
+      const responses = new Map<string, MockFetchResponse | Error>();
+      responses.set(`https://s5.ninja/s5/blob/${cidString}`, createErrorResponse(404, 'Not found'));
+      api.setMockFetch(createMockFetch(responses));
+
       await expect(api.downloadByCID(validHash)).rejects.toThrow();
     });
 
@@ -333,7 +352,7 @@ describe('Public Download by CID', () => {
 
       // Mock fetch to return success on first portal
       const responses = new Map<string, MockFetchResponse | Error>();
-      responses.set('https://s5.ninja/test-cid', createSuccessResponse(testData));
+      responses.set('https://s5.ninja/s5/blob/test-cid', createSuccessResponse(testData));
 
       api.setMockFetch(createMockFetch(responses));
 
@@ -348,8 +367,8 @@ describe('Public Download by CID', () => {
 
       // Mock fetch: first portal fails, second succeeds
       const responses = new Map<string, MockFetchResponse | Error>();
-      responses.set('https://s5.ninja/test-cid', createErrorResponse(500, 'Server error'));
-      responses.set('https://s5.garden/test-cid', createSuccessResponse(testData));
+      responses.set('https://s5.ninja/s5/blob/test-cid', createErrorResponse(500, 'Server error'));
+      responses.set('https://s5.garden/s5/blob/test-cid', createSuccessResponse(testData));
 
       api.setMockFetch(createMockFetch(responses));
 
@@ -385,8 +404,8 @@ describe('Public Download by CID', () => {
 
       // Mock fetch: all portals fail
       const responses = new Map<string, MockFetchResponse | Error>();
-      responses.set('https://s5.ninja/test-cid', createErrorResponse(500, 'Server error'));
-      responses.set('https://s5.garden/test-cid', createErrorResponse(503, 'Service unavailable'));
+      responses.set('https://s5.ninja/s5/blob/test-cid', createErrorResponse(500, 'Server error'));
+      responses.set('https://s5.garden/s5/blob/test-cid', createErrorResponse(503, 'Service unavailable'));
 
       api.setMockFetch(createMockFetch(responses));
 
@@ -394,7 +413,7 @@ describe('Public Download by CID', () => {
       await expect(api.downloadByCID('test-cid')).rejects.toThrow();
     });
 
-    test('constructs correct URL: {protocol}://{host}/{cid}', async () => {
+    test('constructs correct URL: {protocol}://{host}/s5/blob/{cid}', async () => {
       api.addPortal('portal1', 'https', 's5.ninja');
 
       // Track the URL used
@@ -408,18 +427,18 @@ describe('Public Download by CID', () => {
 
       const testCID = 'uJh9dKyF7CZPJQ8FbpW2vksYrncgBfGnBjNADj4GPhqRfY';
 
-      // Should construct URL as {protocol}://{host}/{cid}
+      // Should construct URL as {protocol}://{host}/s5/blob/{cid}
       await expect(api.downloadByCID(testCID)).rejects.toThrow();
 
       // Once implemented, should verify:
-      // expect(requestedUrl).toBe('https://s5.ninja/uJh9dKyF7CZPJQ8FbpW2vksYrncgBfGnBjNADj4GPhqRfY');
+      // expect(requestedUrl).toBe('https://s5.ninja/s5/blob/uJh9dKyF7CZPJQ8FbpW2vksYrncgBfGnBjNADj4GPhqRfY');
     });
 
     test('handles HTTP 404 response gracefully', async () => {
       api.addPortal('portal1', 'https', 's5.ninja');
 
       const responses = new Map<string, MockFetchResponse | Error>();
-      responses.set('https://s5.ninja/test-cid', createErrorResponse(404, 'Not found'));
+      responses.set('https://s5.ninja/s5/blob/test-cid', createErrorResponse(404, 'Not found'));
 
       api.setMockFetch(createMockFetch(responses));
 
@@ -431,7 +450,7 @@ describe('Public Download by CID', () => {
       api.addPortal('portal1', 'https', 's5.ninja');
 
       const responses = new Map<string, MockFetchResponse | Error>();
-      responses.set('https://s5.ninja/test-cid', new Error('Network error: connection refused'));
+      responses.set('https://s5.ninja/s5/blob/test-cid', new Error('Network error: connection refused'));
 
       api.setMockFetch(createMockFetch(responses));
 
@@ -454,7 +473,7 @@ describe('Public Download by CID', () => {
 
       // Mock fetch to return the matching data
       const responses = new Map<string, MockFetchResponse | Error>();
-      responses.set(`https://s5.ninja/${cidString}`, createSuccessResponse(testData));
+      responses.set(`https://s5.ninja/s5/blob/${cidString}`, createSuccessResponse(testData));
 
       api.setMockFetch(createMockFetch(responses));
 
@@ -477,7 +496,7 @@ describe('Public Download by CID', () => {
       // Mock fetch to return DIFFERENT data (tampered)
       const tamperedData = new TextEncoder().encode('Tampered data');
       const responses = new Map<string, MockFetchResponse | Error>();
-      responses.set(`https://s5.ninja/${cidString}`, createSuccessResponse(tamperedData));
+      responses.set(`https://s5.ninja/s5/blob/${cidString}`, createSuccessResponse(tamperedData));
 
       api.setMockFetch(createMockFetch(responses));
 
@@ -524,9 +543,18 @@ describe('Public Download by CID', () => {
 
       api.addPortal('portal1', 'https', 's5.ninja');
 
-      // Both formats should be accepted (will throw "not implemented" for now)
-      await expect(api.downloadByCID(rawCID)).rejects.toThrow();
-      await expect(api.downloadByCID(blobCID)).rejects.toThrow();
+      // Mock fetch to return success for both CID formats
+      const responses = new Map<string, MockFetchResponse | Error>();
+      responses.set(`https://s5.ninja/s5/blob/${rawCID}`, createSuccessResponse(testData));
+      responses.set(`https://s5.ninja/s5/blob/${blobCID}`, createSuccessResponse(testData));
+      api.setMockFetch(createMockFetch(responses));
+
+      // Both formats should be accepted and return data
+      const result1 = await api.downloadByCID(rawCID);
+      expect(result1).toEqual(testData);
+
+      const result2 = await api.downloadByCID(blobCID);
+      expect(result2).toEqual(testData);
     });
   });
 });

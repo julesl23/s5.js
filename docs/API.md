@@ -414,6 +414,8 @@ try {
 
 ### CID Format Utilities
 
+**Important:** S5 portals require BlobIdentifier CIDs (which include file size) for download endpoints. The `downloadByCID()` method handles both CID formats - it passes BlobIdentifier CIDs through unchanged and converts raw hash CIDs to base32 format.
+
 Additional utilities are available for working with CID formats:
 
 ```typescript
@@ -428,9 +430,20 @@ const hash = cidStringToHash(cidString);
 console.log(hash); // Uint8Array(32)
 
 // Convert CID to download-compatible format
-const downloadCID = cidToDownloadFormat(hash);
-console.log(downloadCID); // "baaaa..."
+// - BlobIdentifier CIDs pass through unchanged (portal requires this format)
+// - Uint8Array inputs are converted to base32 string
+const downloadCID = cidToDownloadFormat(blobIdentifierCID);
+console.log(downloadCID); // Same BlobIdentifier CID (unchanged)
 ```
+
+**CID Formats Explained:**
+
+| Format | Example Prefix | Length | Contains | Use Case |
+|--------|---------------|--------|----------|----------|
+| Raw Hash | `b...` | 53 chars | BLAKE3 hash only | Verification, deduplication |
+| BlobIdentifier | `blob...` or `u...` | 59+ chars | Hash + file size | Portal downloads, sharing |
+
+Both formats are accepted by `downloadByCID()`. For portal downloads, use `pathToBlobCID()` which returns BlobIdentifier format with size metadata.
 
 ### Mobile App Example
 
@@ -2351,6 +2364,52 @@ console.log(cid); // Uint8Array(32) [...]
 const formatted = formatCID(cid, 'base32');
 console.log(formatted); // "bafybeig..."
 ```
+
+#### pathToBlobCID(path)
+
+Get the full BlobIdentifier CID for a file path. Unlike `pathToCID()` which returns the raw 32-byte hash, this method returns the full BlobIdentifier string that includes the file size, which is required by S5 portals for downloading.
+
+```typescript
+async pathToBlobCID(path: string): Promise<string>
+```
+
+**Parameters:**
+- `path: string` - The file path (not directories)
+
+**Returns:**
+- `Promise<string>` - The BlobIdentifier CID as a base32 string (59 chars)
+
+**Throws:**
+- `Error` if path does not exist
+- `Error` if path is a directory (only works for files)
+
+**Example:**
+
+```typescript
+const s5 = await S5.create();
+await s5.recoverIdentityFromSeedPhrase(seedPhrase);
+
+const advanced = new FS5Advanced(s5.fs);
+
+// Store a file
+await s5.fs.put('home/photo.jpg', imageData);
+
+// Get BlobIdentifier CID for sharing/downloading
+const blobCID = await advanced.pathToBlobCID('home/photo.jpg');
+console.log(blobCID); // "uaah6c..." (59 chars with file size encoded)
+
+// Use with downloadByCID
+const data = await s5.downloadByCID(blobCID);
+```
+
+**CID Format Comparison:**
+
+| Method | Returns | Length | Use Case |
+|--------|---------|--------|----------|
+| `pathToCID()` | Raw BLAKE3 hash | 32 bytes | Verification, deduplication |
+| `pathToBlobCID()` | BlobIdentifier string | 59 chars | Portal downloads, sharing |
+
+For most download/sharing use cases, use `pathToBlobCID()` as it contains the file size metadata required by portals.
 
 #### cidToPath(cid)
 
