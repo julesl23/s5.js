@@ -8,11 +8,152 @@ import { base32 } from 'multiformats/bases/base32';
 import { base58btc } from 'multiformats/bases/base58';
 import { base64 } from 'multiformats/bases/base64';
 import type { CryptoImplementation } from '../api/crypto.js';
+import { BlobIdentifier } from '../identifier/blob.js';
 
 /**
  * CID size in bytes (blake3 hash)
  */
 const CID_SIZE = 32;
+
+/**
+ * CID format types
+ */
+export type CIDFormat = 'raw' | 'blob';
+
+/**
+ * Detect the format of a CID string
+ *
+ * @param cid - The CID string to analyze
+ * @returns 'raw' for 53-char raw hash format, 'blob' for BlobIdentifier format
+ *
+ * @example
+ * ```typescript
+ * const format = detectCIDFormat('baaaa...'); // 53 chars -> 'raw'
+ * const format = detectCIDFormat('uJh9d...'); // 59+ chars -> 'blob'
+ * ```
+ */
+export function detectCIDFormat(cid: string): CIDFormat {
+  if (!cid || cid.length === 0) {
+    throw new Error('CID string cannot be empty');
+  }
+
+  // Raw hash format: 53 chars (b + 52 base32 chars) = 32 bytes
+  // BlobIdentifier format: 59+ chars = 36+ bytes (prefix + hash + size)
+
+  // Try to decode and check the length
+  try {
+    const firstChar = cid[0];
+    let decoded: Uint8Array;
+
+    if (firstChar === 'b' && /^[a-z2-7]+$/.test(cid.slice(1))) {
+      decoded = base32.decode(cid);
+    } else if (firstChar === 'u') {
+      // Base64url format (common for BlobIdentifier)
+      decoded = base64.decode(cid);
+    } else if (firstChar === 'z') {
+      decoded = base58btc.decode(cid);
+    } else {
+      throw new Error('Unable to detect CID encoding');
+    }
+
+    // 32 bytes = raw hash, 36+ bytes = BlobIdentifier
+    if (decoded.length === CID_SIZE) {
+      return 'raw';
+    } else if (decoded.length >= 36) {
+      // Check for BlobIdentifier prefix bytes (0x5b, 0x82) or legacy (0x26)
+      if ((decoded[0] === 0x5b && decoded[1] === 0x82) || decoded[0] === 0x26) {
+        return 'blob';
+      }
+      throw new Error(`Unknown CID format: decoded length ${decoded.length}, prefix ${decoded[0].toString(16)}`);
+    } else {
+      throw new Error(`Invalid CID size: ${decoded.length} bytes`);
+    }
+  } catch (error) {
+    throw new Error(`Failed to detect CID format: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Extract the raw 32-byte BLAKE3 hash from a CID string
+ *
+ * Handles both raw hash format (53 chars) and BlobIdentifier format (59+ chars).
+ *
+ * @param cid - The CID string to extract hash from
+ * @returns The raw 32-byte BLAKE3 hash
+ *
+ * @example
+ * ```typescript
+ * // From raw hash CID (53 chars)
+ * const hash = cidStringToHash('baaaa...');
+ *
+ * // From BlobIdentifier CID (59+ chars)
+ * const hash = cidStringToHash('uJh9d...');
+ * ```
+ */
+export function cidStringToHash(cid: string): Uint8Array {
+  if (!cid || cid.length === 0) {
+    throw new Error('CID string cannot be empty');
+  }
+
+  const format = detectCIDFormat(cid);
+
+  if (format === 'raw') {
+    // Raw hash format - decode directly
+    return parseCID(cid);
+  } else {
+    // BlobIdentifier format - extract hash from structure
+    const blobId = BlobIdentifier.decode(cid);
+    // BlobIdentifier.hash is 33 bytes (MULTIHASH prefix + 32 byte hash)
+    // Extract the raw 32-byte hash by skipping the prefix byte
+    const rawHash = blobId.hash.subarray(1);
+    if (rawHash.length !== CID_SIZE) {
+      throw new Error(`Invalid hash size in BlobIdentifier: expected ${CID_SIZE} bytes, got ${rawHash.length} bytes`);
+    }
+    return rawHash;
+  }
+}
+
+/**
+ * Convert a CID (string or Uint8Array) to the format expected by portal download endpoints
+ *
+ * Portals accept CID strings directly in the URL path. This function ensures the CID
+ * is in the correct string format for download URLs.
+ *
+ * @param cid - The CID as string or 32-byte Uint8Array
+ * @returns CID string suitable for portal download URL
+ *
+ * @example
+ * ```typescript
+ * // From string CID
+ * const downloadCID = cidToDownloadFormat('baaaa...');
+ * const url = `https://s5.ninja/${downloadCID}`;
+ *
+ * // From Uint8Array (raw 32-byte hash)
+ * const downloadCID = cidToDownloadFormat(hash);
+ * const url = `https://s5.ninja/${downloadCID}`;
+ * ```
+ */
+export function cidToDownloadFormat(cid: string | Uint8Array): string {
+  if (cid instanceof Uint8Array) {
+    // Validate and convert Uint8Array to base32 string
+    if (cid.length !== CID_SIZE) {
+      throw new Error(`Invalid CID size: expected ${CID_SIZE} bytes, got ${cid.length} bytes`);
+    }
+    return formatCID(cid, 'base32');
+  }
+
+  if (typeof cid === 'string') {
+    if (cid.length === 0) {
+      throw new Error('CID string cannot be empty');
+    }
+    // Validate the CID format by attempting to detect it
+    detectCIDFormat(cid);
+    // Return as-is - portal accepts CID strings directly
+    return cid;
+  }
+
+  throw new Error('CID must be a string or Uint8Array');
+}
 
 /**
  * Format a CID using the specified multibase encoding
