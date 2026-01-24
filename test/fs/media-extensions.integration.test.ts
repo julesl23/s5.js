@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { S5 } from '../../src/index.js';
 import WebSocket from 'ws';
 import { URL as NodeURL } from 'url';
+import { getPortalUrl, getInitialPeers } from '../test-config.js';
 
 // Polyfill WebSocket for Node.js environment
 if (!global.WebSocket) {
@@ -117,16 +118,17 @@ describe.skip('FS5 Media Extensions - Integration', () => {
 
   beforeEach(async () => {
     // Create a real S5 instance with actual storage
-    s5 = await S5.create({
-      initialPeers: ["wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p"]
-    });
+    const initialPeers = getInitialPeers();
+    const portalUrl = getPortalUrl();
+
+    s5 = await S5.create({ initialPeers });
 
     // Create an identity for file operations
     const seedPhrase = s5.generateSeedPhrase();
     await s5.recoverIdentityFromSeedPhrase(seedPhrase);
 
     // Register on portal to enable uploads (required for real S5 portal testing)
-    await s5.registerOnNewPortal("https://s5.vup.cx");
+    await s5.registerOnNewPortal(portalUrl);
 
     // Ensure identity is initialized for file operations
     await s5.fs.ensureIdentityInitialized();

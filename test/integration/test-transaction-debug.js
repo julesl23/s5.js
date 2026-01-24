@@ -3,6 +3,7 @@ import { S5 } from "../../dist/src/index.js";
 import { generatePhrase } from "../../dist/src/identity/seed_phrase/seed_phrase.js";
 import { DirV1Serialiser } from "../../dist/src/fs/dirv1/serialisation.js";
 import { createRegistryEntry } from "../../dist/src/registry/entry.js";
+import { getPortalUrl, getInitialPeers } from "../test-config.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";
@@ -30,11 +31,12 @@ if (!global.FormData) global.FormData = FormData;
 if (!global.WebSocket) global.WebSocket = WebSocket;
 
 async function debugTransaction() {
+  const portalUrl = getPortalUrl();
+  const initialPeers = getInitialPeers();
+
   console.log("🔍 Transaction Debug\n");
 
-  const s5 = await S5.create({
-    initialPeers: ["wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p"]
-  });
+  const s5 = await S5.create({ initialPeers });
 
   // Generate fresh seed
   const freshSeedPhrase = generatePhrase(s5.api.crypto);
@@ -42,7 +44,7 @@ async function debugTransaction() {
   await s5.recoverIdentityFromSeedPhrase(freshSeedPhrase);
 
   // Register
-  await s5.registerOnNewPortal("https://s5.vup.cx");
+  await s5.registerOnNewPortal(portalUrl);
   console.log("✅ Registered\n");
 
   // Get root info

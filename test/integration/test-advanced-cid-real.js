@@ -26,6 +26,7 @@
 import { S5 } from '../../dist/src/index.js';
 import { FS5Advanced } from '../../dist/src/fs/fs5-advanced.js';
 import { formatCID, parseCID, verifyCID } from '../../dist/src/fs/cid-utils.js';
+import { getPortalUrl, getInitialPeers } from '../test-config.js';
 
 // Node.js polyfills
 import { webcrypto } from 'crypto';
@@ -51,11 +52,9 @@ if (!global.fetch) global.fetch = fetch;
 if (!global.FormData) global.FormData = FormData;
 if (!global.WebSocket) global.WebSocket = WebSocket;
 
-// Test configuration
-const PORTAL_URL = 'https://s5.vup.cx';
-const INITIAL_PEERS = [
-  'wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p',
-];
+// Test configuration (loaded from .env)
+const PORTAL_URL = getPortalUrl();
+const INITIAL_PEERS = getInitialPeers();
 
 // Registry propagation delay (milliseconds)
 const REGISTRY_DELAY = 5000;

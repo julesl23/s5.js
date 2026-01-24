@@ -2,6 +2,7 @@
 import { S5 } from "../../dist/src/index.js";
 import { performance } from "perf_hooks";
 import { generatePhrase } from "../../dist/src/identity/seed_phrase/seed_phrase.js";
+import { getPortalUrl, getInitialPeers } from "../test-config.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";
@@ -38,19 +39,20 @@ console.log = (...args) => {
 };
 
 async function main() {
+  const portalUrl = getPortalUrl();
+  const initialPeers = getInitialPeers();
+
   console.log("🚀 HAMT Activation Threshold Test (Real Portal)\n");
   console.log("Testing the exact point where HAMT activates...\n");
 
   // Initialize S5
-  const s5 = await S5.create({
-    initialPeers: ["wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p"]
-  });
+  const s5 = await S5.create({ initialPeers });
 
   const seedPhrase = generatePhrase(s5.crypto);
   await s5.recoverIdentityFromSeedPhrase(seedPhrase);
-  
+
   try {
-    await s5.registerOnNewPortal("https://s5.vup.cx");
+    await s5.registerOnNewPortal(portalUrl);
   } catch (error) {
     if (!error.message.includes("already has an account")) throw error;
   }

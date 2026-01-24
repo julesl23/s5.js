@@ -2,6 +2,7 @@
 import { S5 } from "../../dist/src/index.js";
 import { performance } from "perf_hooks";
 import { generatePhrase } from "../../dist/src/identity/seed_phrase/seed_phrase.js";
+import { getPortalUrl, getInitialPeers } from "../test-config.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";
@@ -54,23 +55,24 @@ console.log = (...args) => {
 
 // Main benchmark function
 async function runBenchmarks() {
+  const portalUrl = getPortalUrl();
+  const initialPeers = getInitialPeers();
+
   console.log("🚀 Real S5 Portal HAMT Benchmark (Simplified)\n");
   console.log("=" .repeat(70) + "\n");
-  console.log("Portal: https://s5.vup.cx");
+  console.log(`Portal: ${portalUrl}`);
   console.log("Note: Reduced entry counts for network testing\n");
 
   // Initialize S5 with real portal
   console.log("Setting up S5 with fresh identity...");
-  const s5 = await S5.create({
-    initialPeers: ["wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p"]
-  });
+  const s5 = await S5.create({ initialPeers });
 
   const seedPhrase = generatePhrase(s5.crypto);
   console.log("Seed phrase:", seedPhrase);
   await s5.recoverIdentityFromSeedPhrase(seedPhrase);
-  
+
   try {
-    await s5.registerOnNewPortal("https://s5.vup.cx");
+    await s5.registerOnNewPortal(portalUrl);
     console.log("✅ Portal registration successful");
   } catch (error) {
     if (!error.message.includes("already has an account")) throw error;

@@ -18,6 +18,7 @@ import { generatePhrase } from "../../dist/src/identity/seed_phrase/seed_phrase.
 import { readFileSync } from "fs";
 import { fileURLToPath, URL as NodeURL } from "url";
 import { dirname, join } from "path";
+import { getPortalUrl, getInitialPeers } from "../test-config.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";
@@ -137,12 +138,13 @@ async function testMediaExtensions() {
     // ============================================================
     // GROUP 1: Setup and Initialization
     // ============================================================
+    const portalUrl = getPortalUrl();
+    const initialPeers = getInitialPeers();
+
     console.log("📦 GROUP 1: Setup and Initialization\n");
 
     console.log("  1.1: Creating S5 instance...");
-    const s5 = await S5.create({
-      initialPeers: ["wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p"]
-    });
+    const s5 = await S5.create({ initialPeers });
     console.log("  ✅ S5 instance created");
     testsPassed++;
 
@@ -153,7 +155,7 @@ async function testMediaExtensions() {
       await s5.recoverIdentityFromSeedPhrase(seedPhrase);
 
       // Register on portal to enable uploads (required for real S5 portal testing)
-      await s5.registerOnNewPortal("https://s5.vup.cx");
+      await s5.registerOnNewPortal(portalUrl);
 
       // Ensure identity is initialized for file operations
       await s5.fs.ensureIdentityInitialized();

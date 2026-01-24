@@ -1,5 +1,9 @@
 import { webcrypto } from 'node:crypto';
 import 'fake-indexeddb/auto';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 // Set NODE_ENV for test environment
 process.env.NODE_ENV = 'test';
