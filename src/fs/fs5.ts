@@ -1,6 +1,7 @@
 import { base32 } from "multiformats/bases/base32";
 import { S5APIInterface } from "../api/s5.js";
 import { mkeyEd25519, MULTIHASH_BLAKE3 } from "../constants.js";
+import { dbg, dbgError } from "../util/debug.js";
 import {
   decryptMutableBytes,
   encryptMutableBytes,
@@ -290,16 +291,19 @@ export class FS5 {
     data: any,
     options?: PutOptions
   ): Promise<void> {
+    dbg('FS5', 'put', 'ENTER', { path, dataType: typeof data, hasOptions: !!options });
     const startTime = performance.now();
     path = normalizePath(path);
     const segments = path.split("/").filter((s) => s);
 
     if (segments.length === 0) {
+      dbgError('FS5', 'put', 'Cannot put at root');
       throw new Error("Cannot put data at root directory");
     }
 
     const fileName = segments[segments.length - 1];
     const dirPath = segments.slice(0, -1).join("/") || "";
+    dbg('FS5', 'put', 'Path parsed', { fileName, dirPath, segments });
 
     // Handle null/undefined data
     if (data === null || data === undefined) {
@@ -977,15 +981,25 @@ export class FS5 {
   }
 
   async createDirectory(path: string, name: string): Promise<DirRef> {
+    dbg('DIRECTORY', 'createDirectory', 'ENTER', { path, name });
     // TODO validateFileSystemEntityName(name);
 
     let dirReference: DirRef | undefined;
 
+    const preprocessedPath = await this._preprocessLocalPath(path);
+    dbg('DIRECTORY', 'createDirectory', 'Preprocessed path', { preprocessedPath });
+
     const res = await this.runTransactionOnDirectory(
-      await this._preprocessLocalPath(path),
+      preprocessedPath,
       async (dir, writeKey) => {
+        dbg('DIRECTORY', 'createDirectory', 'Transaction callback', {
+          isSharded: !!dir.header.sharding?.root?.cid,
+          existingDirs: Array.from(dir.dirs.keys())
+        });
+
         // Check if directory is sharded
         if (dir.header.sharding?.root?.cid) {
+          dbg('DIRECTORY', 'createDirectory', 'Loading HAMT for sharded directory...');
           // Load HAMT
           const hamtData = await this.api.downloadBlobAsBytes(
             dir.header.sharding.root.cid
@@ -995,12 +1009,14 @@ export class FS5 {
           // Check if already exists
           const existingDir = await hamt.get(`d:${name}`);
           if (existingDir) {
+            dbgError('DIRECTORY', 'createDirectory', 'Subdirectory already exists in HAMT', { name });
             throw new Error(
               "Directory already contains a subdirectory with the same name"
             );
           }
 
           // Create new directory and add to HAMT
+          dbg('DIRECTORY', 'createDirectory', 'Creating subdirectory (sharded)', { name });
           const newDir = await this._createDirectory(name, writeKey);
           await hamt.insert(`d:${name}`, newDir);
 
@@ -1011,24 +1027,30 @@ export class FS5 {
           dir.header.sharding.root.totalEntries++;
 
           dirReference = newDir;
+          dbg('DIRECTORY', 'createDirectory', 'Subdirectory created in HAMT', { name });
         } else {
           // Regular directory
           if (dir.dirs.has(name)) {
+            dbgError('DIRECTORY', 'createDirectory', 'Subdirectory already exists', { name });
             throw new Error(
               "Directory already contains a subdirectory with the same name"
             );
           }
+          dbg('DIRECTORY', 'createDirectory', 'Creating subdirectory (regular)', { name });
           const newDir = await this._createDirectory(name, writeKey);
           dir.dirs.set(name, newDir);
           dirReference = newDir;
 
           // Check if we need to convert to sharded
           await this._checkAndConvertToSharded(dir);
+          dbg('DIRECTORY', 'createDirectory', 'Subdirectory created', { name, totalDirs: dir.dirs.size });
         }
         return dir;
       }
     );
+    dbg('DIRECTORY', 'createDirectory', 'Transaction complete, unwrapping...', { resultType: res.type });
     res.unwrap();
+    dbg('DIRECTORY', 'createDirectory', 'SUCCESS', { path, name });
     return dirReference!;
   }
   public async createFile(
@@ -1067,55 +1089,150 @@ export class FS5 {
     uri: string,
     transaction: DirectoryTransactionFunction
   ): Promise<DirectoryTransactionResult> {
+    dbg('DIRECTORY', 'runTransactionOnDirectory', 'ENTER', { uri: uri.slice(0, 80) });
+
     const ks = await this.getKeySet(uri);
-    const dir = await this._getDirectoryMetadata(ks);
-    if (ks.writeKey == null) throw new Error(`Missing write access for ${uri}`);
-    try {
-      const transactionRes = await transaction(
-        dir?.directory ?? {
-          magic: "S5.pro",
-          header: {},
-          dirs: new Map(),
-          files: new Map(),
-        },
-        ks.writeKey!
-      );
-      if (transactionRes == null) {
+    if (ks.writeKey == null) {
+      dbgError('DIRECTORY', 'runTransactionOnDirectory', 'Missing write access', { uri });
+      throw new Error(`Missing write access for ${uri}`);
+    }
+    dbg('DIRECTORY', 'runTransactionOnDirectory', 'Got keyset', {
+      hasWriteKey: !!ks.writeKey,
+      hasEncryptionKey: !!ks.encryptionKey,
+      publicKey: ks.publicKey
+    });
+
+    const maxRetries = 5;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      dbg('DIRECTORY', 'runTransactionOnDirectory', `Attempt ${attempt}/${maxRetries}`, { uri: uri.slice(0, 50) });
+
+      // Re-fetch directory metadata on each attempt to get current revision
+      let dir: { directory: DirV1; entry?: RegistryEntry } | undefined;
+      try {
+        dbg('DIRECTORY', 'runTransactionOnDirectory', 'Fetching directory metadata...');
+        dir = await this._getDirectoryMetadata(ks);
+        dbg('DIRECTORY', 'runTransactionOnDirectory', 'Got directory metadata', {
+          hasDirectory: !!dir?.directory,
+          hasEntry: !!dir?.entry,
+          entryRevision: dir?.entry?.revision,
+          fileCount: dir?.directory?.files?.size,
+          dirCount: dir?.directory?.dirs?.size
+        });
+      } catch (metadataError: any) {
+        dbgError('DIRECTORY', 'runTransactionOnDirectory', `_getDirectoryMetadata failed (attempt ${attempt})`, metadataError);
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, 100 * attempt));
+          continue;
+        }
         return new DirectoryTransactionResult(
-          DirectoryTransactionResultType.NotModified
+          DirectoryTransactionResultType.Error,
+          new Error(`Failed to get directory metadata: ${metadataError?.message || metadataError}`)
         );
       }
 
-      // TODO Make sure this is secure
-      const newBytes =
-        ks.encryptionKey !== undefined
-          ? await encryptMutableBytes(
-              DirV1Serialiser.serialise(transactionRes),
-              ks.encryptionKey!,
-              this.api.crypto
-            )
-          : DirV1Serialiser.serialise(transactionRes);
+      const willUseRevision = (dir?.entry?.revision ?? 0) + 1;
+      dbg('REVISION', 'runTransactionOnDirectory', `Revision planning`, {
+        currentRevision: dir?.entry?.revision ?? 'none',
+        willUseRevision,
+        attempt
+      });
 
-      const cid = await this.api.uploadBlob(new Blob([newBytes as BlobPart]));
+      try {
+        dbg('DIRECTORY', 'runTransactionOnDirectory', 'Executing transaction function...');
+        const transactionRes = await transaction(
+          dir?.directory ?? {
+            magic: "S5.pro",
+            header: {},
+            dirs: new Map(),
+            files: new Map(),
+          },
+          ks.writeKey!
+        );
+        if (transactionRes == null) {
+          dbg('DIRECTORY', 'runTransactionOnDirectory', 'Transaction returned null (not modified)');
+          return new DirectoryTransactionResult(
+            DirectoryTransactionResultType.NotModified
+          );
+        }
+        dbg('DIRECTORY', 'runTransactionOnDirectory', 'Transaction returned modified directory', {
+          fileCount: transactionRes.files?.size,
+          dirCount: transactionRes.dirs?.size
+        });
 
-      const kp = await this.api.crypto.newKeyPairEd25519(ks.writeKey!);
+        // TODO Make sure this is secure
+        dbg('DIRECTORY', 'runTransactionOnDirectory', 'Serializing directory...');
+        const serialized = DirV1Serialiser.serialise(transactionRes);
+        dbg('DIRECTORY', 'runTransactionOnDirectory', 'Serialized', { byteLength: serialized.length });
 
-      const entry = await createRegistryEntry(
-        kp,
-        cid.hash,
-        (dir?.entry?.revision ?? 0) + 1,
-        this.api.crypto
-      );
+        const newBytes =
+          ks.encryptionKey !== undefined
+            ? await encryptMutableBytes(
+                serialized,
+                ks.encryptionKey!,
+                this.api.crypto
+              )
+            : serialized;
+        dbg('DIRECTORY', 'runTransactionOnDirectory', 'Prepared bytes for upload', {
+          encrypted: ks.encryptionKey !== undefined,
+          byteLength: newBytes.length
+        });
 
-      await this.api.registrySet(entry);
+        dbg('UPLOAD', 'runTransactionOnDirectory', 'Uploading directory blob...');
+        const cid = await this.api.uploadBlob(new Blob([newBytes as BlobPart]));
+        dbg('UPLOAD', 'runTransactionOnDirectory', 'Upload complete', { cidHash: cid.hash });
 
-      return new DirectoryTransactionResult(DirectoryTransactionResultType.Ok);
-    } catch (e) {
-      return new DirectoryTransactionResult(
-        DirectoryTransactionResultType.Error,
-        e
-      );
+        const kp = await this.api.crypto.newKeyPairEd25519(ks.writeKey!);
+        const revisionToUse = (dir?.entry?.revision ?? 0) + 1;
+
+        dbg('REGISTRY', 'runTransactionOnDirectory', 'Creating registry entry', {
+          revision: revisionToUse,
+          publicKey: kp.publicKey
+        });
+        const entry = await createRegistryEntry(
+          kp,
+          cid.hash,
+          revisionToUse,
+          this.api.crypto
+        );
+
+        dbg('REGISTRY', 'runTransactionOnDirectory', 'Setting registry entry...');
+        await this.api.registrySet(entry);
+        dbg('REGISTRY', 'runTransactionOnDirectory', 'Registry entry set successfully');
+
+        dbg('DIRECTORY', 'runTransactionOnDirectory', 'SUCCESS', { revision: revisionToUse });
+        return new DirectoryTransactionResult(DirectoryTransactionResultType.Ok);
+      } catch (e: any) {
+        const message = e?.message?.toLowerCase() || '';
+        const isRevisionError = message.includes('revision') && message.includes('low');
+
+        dbgError('DIRECTORY', 'runTransactionOnDirectory', `Error on attempt ${attempt}`, {
+          error: e?.message || e,
+          isRevisionError,
+          dirEntryRevision: dir?.entry?.revision,
+          attemptedRevision: (dir?.entry?.revision ?? 0) + 1,
+          stack: e?.stack?.split('\n').slice(0, 5)
+        });
+
+        if (isRevisionError && attempt < maxRetries) {
+          dbg('REVISION', 'runTransactionOnDirectory', `Revision conflict, retrying (${attempt}/${maxRetries})...`);
+          // Small delay before retry
+          await new Promise(r => setTimeout(r, 50 * attempt));
+          continue;
+        }
+
+        dbgError('DIRECTORY', 'runTransactionOnDirectory', 'FAILED - returning error', { attempt, maxRetries });
+        return new DirectoryTransactionResult(
+          DirectoryTransactionResultType.Error,
+          e
+        );
+      }
     }
+
+    // Should not reach here, but TypeScript needs a return
+    return new DirectoryTransactionResult(
+      DirectoryTransactionResultType.Error,
+      new Error('Max retries exceeded')
+    );
   }
 
   // In ensureIdentityInitialized method
@@ -1172,10 +1289,14 @@ export class FS5 {
     name: string,
     parentWriteKey: Uint8Array
   ): Promise<DirRef> {
+    dbg('DIRECTORY', '_createDirectory', 'ENTER', { name, parentWriteKey });
+
     // Derive write key deterministically from parent
     const newWriteKey = await this._deriveWriteKeyForChildDirectory(parentWriteKey, name);
+    dbg('DIRECTORY', '_createDirectory', 'Derived write key', { newWriteKey });
 
     const ks = await this._deriveKeySetFromWriteKey(newWriteKey);
+    dbg('DIRECTORY', '_createDirectory', 'Derived keyset', { publicKey: ks.publicKey });
 
     // Create empty DirV1
     const emptyDir: DirV1 = {
@@ -1187,17 +1308,36 @@ export class FS5 {
 
     // Serialize and upload
     const serialized = DirV1Serialiser.serialise(emptyDir);
+    dbg('UPLOAD', '_createDirectory', 'Uploading empty directory blob...', { byteLength: serialized.length });
     const cid = await this.api.uploadBlob(new Blob([serialized as BlobPart]));
+    dbg('UPLOAD', '_createDirectory', 'Upload complete', { cidHash: cid.hash });
 
     // Create registry entry for the new directory
     const kp = await this.api.crypto.newKeyPairEd25519(newWriteKey);
+
+    // Check for existing registry entry to get correct revision
+    // (P2P network may have stale entries from other portals)
+    dbg('REGISTRY', '_createDirectory', 'Checking for existing registry entry...', { publicKey: kp.publicKey });
+    const existingEntry = await this.api.registryGet(kp.publicKey);
+    const revision = (existingEntry?.revision ?? 0) + 1;
+
+    dbg('REVISION', '_createDirectory', 'Revision calculation', {
+      name,
+      existingRevision: existingEntry?.revision ?? 'none',
+      usingRevision: revision
+    });
+
+    dbg('REGISTRY', '_createDirectory', 'Creating registry entry...', { revision });
     const entry = await createRegistryEntry(
       kp,
       cid.hash,
-      1, // Initial revision
+      revision,
       this.api.crypto
     );
+
+    dbg('REGISTRY', '_createDirectory', 'Setting registry entry...');
     await this.api.registrySet(entry);
+    dbg('REGISTRY', '_createDirectory', 'Registry entry set successfully');
 
     // Create DirRef pointing to the new directory with mutable registry link
     const dirRef: DirRef = {
@@ -1208,6 +1348,7 @@ export class FS5 {
       ts_seconds: Math.floor(Date.now() / 1000),
     };
 
+    dbg('DIRECTORY', '_createDirectory', 'SUCCESS', { name, revision });
     return dirRef;
   }
   async _deriveKeySetFromWriteKey(writeKey: Uint8Array): Promise<KeySet> {
@@ -1379,15 +1520,27 @@ export class FS5 {
   private async _getDirectoryMetadata(
     ks: KeySet
   ): Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined> {
+    dbg('FS5', '_getDirectoryMetadata', 'ENTER', { publicKey: ks.publicKey });
+
     let entry: RegistryEntry | undefined;
 
     let hash: Uint8Array;
     if (ks.publicKey[0] == mhashBlake3Default) {
       hash = ks.publicKey;
+      dbg('FS5', '_getDirectoryMetadata', 'Using fixed hash (blake3)', { hash });
     } else {
+      dbg('REGISTRY', '_getDirectoryMetadata', 'Fetching registry entry...');
       entry = await this.api.registryGet(ks.publicKey);
 
-      if (entry === undefined) return undefined;
+      if (entry === undefined) {
+        dbg('FS5', '_getDirectoryMetadata', 'No registry entry found - returning undefined');
+        return undefined;
+      }
+
+      dbg('REGISTRY', '_getDirectoryMetadata', 'Got registry entry', {
+        revision: entry.revision,
+        dataLength: entry.data?.length
+      });
 
       const data = entry.data;
       if (data[0] == mhashBlake3 || data[0] == mhashBlake3Default) {
@@ -1396,25 +1549,66 @@ export class FS5 {
         hash = data.subarray(2, 35);
       }
       hash[0] = mhashBlake3;
+      dbg('FS5', '_getDirectoryMetadata', 'Extracted hash from entry', { hash });
     }
 
-    const metadataBytes = await this.api.downloadBlobAsBytes(hash);
+    // Handle 404/not found errors when blob doesn't exist
+    let metadataBytes: Uint8Array;
+    try {
+      dbg('DOWNLOAD', '_getDirectoryMetadata', 'Downloading blob...');
+      metadataBytes = await this.api.downloadBlobAsBytes(hash);
+      dbg('DOWNLOAD', '_getDirectoryMetadata', 'Downloaded blob', { byteLength: metadataBytes.length });
+    } catch (error: any) {
+      const message = error?.message?.toLowerCase() || '';
+      dbgError('DOWNLOAD', '_getDirectoryMetadata', 'Download failed', error);
+
+      if (message.includes('404') ||
+          message.includes('not found') ||
+          error?.status === 404) {
+        // Registry entry exists but blob is gone - return empty directory with entry
+        // This preserves entry.revision so callers use (revision + 1) instead of 1
+        dbg('FS5', '_getDirectoryMetadata', '404 detected - returning empty directory with existing entry revision', {
+          entryRevision: entry?.revision
+        });
+        return {
+          directory: {
+            magic: "S5.pro",
+            header: {},
+            dirs: new Map(),
+            files: new Map(),
+          },
+          entry,  // Preserve registry entry for correct revision calculation
+        };
+      }
+      throw error;
+    }
 
     if (metadataBytes[0] == 0x8d) {
       if (ks.encryptionKey == undefined) {
+        dbgError('FS5', '_getDirectoryMetadata', 'Encrypted blob but no encryption key');
         throw new Error("MissingEncryptionKey");
       }
+      dbg('FS5', '_getDirectoryMetadata', 'Decrypting blob...');
       const decryptedMetadataBytes = await decryptMutableBytes(
         metadataBytes,
         ks.encryptionKey!,
         this.api.crypto
       );
-      return {
-        directory: DirV1Serialiser.deserialise(decryptedMetadataBytes),
-        entry,
-      };
+      const directory = DirV1Serialiser.deserialise(decryptedMetadataBytes);
+      dbg('FS5', '_getDirectoryMetadata', 'SUCCESS (encrypted)', {
+        fileCount: directory.files?.size,
+        dirCount: directory.dirs?.size,
+        entryRevision: entry?.revision
+      });
+      return { directory, entry };
     } else {
-      return { directory: DirV1Serialiser.deserialise(metadataBytes), entry };
+      const directory = DirV1Serialiser.deserialise(metadataBytes);
+      dbg('FS5', '_getDirectoryMetadata', 'SUCCESS (unencrypted)', {
+        fileCount: directory.files?.size,
+        dirCount: directory.dirs?.size,
+        entryRevision: entry?.revision
+      });
+      return { directory, entry };
     }
   }
 
@@ -1503,8 +1697,11 @@ export class FS5 {
     path: string,
     updater: DirectoryTransactionFunction
   ): Promise<void> {
+    dbg('FS5', '_updateDirectory', 'ENTER', { path });
+
     // Create intermediate directories if needed
     const segments = path.split("/").filter((s) => s);
+    dbg('FS5', '_updateDirectory', 'Path segments', { segments, count: segments.length });
 
     // First ensure all parent directories exist
     for (let i = 1; i <= segments.length; i++) {
@@ -1512,36 +1709,55 @@ export class FS5 {
       const parentPath = segments.slice(0, i - 1).join("/") || "";
       const dirName = segments[i - 1];
 
+      dbg('FS5', '_updateDirectory', `Checking segment ${i}/${segments.length}`, {
+        currentPath,
+        parentPath,
+        dirName
+      });
+
       // Check if this directory exists
       try {
+        dbg('FS5', '_updateDirectory', 'Loading directory to check existence...', { currentPath });
         const dir = await this._loadDirectory(currentPath);
         if (!dir) {
           // Create this directory
-          console.log('[Enhanced S5.js] Resilience: Auto-creating parent directory', {
-            path: currentPath,
-            reason: 'intermediate directory missing',
-            autoCreate: true
+          dbg('DIRECTORY', '_updateDirectory', 'Directory missing - creating', {
+            currentPath,
+            parentPath,
+            dirName
           });
           await this.createDirectory(parentPath, dirName);
+          dbg('DIRECTORY', '_updateDirectory', 'Directory created', { currentPath });
+        } else {
+          dbg('FS5', '_updateDirectory', 'Directory exists', { currentPath });
         }
-      } catch (error) {
+      } catch (error: any) {
         // Directory doesn't exist, create it
-        console.log('[Enhanced S5.js] Resilience: Retrying directory creation', {
-          path: currentPath,
-          attempt: 'retry',
-          reason: 'concurrent creation possible'
+        dbg('DIRECTORY', '_updateDirectory', 'Error loading directory - creating', {
+          currentPath,
+          parentPath,
+          dirName,
+          error: error?.message
         });
         await this.createDirectory(parentPath, dirName);
+        dbg('DIRECTORY', '_updateDirectory', 'Directory created after error', { currentPath });
       }
     }
 
     // Now perform the update
     const preprocessedPath = await this._preprocessLocalPath(path || "home");
+    dbg('FS5', '_updateDirectory', 'Running transaction', { preprocessedPath });
+
     const result = await this.runTransactionOnDirectory(
       preprocessedPath,
       updater
     );
+
+    dbg('FS5', '_updateDirectory', 'Transaction complete, unwrapping result...', {
+      resultType: result.type
+    });
     result.unwrap();
+    dbg('FS5', '_updateDirectory', 'SUCCESS', { path });
   }
 
   /**

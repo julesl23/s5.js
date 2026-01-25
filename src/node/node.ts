@@ -22,6 +22,7 @@ export class S5Node implements S5APIInterface {
     }
 
     async init(openKeyValueStore: OpenKeyValueStoreFunction): Promise<void> {
+        console.log('[S5_DBG:NODE] S5Node.init() - s5.js beta.29');
         const p2p = await P2P.create(this.crypto);
         this.blobDB = await openKeyValueStore("s5_blob");
         const registryDB = await openKeyValueStore("s5_registry");
@@ -36,7 +37,7 @@ export class S5Node implements S5APIInterface {
             await new Promise(resolve => setTimeout(resolve, 10));
         }
     }
-    async downloadBlobAsBytes(hash: Uint8Array): Promise<Uint8Array> {
+    async downloadBlobAsBytes(hash: Uint8Array, timeoutMs: number = 10000): Promise<Uint8Array> {
         hash[0] = 0x1f;
         this.p2p.sendHashRequest(hash, [3, 5]);
         const hashStr = base64UrlNoPaddingEncode(hash);
@@ -47,14 +48,27 @@ export class S5Node implements S5APIInterface {
             discovering: true
         });
 
+        const startTime = Date.now();
         let urlsAlreadyTried: Set<string> = new Set([]);
+        let lastError: string | null = null;
+
         while (true) {
+            // Check timeout
+            if (Date.now() - startTime > timeoutMs) {
+                throw new Error(`Blob not found: ${lastError || 'timeout'} (hash: ${hashStr.slice(0, 16)}...)`);
+            }
+
             for (const location of this.p2p.blobLocations.get(hashStr) ?? []) {
                 const url = location.parts[0];
                 if (!urlsAlreadyTried.has(url)) {
                     urlsAlreadyTried.add(url);
                     try {
                         const res = await fetch(url);
+                        if (res.status === 404) {
+                            lastError = '404 not found';
+                            console.debug(`[S5] 404 from ${url}`);
+                            continue;
+                        }
                         if (res.status >= 200 && res.status < 300) {
                             const bytes = new Uint8Array(await res.arrayBuffer())
                             const bytesHash = await this.crypto.hashBlake3(bytes);

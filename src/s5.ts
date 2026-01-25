@@ -62,9 +62,11 @@ export class S5 {
       'wss://z2DezEfGjmwumVTtEM4G5pSo9mGwrach56nhEH6m1KRXMnL@node.fi.sfive.network/s5/p2p',
       'wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p',
     ],
+    skipIdentityLoad = false,
     // TODO autoConnectToNewNodes = false,
   }: {
     initialPeers?: string[];
+    skipIdentityLoad?: boolean;
     // autoConnectToNewNodes?: boolean;
   }): Promise<S5> {
     const crypto = new JSCryptoImplementation();
@@ -76,10 +78,10 @@ export class S5 {
     await node.ensureInitialized();
 
     const authStore = await IDBStore.open("auth");
-    if (await authStore.contains(utf8ToBytes('identity_main'))) {
+    if (!skipIdentityLoad && await authStore.contains(utf8ToBytes('identity_main'))) {
       const newIdentity = await S5UserIdentity.unpack(
         (await authStore.get(utf8ToBytes('identity_main'))) as Uint8Array,
-        
+
       );
       const apiWithIdentity = new S5APIWithIdentity(
         node,

@@ -1,6 +1,6 @@
 {
   "name": "@julesl23/s5js",
-  "version": "0.9.0-beta.13",
+  "version": "0.9.0-beta.29",
   "type": "module",
   "description": "Enhanced TypeScript SDK for S5 decentralized storage with path-based API, media processing, and directory utilities",
   "main": "./dist/src/index.js",
