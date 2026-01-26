@@ -47,9 +47,12 @@ export async function portalAccountRegister(
     );
     const registerResponse = await fetch(portal.apiURL(portalAccountRegisterEndpoint), {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: authToken === undefined
+            ? { 'Content-Type': 'application/json' }
+            : {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`,
+            },
         body: JSON.stringify({
             'pubKey': publicKey,
             'response': base64UrlNoPaddingEncode(challengeResponse.response),

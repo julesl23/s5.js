@@ -1,6 +1,7 @@
 // test-pagination-real.js - Real S5 Portal Pagination/Cursor Test
 import { S5 } from "../../dist/src/index.js";
 import { generatePhrase } from "../../dist/src/identity/seed_phrase/seed_phrase.js";
+import { getPortalUrl, getInitialPeers } from "../test-config.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";
@@ -319,17 +320,18 @@ async function testMixedContent(s5, testDir) {
 }
 
 async function main() {
+  const portalUrl = getPortalUrl();
+  const initialPeers = getInitialPeers();
+
   console.log("🚀 Real S5 Portal Pagination/Cursor Test\n");
-  console.log("Portal: https://s5.vup.cx");
+  console.log(`Portal: ${portalUrl}`);
   console.log("Testing pagination and cursor features with real network\n");
-  
+
   try {
     // Initialize S5
     console.log("Initializing S5...");
-    const s5 = await S5.create({
-      initialPeers: ["wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p"]
-    });
-    
+    const s5 = await S5.create({ initialPeers });
+
     // Suppress verbose logging
     const originalLog = console.log;
     let logBuffer = [];
@@ -341,14 +343,14 @@ async function main() {
         originalLog(...args);
       }
     };
-    
+
     // Generate a unique identity for this test run
     const seedPhrase = generatePhrase(s5.crypto);
     await s5.recoverIdentityFromSeedPhrase(seedPhrase);
-    
+
     // Register on portal if needed
     try {
-      await s5.registerOnNewPortal("https://s5.vup.cx");
+      await s5.registerOnNewPortal(portalUrl);
       originalLog("✅ Registered on portal");
     } catch (error) {
       if (!error.message.includes("already has an account")) throw error;

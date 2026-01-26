@@ -1,5 +1,6 @@
 // test-portal-direct.js
 import { S5 } from "../../dist/src/index.js";
+import { getPortalUrl, getInitialPeers, getSeedPhrase } from "../test-config.js";
 import { webcrypto } from "crypto";
 import { TextEncoder, TextDecoder } from "util";
 import { ReadableStream, WritableStream, TransformStream } from "stream/web";
@@ -25,25 +26,27 @@ if (!global.FormData) global.FormData = FormData;
 if (!global.WebSocket) global.WebSocket = WebSocket;
 
 async function testPortalDirect() {
+  const portalUrl = getPortalUrl();
+  const initialPeers = getInitialPeers();
+  const configuredSeedPhrase = getSeedPhrase();
+
   console.log("🚀 Testing Direct Portal API...\n");
+  console.log(`📡 Portal: ${portalUrl}`);
+  console.log(`🔗 Peers: ${initialPeers[0]}...\n`);
 
   try {
     // Step 1: Create S5 instance and recover identity
-    const s5 = await S5.create({
-      initialPeers: [
-        "wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p",
-      ],
-    });
+    const s5 = await S5.create({ initialPeers });
 
-    const seedPhrase =
+    const seedPhrase = configuredSeedPhrase ||
       "physics observe friend coin name kick walk buck poor blood library spy affect care copy";
     await s5.recoverIdentityFromSeedPhrase(seedPhrase);
     console.log("✅ Identity recovered\n");
 
     // Step 2: Register on the new portal
-    console.log("🌐 Registering on s5.vup.cx portal...");
+    console.log(`🌐 Registering on ${portalUrl} portal...`);
     try {
-      await s5.registerOnNewPortal("https://s5.vup.cx");
+      await s5.registerOnNewPortal(portalUrl);
       console.log("✅ Portal registration successful!\n");
     } catch (error) {
       if (error.message.includes("already has an account")) {
@@ -76,7 +79,7 @@ async function testPortalDirect() {
           const formData = new FormData();
           formData.append("file", file);
 
-          const uploadUrl = `https://s5.vup.cx/s5/upload`;
+          const uploadUrl = `${portalUrl}/s5/upload`;
           console.log(`Uploading to: ${uploadUrl}`);
 
           const response = await fetch(uploadUrl, {

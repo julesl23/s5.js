@@ -65,7 +65,9 @@ screenshots/
 # Docker
 .dockerignore
 docker-compose.override.yml
+docker-compose.dev.yml
 
 demos/media/baseline-performance.json
 demos/media/metadata-report.html
 tmp/
+*.gz

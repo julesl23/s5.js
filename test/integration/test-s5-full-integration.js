@@ -1,5 +1,6 @@
 // test-s5-full-integration.js
 import { S5 } from "../../dist/src/index.js";
+import { getPortalUrl, getInitialPeers } from "../test-config.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";
@@ -64,14 +65,13 @@ async function runFullIntegrationTest() {
   let testsPassed = 0;
   let testsFailed = 0;
 
+  const portalUrl = getPortalUrl();
+  const initialPeers = getInitialPeers();
+
   try {
     // Test 1: S5 Instance Creation
     console.log("Test 1: Creating S5 instance...");
-    const s5 = await S5.create({
-      initialPeers: [
-        "wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p",
-      ],
-    });
+    const s5 = await S5.create({ initialPeers });
     console.log("✅ S5 instance created successfully");
     testsPassed++;
     console.log();
@@ -86,9 +86,9 @@ async function runFullIntegrationTest() {
     console.log();
 
     // Test 3: Portal Registration
-    console.log("Test 3: Registering on s5.vup.cx portal...");
+    console.log(`Test 3: Registering on ${portalUrl} portal...`);
     try {
-      await s5.registerOnNewPortal("https://s5.vup.cx");
+      await s5.registerOnNewPortal(portalUrl);
       console.log("✅ Portal registration successful");
       testsPassed++;
     } catch (error) {

@@ -3,6 +3,7 @@ import { S5 } from "../../dist/src/index.js";
 import { generatePhrase } from "../../dist/src/identity/seed_phrase/seed_phrase.js";
 import { DirV1Serialiser } from "../../dist/src/fs/dirv1/serialisation.js";
 import { createRegistryEntry } from "../../dist/src/registry/entry.js";
+import { getPortalUrl, getInitialPeers } from "../test-config.js";
 
 // Node.js polyfills
 import { webcrypto } from "crypto";
@@ -52,14 +53,13 @@ async function comprehensiveDebug() {
   console.log("\n🔍 COMPREHENSIVE S5 PORTAL DEBUG TEST");
   console.log("=".repeat(70) + "\n");
 
+  const portalUrl = getPortalUrl();
+  const initialPeers = getInitialPeers();
+
   try {
     // STEP 1: Create S5 instance
     log("STEP 1: Creating S5 instance...");
-    const s5 = await S5.create({
-      initialPeers: [
-        "wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p",
-      ],
-    });
+    const s5 = await S5.create({ initialPeers });
     log("✅ S5 instance created");
 
     // STEP 2: Create fresh identity
@@ -86,7 +86,7 @@ async function comprehensiveDebug() {
     // STEP 3: Portal registration
     log("\nSTEP 3: Registering on portal...");
     try {
-      await s5.registerOnNewPortal("https://s5.vup.cx");
+      await s5.registerOnNewPortal(portalUrl);
       log("✅ Portal registration successful");
     } catch (error) {
       log("❌ Portal registration failed:", error.message);

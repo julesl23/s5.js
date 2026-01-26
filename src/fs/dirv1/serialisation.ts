@@ -1,4 +1,5 @@
 import { encodeS5, decodeS5 } from './cbor-config.js';
+import { debugLog } from '../../util/debug.js';
 import type { DirV1, FileRef, DirRef, DirLink, BlobLocation } from './types.js';
 import { FILE_REF_KEYS, DIR_REF_KEYS, DIR_LINK_TYPES, BLOB_LOCATION_TAGS } from './types.js';
 
@@ -10,7 +11,7 @@ export class DirV1Serialiser {
 
     const fileCount = (dir.files instanceof Map) ? dir.files.size : 0;
     const dirCount = (dir.dirs instanceof Map) ? dir.dirs.size : 0;
-    console.log('[Enhanced S5.js] CBOR: Serializing directory', {
+    debugLog('[Enhanced S5.js] CBOR: Serializing directory', {
       files: fileCount,
       directories: dirCount,
       sharded: !!dir.header?.sharding,
@@ -35,7 +36,7 @@ export class DirV1Serialiser {
       ? ((1 - result.length / estimatedJsonSize) * 100).toFixed(1)
       : '0.0';
 
-    console.log('[Enhanced S5.js] CBOR: Serialization complete', {
+    debugLog('[Enhanced S5.js] CBOR: Serialization complete', {
       inputEntries: fileCount + dirCount,
       cborBytes: cborBytes.length,
       withMagic: result.length,
@@ -217,7 +218,7 @@ export class DirV1Serialiser {
 
     const filesSize = (files instanceof Map) ? files.size : 0;
     const dirsSize = (dirs instanceof Map) ? dirs.size : 0;
-    console.log('[Enhanced S5.js] CBOR: Deserialization complete', {
+    debugLog('[Enhanced S5.js] CBOR: Deserialization complete', {
       inputBytes: cborData.length,
       files: filesSize,
       directories: dirsSize,
