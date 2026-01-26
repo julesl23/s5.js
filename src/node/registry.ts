@@ -1,4 +1,5 @@
 import { base64UrlNoPaddingEncode } from "../util/base64.js";
+import { debugLog } from "../util/debug.js";
 import { deserializeRegistryEntry, RegistryEntry, serializeRegistryEntry, verifyRegistryEntry } from "../registry/entry.js";
 import { KeyValueStore } from "../kv/kv.js";
 import { mkeyEd25519 } from "../constants.js";
@@ -32,7 +33,7 @@ export class S5RegistryService {
     constructor(p2p: P2P, registryDB: KeyValueStore) {
         this.p2p = p2p;
         this.db = registryDB;
-        console.log('[S5_DBG:REGISTRY] S5RegistryService initialized (beta.36 with in-memory cache)');
+        debugLog('[S5_DBG:REGISTRY] S5RegistryService initialized (beta.36 with in-memory cache)');
     }
 
     /**
@@ -42,7 +43,7 @@ export class S5RegistryService {
     private getFromCache(key: string): RegistryEntry | undefined {
         const cached = this.recentWrites.get(key);
         if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
-            console.log(`[S5_DBG:REGISTRY] Cache hit for ${key.slice(0, 16)}..., revision=${cached.entry.revision}`);
+            debugLog(`[S5_DBG:REGISTRY] Cache hit for ${key.slice(0, 16)}..., revision=${cached.entry.revision}`);
             return cached.entry;
         }
         return undefined;
@@ -52,7 +53,7 @@ export class S5RegistryService {
      * Store an entry in the in-memory cache
      */
     private setInCache(key: string, entry: RegistryEntry): void {
-        console.log(`[S5_DBG:REGISTRY] Cache set for ${key.slice(0, 16)}..., revision=${entry.revision}`);
+        debugLog(`[S5_DBG:REGISTRY] Cache set for ${key.slice(0, 16)}..., revision=${entry.revision}`);
         this.recentWrites.set(key, {
             entry,
             timestamp: Date.now()
@@ -78,7 +79,7 @@ export class S5RegistryService {
 
     async put(entry: RegistryEntry, trusted: boolean = false): Promise<void> {
         const key = base64UrlNoPaddingEncode(entry.pk);
-        console.log(`[S5_DBG:REGISTRY] put() called, key=${key.slice(0, 16)}..., revision=${entry.revision}, trusted=${trusted}`);
+        debugLog(`[S5_DBG:REGISTRY] put() called, key=${key.slice(0, 16)}..., revision=${entry.revision}, trusted=${trusted}`);
 
         if (trusted !== true) {
             if (entry.pk.length !== 33) {
@@ -104,7 +105,7 @@ export class S5RegistryService {
         const existingEntry = cachedEntry ?? await this.getFromDB(entry.pk);
 
         if (existingEntry) {
-            console.log(`[S5_DBG:REGISTRY] put() existing revision=${existingEntry.revision}, new revision=${entry.revision}`);
+            debugLog(`[S5_DBG:REGISTRY] put() existing revision=${existingEntry.revision}, new revision=${entry.revision}`);
             /* if (receivedFrom) {
                 if (existingEntry.revision === sre.revision) {
                     return;
@@ -116,7 +117,7 @@ export class S5RegistryService {
             } */
 
             if (existingEntry.revision >= entry.revision) {
-                console.log(`[S5_DBG:REGISTRY] put() REJECTED - revision too low`);
+                debugLog(`[S5_DBG:REGISTRY] put() REJECTED - revision too low`);
                 throw new Error('Revision number too low');
             }
         }
@@ -132,7 +133,7 @@ export class S5RegistryService {
         // This prevents P2P race conditions where old entries might be returned
         this.setInCache(key, entry);
 
-        console.log(`[S5_DBG:REGISTRY] put() SUCCESS - stored revision=${entry.revision}`);
+        debugLog(`[S5_DBG:REGISTRY] put() SUCCESS - stored revision=${entry.revision}`);
 
         if (trusted) {
             this.broadcastEntry(entry);
@@ -166,19 +167,19 @@ export class S5RegistryService {
 
     async get(pk: Uint8Array): Promise<RegistryEntry | undefined> {
         const key = base64UrlNoPaddingEncode(pk);
-        console.log(`[S5_DBG:REGISTRY] get() called, key=${key.slice(0, 16)}...`);
+        debugLog(`[S5_DBG:REGISTRY] get() called, key=${key.slice(0, 16)}...`);
 
         // CRITICAL: Check in-memory cache FIRST for recent writes
         // This ensures read-your-writes consistency and prevents P2P race conditions
         const cachedEntry = this.getFromCache(key);
         if (cachedEntry) {
-            console.log(`[S5_DBG:REGISTRY] get() returning cached entry, revision=${cachedEntry.revision}`);
+            debugLog(`[S5_DBG:REGISTRY] get() returning cached entry, revision=${cachedEntry.revision}`);
             return cachedEntry;
         }
 
         if (this.cachedOnlyMode) {
             const entry = await this.getFromDB(pk);
-            console.log(`[S5_DBG:REGISTRY] get() cachedOnlyMode, revision=${entry?.revision ?? 'none'}`);
+            debugLog(`[S5_DBG:REGISTRY] get() cachedOnlyMode, revision=${entry?.revision ?? 'none'}`);
             return entry;
         }
 
@@ -186,19 +187,19 @@ export class S5RegistryService {
             // Already subscribed - check DB directly
             const res = await this.getFromDB(pk);
             if (res) {
-                console.log(`[S5_DBG:REGISTRY] get() from DB (subscribed), revision=${res.revision}`);
+                debugLog(`[S5_DBG:REGISTRY] get() from DB (subscribed), revision=${res.revision}`);
                 return res;
             }
             // Not in DB, request from P2P
-            console.log(`[S5_DBG:REGISTRY] get() not in DB, requesting from P2P...`);
+            debugLog(`[S5_DBG:REGISTRY] get() not in DB, requesting from P2P...`);
             this.sendRegistryRequest(pk);
             await this.delay(250);
             const dbEntry = await this.getFromDB(pk);
-            console.log(`[S5_DBG:REGISTRY] get() after P2P wait, revision=${dbEntry?.revision ?? 'none'}`);
+            debugLog(`[S5_DBG:REGISTRY] get() after P2P wait, revision=${dbEntry?.revision ?? 'none'}`);
             return dbEntry;
         } else {
             // First access - send P2P request and wait
-            console.log(`[S5_DBG:REGISTRY] get() first access, sending P2P request...`);
+            debugLog(`[S5_DBG:REGISTRY] get() first access, sending P2P request...`);
             this.sendRegistryRequest(pk);
             this.subs.add(key);
 
@@ -208,19 +209,19 @@ export class S5RegistryService {
 
             if ((await this.getFromDB(pk)) === undefined) {
                 // No local entry, wait for P2P response
-                console.log(`[S5_DBG:REGISTRY] get() no local entry, waiting for P2P...`);
+                debugLog(`[S5_DBG:REGISTRY] get() no local entry, waiting for P2P...`);
                 for (let i = 0; i < 500; i++) {
                     await this.delay(5);
                     if (await this.getFromDB(pk)) break;
                 }
             } else {
                 // Have local entry, wait briefly for potentially newer P2P entries
-                console.log(`[S5_DBG:REGISTRY] get() have local entry, waiting 250ms for P2P updates...`);
+                debugLog(`[S5_DBG:REGISTRY] get() have local entry, waiting 250ms for P2P updates...`);
                 await this.delay(250);
             }
 
             const finalEntry = await this.getFromDB(pk);
-            console.log(`[S5_DBG:REGISTRY] get() returning final entry, revision=${finalEntry?.revision ?? 'none'}`);
+            debugLog(`[S5_DBG:REGISTRY] get() returning final entry, revision=${finalEntry?.revision ?? 'none'}`);
             return finalEntry;
         }
     }

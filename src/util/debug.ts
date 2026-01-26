@@ -6,7 +6,17 @@
  */
 
 // Toggle this to enable/disable all debug logging
-export const S5_DEBUG_ENABLED = true;
+export const S5_DEBUG_ENABLED = false;
+
+/**
+ * Simple console.log wrapper that respects S5_DEBUG_ENABLED
+ * Use this for [S5_DBG:*] and [Enhanced S5.js] logs
+ */
+export function debugLog(...args: any[]): void {
+  if (S5_DEBUG_ENABLED) {
+    console.log(...args);
+  }
+}
 
 // Debug categories - toggle individual categories
 export const S5_DEBUG_CATEGORIES = {

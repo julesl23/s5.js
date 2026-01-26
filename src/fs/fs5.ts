@@ -1,7 +1,7 @@
 import { base32 } from "multiformats/bases/base32";
 import { S5APIInterface } from "../api/s5.js";
 import { mkeyEd25519, MULTIHASH_BLAKE3 } from "../constants.js";
-import { dbg, dbgError } from "../util/debug.js";
+import { dbg, dbgError, debugLog } from "../util/debug.js";
 import {
   decryptMutableBytes,
   encryptMutableBytes,
@@ -157,7 +157,7 @@ export class FS5 {
   ): Promise<any | undefined> {
     const startTime = performance.now();
     path = normalizePath(path);
-    console.log('[Enhanced S5.js] Path API: GET', {
+    debugLog('[Enhanced S5.js] Path API: GET', {
       path: path,
       operation: 'read'
     });
@@ -208,7 +208,7 @@ export class FS5 {
       );
     }
 
-    console.log('[Enhanced S5.js] Download complete', {
+    debugLog('[Enhanced S5.js] Download complete', {
       path: path,
       size: data.length,
       mediaType: fileRef.media_type,
@@ -271,7 +271,7 @@ export class FS5 {
       }
     } finally {
       const duration = performance.now() - startTime;
-      console.log('[Enhanced S5.js] Performance: GET operation', {
+      debugLog('[Enhanced S5.js] Performance: GET operation', {
         path: path,
         duration: duration.toFixed(2) + 'ms',
         size: data?.length || 0,
@@ -320,7 +320,7 @@ export class FS5 {
         mediaType ||
         getMediaTypeFromExtension(fileName) ||
         "application/octet-stream";
-      console.log('[Enhanced S5.js] Binary data detected', {
+      debugLog('[Enhanced S5.js] Binary data detected', {
         path: path,
         size: encodedData.length,
         mediaType: mediaType,
@@ -330,7 +330,7 @@ export class FS5 {
       encodedData = new TextEncoder().encode(data);
       mediaType =
         mediaType || getMediaTypeFromExtension(fileName) || "text/plain";
-      console.log('[Enhanced S5.js] Text data detected', {
+      debugLog('[Enhanced S5.js] Text data detected', {
         path: path,
         size: encodedData.length,
         mediaType: mediaType,
@@ -341,7 +341,7 @@ export class FS5 {
       encodedData = encodeS5(data);
       mediaType =
         mediaType || getMediaTypeFromExtension(fileName) || "application/cbor";
-      console.log('[Enhanced S5.js] Object data detected', {
+      debugLog('[Enhanced S5.js] Object data detected', {
         path: path,
         size: encodedData.length,
         mediaType: mediaType,
@@ -350,7 +350,7 @@ export class FS5 {
       });
     }
 
-    console.log('[Enhanced S5.js] Path API: PUT', {
+    debugLog('[Enhanced S5.js] Path API: PUT', {
       path: path,
       dataType: data instanceof Uint8Array ? 'binary' : typeof data,
       size: encodedData.length,
@@ -387,7 +387,7 @@ export class FS5 {
       size = result.size;
     }
 
-    console.log('[Enhanced S5.js] Upload complete', {
+    debugLog('[Enhanced S5.js] Upload complete', {
       path: path,
       hash: Array.from(hash.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(''),
       size: size,
@@ -450,7 +450,7 @@ export class FS5 {
     });
 
     const duration = performance.now() - startTime;
-    console.log('[Enhanced S5.js] Performance: PUT operation', {
+    debugLog('[Enhanced S5.js] Performance: PUT operation', {
       path: path,
       duration: duration.toFixed(2) + 'ms',
       size: size,
@@ -477,7 +477,7 @@ export class FS5 {
       const oldestTimestamp = this._getOldestTimestamp(dir);
       const newestTimestamp = this._getNewestTimestamp(dir);
 
-      console.log('[Enhanced S5.js] Path API: METADATA', {
+      debugLog('[Enhanced S5.js] Path API: METADATA', {
         path: 'root',
         type: 'directory',
         sharded: !!dir.header.sharding,
@@ -562,7 +562,7 @@ export class FS5 {
    */
   public async delete(path: string): Promise<boolean> {
     path = normalizePath(path);
-    console.log('[Enhanced S5.js] Path API: DELETE', {
+    debugLog('[Enhanced S5.js] Path API: DELETE', {
       path: path,
       operation: 'remove'
     });
@@ -635,7 +635,7 @@ export class FS5 {
         if (dir.files.has(itemName)) {
           dir.files.delete(itemName);
           deleted = true;
-          console.log('[Enhanced S5.js] Delete complete', {
+          debugLog('[Enhanced S5.js] Delete complete', {
             path: path,
             type: 'file',
             deleted: true
@@ -654,7 +654,7 @@ export class FS5 {
           ) {
             dir.dirs.delete(itemName);
             deleted = true;
-            console.log('[Enhanced S5.js] Delete complete', {
+            debugLog('[Enhanced S5.js] Delete complete', {
               path: path,
               type: 'directory',
               deleted: true
@@ -686,7 +686,7 @@ export class FS5 {
       return; // Directory doesn't exist - return empty iterator
     }
 
-    console.log('[Enhanced S5.js] Path API: LIST', {
+    debugLog('[Enhanced S5.js] Path API: LIST', {
       path: path,
       isSharded: !!(dir.header.sharding?.root?.cid),
       withCursor: !!options?.cursor,
@@ -2001,7 +2001,7 @@ export class FS5 {
 
     // Log warning when approaching threshold
     if (!dir.header.sharding && totalEntries >= 950) {
-      console.log('[Enhanced S5.js] HAMT: Approaching shard threshold', {
+      debugLog('[Enhanced S5.js] HAMT: Approaching shard threshold', {
         currentEntries: totalEntries,
         threshold: 1000,
         willShard: totalEntries >= 1000
@@ -2009,7 +2009,7 @@ export class FS5 {
     }
 
     if (!dir.header.sharding && totalEntries >= 1000) {
-      console.log('[Enhanced S5.js] HAMT: Converting to sharded directory', {
+      debugLog('[Enhanced S5.js] HAMT: Converting to sharded directory', {
         totalEntries: totalEntries,
         filesCount: dir.files.size,
         dirsCount: dir.dirs.size,
@@ -2056,7 +2056,7 @@ export class FS5 {
       dir.files.clear();
       dir.dirs.clear();
 
-      console.log('[Enhanced S5.js] HAMT: Shard complete', {
+      debugLog('[Enhanced S5.js] HAMT: Shard complete', {
         cidHash: Array.from(hash.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(''),
         totalEntries: totalEntries,
         depth: await hamt.getDepth(),

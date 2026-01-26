@@ -15,7 +15,7 @@ import { HiddenJSONResponse, TrustedHiddenDBProvider } from "./hidden_db.js";
 import { S5UserIdentity } from "./identity.js";
 import { MULTIHASH_BLAKE3 } from "../constants.js";
 import { concatBytes } from "@noble/hashes/utils";
-import { dbg, dbgError } from "../util/debug.js";
+import { dbg, dbgError, debugLog } from "../util/debug.js";
 
 const portalUploadEndpoint = 'upload';
 
@@ -51,7 +51,7 @@ export class S5APIWithIdentity implements S5APIInterface {
         this.identity = identity;
         this.authStore = authStore;
         this.hiddenDB = new TrustedHiddenDBProvider(identity.hiddenDBKey, this);
-        console.log('[S5_DBG:API] S5APIWithIdentity initialized (beta.36 with z-prefix CID fallback)');
+        debugLog('[S5_DBG:API] S5APIWithIdentity initialized (beta.36 with z-prefix CID fallback)');
     }
 
     /**
@@ -60,7 +60,7 @@ export class S5APIWithIdentity implements S5APIInterface {
     private getBlobFromCache(hashKey: string): Uint8Array | undefined {
         const cached = this.blobCache.get(hashKey);
         if (cached && (Date.now() - cached.timestamp) < BLOB_CACHE_TTL_MS) {
-            console.log(`[S5_DBG:BLOB_CACHE] Cache hit for ${hashKey.slice(0, 16)}..., size=${cached.data.length}`);
+            debugLog(`[S5_DBG:BLOB_CACHE] Cache hit for ${hashKey.slice(0, 16)}..., size=${cached.data.length}`);
             return cached.data;
         }
         return undefined;
@@ -70,7 +70,7 @@ export class S5APIWithIdentity implements S5APIInterface {
      * Store blob in in-memory cache
      */
     private setBlobInCache(hashKey: string, data: Uint8Array): void {
-        console.log(`[S5_DBG:BLOB_CACHE] Cache set for ${hashKey.slice(0, 16)}..., size=${data.length}`);
+        debugLog(`[S5_DBG:BLOB_CACHE] Cache set for ${hashKey.slice(0, 16)}..., size=${data.length}`);
         this.blobCache.set(hashKey, {
             data,
             timestamp: Date.now()
@@ -388,7 +388,7 @@ export class S5APIWithIdentity implements S5APIInterface {
 
         const id = existingId ?? uri.host;
         this.accountConfigs[id] = portalConfig;
-        console.log('[S5_DBG:API] setPortalAuth: Portal configured for immediate use', {
+        debugLog('[S5_DBG:API] setPortalAuth: Portal configured for immediate use', {
             host: uri.host,
             updated: existingId !== null
         });
@@ -403,7 +403,7 @@ export class S5APIWithIdentity implements S5APIInterface {
         const expectedBlobIdentifier = new BlobIdentifier(concatBytes(new Uint8Array([MULTIHASH_BLAKE3]), blake3Hash), blob.size);
 
         const portals = Object.values(this.accountConfigs);
-        console.log('[Enhanced S5.js] Portal: Starting upload', {
+        debugLog('[Enhanced S5.js] Portal: Starting upload', {
             blobSize: blob.size,
             portalsAvailable: portals.length,
             retriesPerPortal: 3,
@@ -452,7 +452,7 @@ export class S5APIWithIdentity implements S5APIInterface {
                 const hashKey = base64UrlNoPaddingEncode(expectedBlobIdentifier.hash);
                 this.setBlobInCache(hashKey, blobBytes);
 
-                console.log('[Enhanced S5.js] Portal: Upload successful', {
+                debugLog('[Enhanced S5.js] Portal: Upload successful', {
                     portal: portal.host,
                     status: res.status,
                     verified: true,
@@ -461,7 +461,7 @@ export class S5APIWithIdentity implements S5APIInterface {
                 });
                 return expectedBlobIdentifier;
             } catch (e) {
-                console.log('[Enhanced S5.js] Portal: Upload retry', {
+                debugLog('[Enhanced S5.js] Portal: Upload retry', {
                     portal: portal.host,
                     error: (e as Error).message?.slice(0, 100) || String(e).slice(0, 100),
                     remainingAttempts: 'trying next portal'
@@ -486,7 +486,7 @@ export class S5APIWithIdentity implements S5APIInterface {
         const hashKey = base64UrlNoPaddingEncode(hash);
         const cached = this.getBlobFromCache(hashKey);
         if (cached) {
-            console.log('[S5_DBG:BLOB_CACHE] Serving from cache, skipping P2P', {
+            debugLog('[S5_DBG:BLOB_CACHE] Serving from cache, skipping P2P', {
                 hash: hashKey.slice(0, 16) + '...',
                 size: cached.length
             });
@@ -498,7 +498,7 @@ export class S5APIWithIdentity implements S5APIInterface {
             return await this.node.downloadBlobAsBytes(hash);
         } catch (p2pError) {
             const errorMsg = (p2pError as Error).message || '';
-            console.log('[S5_DBG:DOWNLOAD] P2P failed, trying portal fallback', {
+            debugLog('[S5_DBG:DOWNLOAD] P2P failed, trying portal fallback', {
                 hash: hashKey.slice(0, 16) + '...',
                 error: errorMsg.slice(0, 50)
             });
@@ -517,7 +517,7 @@ export class S5APIWithIdentity implements S5APIInterface {
 
             for (const portal of portals) {
                 const downloadUrl = `${portal.protocol}://${portal.host}/s5/blob/${cid}`;
-                console.log('[S5_DBG:DOWNLOAD] Trying portal fallback', {
+                debugLog('[S5_DBG:DOWNLOAD] Trying portal fallback', {
                     portal: portal.host,
                     cid: cid.slice(0, 20) + '...',
                     cidLength: cid.length
@@ -534,7 +534,7 @@ export class S5APIWithIdentity implements S5APIInterface {
                         // Verify hash matches
                         const downloadedHash = await this.crypto.hashBlake3(bytes);
                         if (areArraysEqual(downloadedHash, hash.subarray(1))) {
-                            console.log('[S5_DBG:DOWNLOAD] Portal fallback SUCCESS', {
+                            debugLog('[S5_DBG:DOWNLOAD] Portal fallback SUCCESS', {
                                 portal: portal.host,
                                 size: bytes.length,
                                 verified: true
@@ -543,18 +543,18 @@ export class S5APIWithIdentity implements S5APIInterface {
                             this.setBlobInCache(hashKey, bytes);
                             return bytes;
                         } else {
-                            console.log('[S5_DBG:DOWNLOAD] Portal fallback hash mismatch', {
+                            debugLog('[S5_DBG:DOWNLOAD] Portal fallback hash mismatch', {
                                 portal: portal.host
                             });
                         }
                     } else {
-                        console.log('[S5_DBG:DOWNLOAD] Portal fallback failed', {
+                        debugLog('[S5_DBG:DOWNLOAD] Portal fallback failed', {
                             portal: portal.host,
                             status: res.status
                         });
                     }
                 } catch (portalError) {
-                    console.log('[S5_DBG:DOWNLOAD] Portal fallback error', {
+                    debugLog('[S5_DBG:DOWNLOAD] Portal fallback error', {
                         portal: portal.host,
                         error: ((portalError as Error).message || '').slice(0, 50)
                     });
@@ -616,7 +616,7 @@ export class S5APIWithIdentity implements S5APIInterface {
         hashWithPrefix[0] = MULTIHASH_BLAKE3;
         hashWithPrefix.set(rawHash, 1);
 
-        console.log('[Enhanced S5.js] downloadByCID: Starting P2P download', {
+        debugLog('[Enhanced S5.js] downloadByCID: Starting P2P download', {
             cidType: cid instanceof Uint8Array ? 'Uint8Array' : 'string',
             hashPrefix: Array.from(rawHash.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join('')
         });
@@ -624,7 +624,7 @@ export class S5APIWithIdentity implements S5APIInterface {
         // Use P2P-based download (discovers signed URLs via network)
         const data = await this.downloadBlobAsBytes(hashWithPrefix);
 
-        console.log('[Enhanced S5.js] downloadByCID: Download complete', {
+        debugLog('[Enhanced S5.js] downloadByCID: Download complete', {
             size: data.length,
             verified: true
         });
