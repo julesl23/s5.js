@@ -1,4 +1,5 @@
-import { CryptoImplementation } from './api/crypto.js';
+import { CryptoImplementation, KeyPairEd25519 } from './api/crypto.js';
+import { base64UrlNoPaddingEncode, base64UrlNoPaddingDecode } from './util/base64.js';
 import { FS5 } from './fs/fs5.js';
 import { IDBStore } from './kv/idb.js';
 import { JSCryptoImplementation } from './api/crypto/js.js';
@@ -190,5 +191,82 @@ export class S5 {
       throw new Error('No identity configured. Call recoverIdentityFromSeedPhrase() and registerOnNewPortal() first.');
     }
     return this.apiWithIdentity.downloadByCID(cid);
+  }
+
+  /**
+   * Get the signing public key for this identity
+   * @param seed Optional base64url seed for purpose-specific key derivation
+   * @returns base64url-encoded Ed25519 public key (with multikey prefix 0xed)
+   */
+  async getSigningPublicKey(seed?: string): Promise<string> {
+    if (!this.identity) {
+      throw new Error('No identity available');
+    }
+    const keyPair = await this.deriveKeyPair(seed);
+    return base64UrlNoPaddingEncode(keyPair.publicKey);
+  }
+
+  /**
+   * Sign data with this identity's signing key
+   * @param data The data to sign
+   * @param seed Optional base64url seed for purpose-specific key derivation
+   * @returns base64url-encoded Ed25519 signature
+   */
+  async sign(data: Uint8Array, seed?: string): Promise<string> {
+    if (!this.identity) {
+      throw new Error('No identity available');
+    }
+    const keyPair = await this.deriveKeyPair(seed);
+    const signature = await this.crypto.signEd25519(keyPair, data);
+    return base64UrlNoPaddingEncode(signature);
+  }
+
+  /**
+   * Store portal credentials after successful backend-mediated registration
+   * @param portalUrl The portal URL
+   * @param seed The base64url seed used for key derivation
+   * @param authToken The auth token from the backend
+   */
+  async storePortalCredentials(
+    portalUrl: string,
+    seed: string,
+    authToken: string
+  ): Promise<void> {
+    if (!this.apiWithIdentity) {
+      throw new Error('No identity available');
+    }
+    await this.apiWithIdentity.storePortalCredentials(portalUrl, seed, authToken);
+  }
+
+  /**
+   * Set portal auth token for immediate use in current session.
+   * This does NOT persist the token - use storePortalCredentials() for persistence.
+   * @param portalUrl The portal URL (e.g., 'https://s5.example.com')
+   * @param authToken The auth token to use for uploads
+   */
+  setPortalAuth(portalUrl: string, authToken: string): void {
+    if (!this.apiWithIdentity) {
+      throw new Error('No identity available');
+    }
+    this.apiWithIdentity.setPortalAuth(portalUrl, authToken);
+  }
+
+  /**
+   * Derive a key pair for signing operations
+   * @param seed Optional base64url seed for purpose-specific key derivation
+   * @returns Ed25519 key pair
+   */
+  private async deriveKeyPair(seed?: string): Promise<KeyPairEd25519> {
+    if (seed) {
+      // Purpose-specific key (e.g., for portal auth)
+      const seedBytes = base64UrlNoPaddingDecode(seed);
+      const derivedKey = await this.crypto.hashBlake3(
+        new Uint8Array([...this.identity!.portalAccountSeed, ...seedBytes])
+      );
+      return this.crypto.newKeyPairEd25519(derivedKey);
+    } else {
+      // Main signing key (from signingKeyPairTweak)
+      return this.crypto.newKeyPairEd25519(this.identity!.signingKey);
+    }
   }
 }

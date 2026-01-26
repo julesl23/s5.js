@@ -51,7 +51,7 @@ export class S5APIWithIdentity implements S5APIInterface {
         this.identity = identity;
         this.authStore = authStore;
         this.hiddenDB = new TrustedHiddenDBProvider(identity.hiddenDBKey, this);
-        console.log('[S5_DBG:API] S5APIWithIdentity initialized (beta.29 with z-prefix CID fallback)');
+        console.log('[S5_DBG:API] S5APIWithIdentity initialized (beta.36 with z-prefix CID fallback)');
     }
 
     /**
@@ -316,6 +316,82 @@ export class S5APIWithIdentity implements S5APIInterface {
 
     getAuthTokenKey(id: string): Uint8Array {
         return utf8ToBytes(`identity_main_account_${id}_auth_token`);
+    }
+
+    /**
+     * Store portal credentials after successful backend-mediated registration
+     * @param portalUrl The portal URL (e.g., 'https://s5.example.com')
+     * @param seed The base64url-encoded seed used for key derivation
+     * @param authToken The auth token received from the backend
+     */
+    async storePortalCredentials(
+        portalUrl: string,
+        seed: string,
+        authToken: string
+    ): Promise<void> {
+        await this.initStorageServices();
+
+        const uri = new URL(portalUrl);
+
+        // Check for duplicate account on this host (handles both "host:seed" and bare "host" formats)
+        for (const id of Object.keys(this.accountConfigs)) {
+            if (id === uri.host || id.startsWith(`${uri.host}:`)) {
+                throw new Error('User already has an account on this service!');
+            }
+        }
+
+        const seedBytes = base64UrlNoPaddingDecode(seed);
+        const id = `${uri.host}:${base64UrlNoPaddingEncode(seedBytes.slice(0, 12))}`;
+
+        this.accounts['accounts'][id] = {
+            'url': `${uri.protocol}//${uri.host}`,
+            'seed': seed,
+            'createdAt': new Date().toISOString(),
+        };
+
+        this.accounts['active'].push(id);
+        this.accounts['uploadOrder']['default'].push(id);
+
+        await this.authStore.put(
+            this.getAuthTokenKey(id),
+            new TextEncoder().encode(authToken)
+        );
+        await this.setupAccount(id);
+        await this.saveStorageServices();
+    }
+
+    /**
+     * Set portal auth token for immediate use in current session.
+     * This does NOT persist the token - use storePortalCredentials() for persistence.
+     * @param portalUrl The portal URL (e.g., 'https://s5.example.com')
+     * @param authToken The auth token to use for uploads
+     */
+    setPortalAuth(portalUrl: string, authToken: string): void {
+        const uri = new URL(portalUrl);
+
+        const portalConfig = new S5Portal(
+            uri.protocol.replace(':', ''),
+            uri.hostname + (uri.port ? `:${uri.port}` : ''),
+            {
+                'Authorization': `Bearer ${authToken}`,
+            },
+        );
+
+        // Find existing account for this host and update it, or create new with host-only key
+        let existingId: string | null = null;
+        for (const id of Object.keys(this.accountConfigs)) {
+            if (id === uri.host || id.startsWith(`${uri.host}:`)) {
+                existingId = id;
+                break;
+            }
+        }
+
+        const id = existingId ?? uri.host;
+        this.accountConfigs[id] = portalConfig;
+        console.log('[S5_DBG:API] setPortalAuth: Portal configured for immediate use', {
+            host: uri.host,
+            updated: existingId !== null
+        });
     }
 
 

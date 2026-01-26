@@ -10,6 +10,9 @@ export { JSCryptoImplementation } from './api/crypto/js.js';
 // Export connection types
 export type { ConnectionStatus } from './node/p2p.js';
 
+// Export challenge type constants for portal authentication
+export { CHALLENGE_TYPE_REGISTER, CHALLENGE_TYPE_LOGIN } from './account/sign_challenge.js';
+
 // Export utility classes
 export { DirectoryWalker } from './fs/utils/walker.js';
 export { BatchOperations } from './fs/utils/batch.js';

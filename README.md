@@ -17,6 +17,7 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - 🎨 **Color Analysis**: Dominant color extraction and palette generation
 - 📊 **Bundle Optimization**: Code-splitting support (~70KB gzipped total)
 - 📡 **Connection API**: Monitor and manage P2P connections for mobile apps
+- ✍️ **Identity & Signing API**: Backend-mediated portal registration with Ed25519 signing
 - ✅ **Real S5 Portal Integration**: Fully tested with s5.vup.cx portal
 
 ## Key Components
@@ -26,6 +27,7 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - **FS5**: File system operations with path-based API
 - **S5UserIdentity**: User identity and authentication
 - **Connection API**: `getConnectionStatus()`, `onConnectionChange()`, `reconnect()` for mobile apps
+- **Signing API**: `getSigningPublicKey()`, `sign()`, `setPortalAuth()` for backend-mediated registration
 
 ### Utility Classes
 - **DirectoryWalker**: Recursive directory traversal with cursor support

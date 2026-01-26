@@ -22,7 +22,7 @@ export class S5Node implements S5APIInterface {
     }
 
     async init(openKeyValueStore: OpenKeyValueStoreFunction): Promise<void> {
-        console.log('[S5_DBG:NODE] S5Node.init() - s5.js beta.29');
+        console.log('[S5_DBG:NODE] S5Node.init() - s5.js beta.36');
         const p2p = await P2P.create(this.crypto);
         this.blobDB = await openKeyValueStore("s5_blob");
         const registryDB = await openKeyValueStore("s5_registry");

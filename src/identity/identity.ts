@@ -168,4 +168,8 @@ export class S5UserIdentity {
     get portalAccountSeed(): Uint8Array {
         return this.seeds.get(storageServiceAccountsTweak)!;
     }
+
+    get signingKey(): Uint8Array {
+        return this.seeds.get(signingKeyPairTweak)!;
+    }
 }

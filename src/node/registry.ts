@@ -32,7 +32,7 @@ export class S5RegistryService {
     constructor(p2p: P2P, registryDB: KeyValueStore) {
         this.p2p = p2p;
         this.db = registryDB;
-        console.log('[S5_DBG:REGISTRY] S5RegistryService initialized (beta.29 with in-memory cache)');
+        console.log('[S5_DBG:REGISTRY] S5RegistryService initialized (beta.36 with in-memory cache)');
     }
 
     /**
