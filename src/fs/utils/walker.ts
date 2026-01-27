@@ -1,5 +1,5 @@
 import { FS5 } from "../fs5.js";
-import { debugLog } from "../../util/debug.js";
+import { debug } from "../../util/debug.js";
 import { FileRef, DirRef, ListOptions } from "../dirv1/types.js";
 import { encodeS5, decodeS5 } from "../dirv1/cbor-config.js";
 
@@ -131,7 +131,7 @@ export class DirectoryWalker {
           listOptions.cursor = state.dirCursor;
         }
 
-        debugLog('[Enhanced S5.js] DirectoryWalker: Traversing', {
+        debug.walker(' DirectoryWalker: Traversing', {
           currentPath: state.path,
           depth: state.depth,
           pendingDirs: state.pendingStack.length,

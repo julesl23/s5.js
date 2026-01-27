@@ -1,5 +1,5 @@
 import { FS5 } from "../fs5.js";
-import { debugLog } from "../../util/debug.js";
+import { debug } from "../../util/debug.js";
 import { DirectoryWalker, WalkOptions } from "./walker.js";
 import { FileRef, DirRef, PutOptions } from "../dirv1/types.js";
 import { encodeS5, decodeS5 } from "../dirv1/cbor-config.js";
@@ -114,7 +114,7 @@ export class BatchOperations {
         state.lastCursor = walkCursor;
 
         try {
-          debugLog('[Enhanced S5.js] BatchOperations: Copy progress', {
+          debug.batch(' BatchOperations: Copy progress', {
             operation: 'copy',
             from: path,
             to: targetPath,

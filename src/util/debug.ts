@@ -1,139 +1,64 @@
 /**
- * Debug utility for S5.js - easily toggleable debugging
+ * Debug utility for S5.js using the standard 'debug' package
  *
- * To disable all debug logging, set S5_DEBUG_ENABLED = false
- * To strip debug logs in production: search for "S5_DBG" and remove
+ * Enable debug output with environment variable:
+ *   DEBUG=s5js:* node app.js           # All debug output
+ *   DEBUG=s5js:registry node app.js    # Only registry
+ *   DEBUG=s5js:*,-s5js:cbor node app.js # All except cbor
+ *
+ * In browser, set localStorage.debug = 's5js:*' before loading
  */
 
-// Toggle this to enable/disable all debug logging
-export const S5_DEBUG_ENABLED = false;
+import createDebug from 'debug';
 
-/**
- * Simple console.log wrapper that respects S5_DEBUG_ENABLED
- * Use this for [S5_DBG:*] and [Enhanced S5.js] logs
- */
-export function debugLog(...args: any[]): void {
-  if (S5_DEBUG_ENABLED) {
-    console.log(...args);
-  }
-}
-
-// Debug categories - toggle individual categories
-export const S5_DEBUG_CATEGORIES = {
-  FS5: true,           // File system operations
-  IDENTITY: true,      // Identity/account operations
-  HIDDEN_DB: true,     // Hidden database operations
-  REGISTRY: true,      // Registry operations
-  UPLOAD: true,        // Blob upload operations
-  DOWNLOAD: true,      // Blob download operations
-  DIRECTORY: true,     // Directory transactions
-  REVISION: true,      // Revision tracking
+// Create namespaced debuggers for different components
+export const debug = {
+  node: createDebug('s5js:node'),
+  registry: createDebug('s5js:registry'),
+  api: createDebug('s5js:api'),
+  fs5: createDebug('s5js:fs5'),
+  upload: createDebug('s5js:upload'),
+  download: createDebug('s5js:download'),
+  directory: createDebug('s5js:directory'),
+  revision: createDebug('s5js:revision'),
+  cbor: createDebug('s5js:cbor'),
+  cache: createDebug('s5js:cache'),
+  batch: createDebug('s5js:batch'),
+  walker: createDebug('s5js:walker'),
+  identity: createDebug('s5js:identity'),
+  hidden_db: createDebug('s5js:hidden_db'),
 };
 
-type DebugCategory = keyof typeof S5_DEBUG_CATEGORIES;
+type DebugCategory = keyof typeof debug;
 
 /**
- * Debug log function - prefix all messages with S5_DBG for easy stripping
- * Usage: dbg('FS5', 'methodName', 'message', { data })
+ * Debug log function compatible with existing dbg() calls
+ * Maps category names to debug namespaces
  */
-export function dbg(category: DebugCategory, context: string, message: string, data?: any): void {
-  if (!S5_DEBUG_ENABLED || !S5_DEBUG_CATEGORIES[category]) return;
-
-  const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
-  const prefix = `[S5_DBG:${category}:${timestamp}]`;
+export function dbg(category: string, context: string, message: string, data?: any): void {
+  const key = category.toLowerCase().replace(/_/g, '_') as DebugCategory;
+  const debugFn = debug[key] || createDebug(`s5js:${key}`);
 
   if (data !== undefined) {
-    // Truncate large data for readability
-    const dataStr = formatDebugData(data);
-    console.log(`${prefix} ${context}: ${message}`, dataStr);
+    debugFn('%s: %s %O', context, message, data);
   } else {
-    console.log(`${prefix} ${context}: ${message}`);
+    debugFn('%s: %s', context, message);
   }
 }
 
 /**
  * Debug error log
  */
-export function dbgError(category: DebugCategory, context: string, message: string, error?: any): void {
-  if (!S5_DEBUG_ENABLED || !S5_DEBUG_CATEGORIES[category]) return;
-
-  const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
-  const prefix = `[S5_DBG:${category}:${timestamp}]`;
+export function dbgError(category: string, context: string, message: string, error?: any): void {
+  const key = category.toLowerCase().replace(/_/g, '_') as DebugCategory;
+  const debugFn = debug[key] || createDebug(`s5js:${key}`);
 
   if (error) {
-    const errorInfo = {
+    debugFn('%s: %s %O', context, message, {
       message: error?.message || String(error),
-      stack: error?.stack?.split('\n').slice(0, 3).join('\n'),
-    };
-    console.error(`${prefix} ${context}: ${message}`, errorInfo);
+      stack: error?.stack?.split?.('\n')?.slice(0, 3)?.join('\n'),
+    });
   } else {
-    console.error(`${prefix} ${context}: ${message}`);
-  }
-}
-
-/**
- * Format data for debug output - truncate large values
- */
-function formatDebugData(data: any): any {
-  if (data === null || data === undefined) return data;
-
-  if (data instanceof Uint8Array) {
-    if (data.length <= 16) {
-      return `Uint8Array(${data.length})[${Array.from(data).map(b => b.toString(16).padStart(2, '0')).join('')}]`;
-    }
-    return `Uint8Array(${data.length})[${Array.from(data.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join('')}...]`;
-  }
-
-  if (typeof data === 'string' && data.length > 100) {
-    return data.slice(0, 100) + '...';
-  }
-
-  if (Array.isArray(data)) {
-    if (data.length > 10) {
-      return `Array(${data.length})[${data.slice(0, 3).map(formatDebugData).join(', ')}...]`;
-    }
-    return data.map(formatDebugData);
-  }
-
-  if (typeof data === 'object') {
-    const formatted: any = {};
-    const keys = Object.keys(data);
-    for (const key of keys.slice(0, 10)) {
-      formatted[key] = formatDebugData(data[key]);
-    }
-    if (keys.length > 10) {
-      formatted['...'] = `(${keys.length - 10} more keys)`;
-    }
-    return formatted;
-  }
-
-  return data;
-}
-
-/**
- * Debug wrapper for async functions - logs entry, exit, and errors
- */
-export async function dbgWrap<T>(
-  category: DebugCategory,
-  context: string,
-  fn: () => Promise<T>,
-  inputData?: any
-): Promise<T> {
-  if (!S5_DEBUG_ENABLED || !S5_DEBUG_CATEGORIES[category]) {
-    return fn();
-  }
-
-  dbg(category, context, 'ENTER', inputData);
-  const startTime = Date.now();
-
-  try {
-    const result = await fn();
-    const elapsed = Date.now() - startTime;
-    dbg(category, context, `EXIT (${elapsed}ms)`, { resultType: typeof result });
-    return result;
-  } catch (error) {
-    const elapsed = Date.now() - startTime;
-    dbgError(category, context, `ERROR (${elapsed}ms)`, error);
-    throw error;
+    debugFn('%s: %s', context, message);
   }
 }

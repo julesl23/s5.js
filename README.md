@@ -176,6 +176,35 @@ document.addEventListener('visibilitychange', async () => {
 unsubscribe();
 ```
 
+### Debugging
+
+Enable debug output using the standard `DEBUG` environment variable:
+
+```bash
+# All S5.js debug output
+DEBUG=s5js:* node app.js
+
+# Specific categories only
+DEBUG=s5js:registry,s5js:fs5 node app.js
+
+# Everything except verbose CBOR logs
+DEBUG=s5js:*,-s5js:cbor node app.js
+```
+
+Available debug namespaces:
+- `s5js:node` - Node initialization
+- `s5js:registry` - Registry operations
+- `s5js:api` - API operations
+- `s5js:fs5` - File system operations
+- `s5js:upload` - Blob uploads
+- `s5js:download` - Blob downloads
+- `s5js:cache` - Blob caching
+- `s5js:cbor` - CBOR serialization
+- `s5js:batch` - Batch operations
+- `s5js:walker` - Directory walker
+
+In browser, set `localStorage.debug = 's5js:*'` before loading.
+
 ## Testing with Real S5 Portal
 
 The enhanced S5.js has been successfully integrated with real S5 portal infrastructure. To test:
