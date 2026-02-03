@@ -1009,7 +1009,7 @@ export class FS5 {
           // Check if already exists
           const existingDir = await hamt.get(`d:${name}`);
           if (existingDir) {
-            dbgError('DIRECTORY', 'createDirectory', 'Subdirectory already exists in HAMT', { name });
+            dbgError('DIRECTORY', 'createDirectory', 'Subdirectory already exists in HAMT', new Error(`name: ${name}`));
             throw new Error(
               "Directory already contains a subdirectory with the same name"
             );
@@ -1031,7 +1031,7 @@ export class FS5 {
         } else {
           // Regular directory
           if (dir.dirs.has(name)) {
-            dbgError('DIRECTORY', 'createDirectory', 'Subdirectory already exists', { name });
+            dbgError('DIRECTORY', 'createDirectory', 'Subdirectory already exists', new Error(`name: ${name}`));
             throw new Error(
               "Directory already contains a subdirectory with the same name"
             );
@@ -1726,21 +1726,41 @@ export class FS5 {
             parentPath,
             dirName
           });
-          await this.createDirectory(parentPath, dirName);
-          dbg('DIRECTORY', '_updateDirectory', 'Directory created', { currentPath });
+          try {
+            await this.createDirectory(parentPath, dirName);
+            dbg('DIRECTORY', '_updateDirectory', 'Directory created', { currentPath });
+          } catch (createError: any) {
+            // Ignore "same name" (race condition) and "does not exist" (parent will be created in next iteration)
+            // DirectoryTransactionResult stores error in .e, not .message
+            const errorStr = createError?.message || createError?.e?.message || createError?.e || createError?.toString?.() || '';
+            if (!errorStr.toString().includes('same name') && !errorStr.toString().includes('does not exist')) {
+              throw createError;
+            }
+            dbg('DIRECTORY', '_updateDirectory', 'Directory creation deferred or already exists', { currentPath });
+          }
         } else {
           dbg('FS5', '_updateDirectory', 'Directory exists', { currentPath });
         }
       } catch (error: any) {
-        // Directory doesn't exist, create it
-        dbg('DIRECTORY', '_updateDirectory', 'Error loading directory - creating', {
+        // Directory might not exist, try to create it
+        dbg('DIRECTORY', '_updateDirectory', 'Error loading directory - attempting create', {
           currentPath,
           parentPath,
           dirName,
           error: error?.message
         });
-        await this.createDirectory(parentPath, dirName);
-        dbg('DIRECTORY', '_updateDirectory', 'Directory created after error', { currentPath });
+        try {
+          await this.createDirectory(parentPath, dirName);
+          dbg('DIRECTORY', '_updateDirectory', 'Directory created after error', { currentPath });
+        } catch (createError: any) {
+          // Ignore "same name" (race condition) and "does not exist" (parent will be created in next iteration)
+          // DirectoryTransactionResult stores error in .e, not .message
+          const errorStr = createError?.message || createError?.e?.message || createError?.e || createError?.toString?.() || '';
+          if (!errorStr.toString().includes('same name') && !errorStr.toString().includes('does not exist')) {
+            throw createError;
+          }
+          dbg('DIRECTORY', '_updateDirectory', 'Directory creation deferred or already exists', { currentPath });
+        }
       }
     }
 

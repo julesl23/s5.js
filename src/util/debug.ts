@@ -56,7 +56,9 @@ export function dbgError(category: string, context: string, message: string, err
   if (error) {
     debugFn('%s: %s %O', context, message, {
       message: error?.message || String(error),
-      stack: error?.stack?.split?.('\n')?.slice(0, 3)?.join('\n'),
+      stack: typeof error?.stack === 'string'
+        ? error.stack.split('\n').slice(0, 3).join('\n')
+        : undefined,
     });
   } else {
     debugFn('%s: %s', context, message);
