@@ -8,9 +8,13 @@ import { describe, test, expect, beforeEach } from 'vitest';
 import {
   formatCID,
   parseCID,
+  detectCIDFormat,
+  cidStringToHash,
+  cidToDownloadFormat,
   verifyCID,
   cidToString,
 } from '../../src/fs/cid-utils.js';
+import { base64url } from 'multiformats/bases/base64';
 import { JSCryptoImplementation } from '../../src/api/crypto/js.js';
 
 describe('CID Utilities', () => {
@@ -167,6 +171,63 @@ describe('CID Utilities', () => {
 
       expect(parsed).toEqual(sampleCID);
       expect(reformatted).toBe(formatted);
+    });
+  });
+
+  describe('base64url (u-prefix) CID handling', () => {
+    test('parseCID should parse u-prefix base64url CID string', () => {
+      const uPrefixed = base64url.encode(sampleCID);
+      expect(uPrefixed[0]).toBe('u');
+
+      const parsed = parseCID(uPrefixed);
+
+      expect(parsed).toBeInstanceOf(Uint8Array);
+      expect(parsed).toEqual(sampleCID);
+    });
+
+    test('parseCID should round-trip u-prefix CID', () => {
+      const uPrefixed = base64url.encode(sampleCID);
+      const parsed = parseCID(uPrefixed);
+      const reEncoded = base64url.encode(parsed);
+
+      expect(reEncoded).toBe(uPrefixed);
+    });
+
+    test('detectCIDFormat should detect u-prefix raw hash as raw', () => {
+      const uPrefixed = base64url.encode(sampleCID);
+
+      const format = detectCIDFormat(uPrefixed);
+
+      expect(format).toBe('raw');
+    });
+
+    test('detectCIDFormat should detect u-prefix BlobIdentifier as blob', () => {
+      // Construct a minimal BlobIdentifier: prefix (0x5b, 0x82) + hash (33 bytes) + size (1 byte) = 36+ bytes
+      const blobBytes = new Uint8Array(37);
+      blobBytes[0] = 0x5b;
+      blobBytes[1] = 0x82;
+      blobBytes.set(sampleCID, 2); // 32 bytes of hash
+      const uPrefixed = base64url.encode(blobBytes);
+
+      const format = detectCIDFormat(uPrefixed);
+
+      expect(format).toBe('blob');
+    });
+
+    test('cidStringToHash should extract hash from u-prefix raw CID', () => {
+      const uPrefixed = base64url.encode(sampleCID);
+
+      const hash = cidStringToHash(uPrefixed);
+
+      expect(hash).toEqual(sampleCID);
+    });
+
+    test('cidToDownloadFormat should pass through u-prefix CID string', () => {
+      const uPrefixed = base64url.encode(sampleCID);
+
+      const result = cidToDownloadFormat(uPrefixed);
+
+      expect(result).toBe(uPrefixed);
     });
   });
 

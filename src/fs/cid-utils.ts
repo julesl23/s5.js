@@ -6,7 +6,7 @@
 
 import { base32 } from 'multiformats/bases/base32';
 import { base58btc } from 'multiformats/bases/base58';
-import { base64 } from 'multiformats/bases/base64';
+import { base64, base64url } from 'multiformats/bases/base64';
 import type { CryptoImplementation } from '../api/crypto.js';
 import { BlobIdentifier } from '../identifier/blob.js';
 
@@ -49,7 +49,7 @@ export function detectCIDFormat(cid: string): CIDFormat {
       decoded = base32.decode(cid);
     } else if (firstChar === 'u') {
       // Base64url format (common for BlobIdentifier)
-      decoded = base64.decode(cid);
+      decoded = base64url.decode(cid);
     } else if (firstChar === 'z') {
       decoded = base58btc.decode(cid);
     } else {
@@ -248,8 +248,11 @@ export function parseCID(cidString: string): Uint8Array {
     } else if (firstChar === 'z') {
       // Multibase base58btc with prefix 'z'
       parsed = base58btc.decode(cidString);
-    } else if (firstChar === 'm' || firstChar === 'M' || firstChar === 'u') {
-      // Multibase base64 variants with prefix
+    } else if (firstChar === 'u') {
+      // Multibase base64url with prefix 'u'
+      parsed = base64url.decode(cidString);
+    } else if (firstChar === 'm' || firstChar === 'M') {
+      // Multibase base64 with prefix 'm' or 'M'
       parsed = base64.decode(cidString);
     } else if (/^[a-z2-7]+$/.test(cidString)) {
       // Base32 without prefix - add it
