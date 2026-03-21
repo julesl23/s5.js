@@ -1450,6 +1450,50 @@ async function cleanupTempFiles(basePath: string) {
 }
 ```
 
+## Blob Upload Methods
+
+### `s5.fs.uploadBlobWithoutEncryption(blob)`
+
+Uploads a blob without encryption and returns the plaintext hash and size.
+
+```typescript
+const blob = new Blob([data]);
+const result = await s5.fs.uploadBlobWithoutEncryption(blob);
+// result: { hash: Uint8Array, size: number }
+// hash: 32-byte BLAKE3 hash (multihash prefix removed)
+```
+
+### `s5.fs.uploadBlobEncrypted(blob)`
+
+Uploads a blob with XChaCha20-Poly1305 encryption. The blob is split into 256 KiB chunks, each encrypted individually, then uploaded as a single encrypted blob.
+
+```typescript
+const blob = new Blob([sensitiveData]);
+const result = await s5.fs.uploadBlobEncrypted(blob);
+// result: {
+//   hash: Uint8Array,             // 32-byte plaintext BLAKE3 hash
+//   size: number,                 // original plaintext size
+//   encryptionKey: Uint8Array,    // 32-byte encryption key
+//   encryptedBlobHash: Uint8Array, // 32-byte BLAKE3 hash of the encrypted blob
+//   padding: number               // padding bytes added for size obfuscation
+// }
+```
+
+The returned components can be used to construct the full `0xae` encrypted CID externally:
+
+```typescript
+const encryptedCID = new Uint8Array([
+  0xae,                              // CID type: encrypted static
+  0x01,                              // encryption algorithm: XChaCha20-Poly1305
+  18,                                // chunk size exponent: 2^18 = 256 KiB
+  0x1f,                              // hash type prefix
+  ...result.encryptedBlobHash,       // 32 bytes
+  ...result.encryptionKey,           // 32 bytes
+  ...encodeLittleEndian(result.padding, 4), // 4 bytes
+  ...plaintextCID,                   // plaintext blob reference (built from hash + size)
+]);
+```
+
 ## Integration with FS5 Class Methods
 
 The path-based API methods work alongside the existing FS5 class methods. Both use the same underlying DirV1 format:

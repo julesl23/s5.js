@@ -902,7 +902,7 @@ export class FS5 {
 
   public async uploadBlobEncrypted(
     blob: Blob
-  ): Promise<{ hash: Uint8Array; size: number; encryptionKey: Uint8Array }> {
+  ): Promise<{ hash: Uint8Array; size: number; encryptionKey: Uint8Array; encryptedBlobHash: Uint8Array; padding: number }> {
     const plaintextBlake3Hash = await this.api.crypto.hashBlake3Blob(blob);
     const size = blob.size;
     const plaintextBlobIdentifier = new BlobIdentifier(
@@ -977,6 +977,8 @@ export class FS5 {
       hash: plaintextBlake3Hash,
       size: size,
       encryptionKey: encryptionKey,
+      encryptedBlobHash: encryptedBlobIdentifier.hash.subarray(1),
+      padding: padding,
     };
   }
 
