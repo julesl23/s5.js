@@ -1069,7 +1069,7 @@ export class FS5 {
       await this._preprocessLocalPath(directoryPath),
       async (dir, _) => {
         if (dir.files.has(fileName)) {
-          throw "Directory already contains a file with the same name";
+          throw new Error("Directory already contains a file with the same name");
         }
         const file: FileRef = {
           hash: new Uint8Array(32), // Placeholder - should be computed from data
@@ -1204,7 +1204,7 @@ export class FS5 {
         dbg('DIRECTORY', 'runTransactionOnDirectory', 'SUCCESS', { revision: revisionToUse });
         return new DirectoryTransactionResult(DirectoryTransactionResultType.Ok);
       } catch (e: any) {
-        const message = e?.message?.toLowerCase() || '';
+        const message = (typeof e === 'string' ? e : (e?.message || '')).toLowerCase();
         const isRevisionError = message.includes('revision') && message.includes('low');
 
         dbgError('DIRECTORY', 'runTransactionOnDirectory', `Error on attempt ${attempt}`, {
@@ -1212,7 +1212,7 @@ export class FS5 {
           isRevisionError,
           dirEntryRevision: dir?.entry?.revision,
           attemptedRevision: (dir?.entry?.revision ?? 0) + 1,
-          stack: e?.stack?.split('\n').slice(0, 5)
+          stack: typeof e?.stack === 'string' ? e.stack.split('\n').slice(0, 5) : undefined
         });
 
         if (isRevisionError && attempt < maxRetries) {
