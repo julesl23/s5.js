@@ -27,6 +27,7 @@ import {
 import { encodeS5, decodeS5 } from "./dirv1/cbor-config.js";
 import { base64UrlNoPaddingDecode } from "../util/base64.js";
 import { HAMT } from "./hamt/hamt.js";
+import { AsyncMutex } from "../util/async-mutex.js";
 
 // Media type mappings
 const MEDIA_TYPE_MAP: Record<string, string> = {
@@ -138,6 +139,7 @@ function mapToObject(value: any): any {
 export class FS5 {
   readonly api: S5APIInterface;
   readonly identity?: S5UserIdentity;
+  private readonly directoryLocks = new AsyncMutex();
 
   constructor(api: S5APIInterface, identity?: S5UserIdentity) {
     this.api = api;
@@ -1091,6 +1093,8 @@ export class FS5 {
     uri: string,
     transaction: DirectoryTransactionFunction
   ): Promise<DirectoryTransactionResult> {
+    const release = await this.directoryLocks.acquire(uri);
+    try {
     dbg('DIRECTORY', 'runTransactionOnDirectory', 'ENTER', { uri: uri.slice(0, 80) });
 
     const ks = await this.getKeySet(uri);
@@ -1235,6 +1239,9 @@ export class FS5 {
       DirectoryTransactionResultType.Error,
       new Error('Max retries exceeded')
     );
+    } finally {
+      release();
+    }
   }
 
   // In ensureIdentityInitialized method
