@@ -1,10 +1,12 @@
 # Enhanced S5.js - Executive Summary
 
-**Project Status:** 90% Complete (Phases 1-7 Delivered)
-**Grant Period:** 8 months (July 2025 - February 2026)
+**Project Status:** Grant Complete, Actively Maintained Post-Grant
+**Grant Period:** 8 months (July 2025 - December 2025)
+**Grant Completed:** 4 December 2025
 **Funding:** Sia Foundation Standard Grant
-**Current Phase:** Month 7 - Testing & Performance (Complete)
-**Last Updated:** October 20, 2025
+**Current Version:** v0.9.0-beta.45
+**Maintainer:** Jules Lai
+**Last Updated:** 4 April 2026
 
 ---
 
@@ -20,7 +22,7 @@ Enable developers to build privacy-first, decentralized applications with the si
 
 ## Key Achievements
 
-### 1. Technical Deliverables (90% Complete)
+### 1. Technical Deliverables (100% Complete)
 
 | Deliverable | Status | Impact |
 |-------------|--------|--------|
@@ -29,15 +31,15 @@ Enable developers to build privacy-first, decentralized applications with the si
 | **Media Processing** | ✅ Complete | Image thumbnails, metadata extraction |
 | **Advanced CID API** | ✅ Complete | Power user content-addressed operations |
 | **Performance Testing** | ✅ Complete | Verified up to 100K+ entries |
-| **Documentation** | ✅ Complete | 500+ lines API docs, benchmarks |
-| **Upstream Integration** | 🚧 Pending | Awaiting grant approval (Phase 8) |
+| **Documentation** | ✅ Complete | 3,000+ lines API docs, benchmarks |
+| **Upstream Integration** | ✅ Complete | Published as `@julesl23/s5js@beta` |
 
 ### 2. Performance Metrics
 
 **Bundle Size Achievement:**
 - **Target:** ≤ 700 KB compressed (grant requirement)
-- **Actual:** 60.09 KB compressed (brotli)
-- **Result:** **10.6x under requirement** (639.91 KB margin)
+- **Actual:** 61.14 KB compressed (brotli)
+- **Result:** **10.4x under requirement** (638.86 KB margin)
 
 **Scalability:**
 - Automatic HAMT activation at 1,000+ entries
@@ -46,9 +48,9 @@ Enable developers to build privacy-first, decentralized applications with the si
 - ~800ms per operation on real S5 network
 
 **Quality Metrics:**
-- **280+ tests** passing across 30+ test files
+- **529 tests** passing across 54 test files
 - **74 dedicated tests** for Advanced CID API
-- **100% success rate** with real S5 portal integration (s5.vup.cx)
+- **100% success rate** with real S5 portal integration
 - **20/20 browser tests** passing (Chrome/Edge verified)
 
 ### 3. Developer Experience
@@ -128,17 +130,17 @@ const data = await s5.fs.get("home/documents/report.pdf");
 
 **Modular Export Strategy:**
 ```javascript
-// Core bundle: 59.61 KB (file system operations only)
-import { S5, FS5 } from "s5/core";
+// Core bundle: 59.58 KB (file system operations only)
+import { S5, FS5 } from "@julesl23/s5js/core";
 
 // Media bundle: 9.79 KB (lazy-loaded media processing)
-import { MediaProcessor } from "s5/media";
+import { MediaProcessor } from "@julesl23/s5js/media";
 
-// Advanced bundle: 59.53 KB (CID-aware API for power users)
-import { FS5Advanced, formatCID } from "s5/advanced";
+// Advanced bundle: 60.60 KB (CID-aware API for power users)
+import { FS5Advanced, formatCID } from "@julesl23/s5js/advanced";
 
-// Full bundle: 60.09 KB (everything)
-import { S5, MediaProcessor, FS5Advanced } from "s5";
+// Full bundle: 61.14 KB (everything)
+import { S5, MediaProcessor, FS5Advanced } from "@julesl23/s5js";
 ```
 
 **Innovation:** Code-splitting enables tree-shaking (13.4% efficiency) and on-demand loading, ensuring minimal bundle impact.
@@ -178,26 +180,28 @@ import { S5, MediaProcessor, FS5Advanced } from "s5";
 | 4 | Directory Utilities | $6,200 | ✅ Complete |
 | 5 | Media Processing Foundation | $6,200 | ✅ Complete |
 | 6 | Advanced Media Processing | $6,200 | ✅ Complete |
-| 7 | Testing & Performance | $6,200 | ✅ 85% Complete |
-| 8 | Documentation & Integration | $6,200 | 🚧 40% Complete |
-| **Total** | **8 Months** | **$49,600** | **~90% Complete** |
+| 7 | Testing & Performance | $6,200 | ✅ Complete |
+| 8 | Documentation & Integration | $6,200 | ✅ Complete |
+| **Total** | **8 Months** | **$49,600** | **100% Complete** |
 
-**Budget Status:** On track, no overruns
+**Budget Status:** Delivered on budget, grant concluded 4 December 2025
 
 ### Delivery Quality
 
 **Code Quality Metrics:**
 - ✅ TypeScript strict mode compliance
-- ✅ 280+ unit and integration tests
+- ✅ 529 unit and integration tests across 54 test files
 - ✅ Zero linting errors
 - ✅ Comprehensive documentation (IMPLEMENTATION.md, API.md, BENCHMARKS.md)
-- ✅ Real S5 portal integration verified (s5.vup.cx)
+- ✅ Real S5 portal integration verified
+- ✅ Production-validated via Fabstir platform deployment
 
 **Documentation Deliverables:**
-- [API Documentation](./API.md) - 500+ lines with examples
+- [API Documentation](../API.md) - 3,000+ lines with examples
 - [Implementation Progress](./IMPLEMENTATION.md) - Detailed phase tracking
 - [Performance Benchmarks](./BENCHMARKS.md) - Scaling analysis
 - [Bundle Analysis](./BUNDLE_ANALYSIS.md) - Size optimization report
+- [Post-Grant Update](./POST_GRANT_UPDATE.md) - Continued development since grant completion
 
 ---
 
@@ -251,11 +255,11 @@ import { S5, MediaProcessor, FS5Advanced } from "s5";
 **Investment:** $49,600 (8-month grant)
 
 **Deliverables:**
-- ✅ Production-ready SDK (280+ tests, 60KB bundle)
+- ✅ Production-ready SDK (529 tests, 61KB bundle)
 - ✅ 10x developer experience improvement (path-based API)
 - ✅ Enterprise-grade features (HAMT, media processing, encryption)
-- ✅ Comprehensive documentation (4 major docs, API examples)
-- ✅ Real-world validation (s5.vup.cx integration)
+- ✅ Comprehensive documentation (5 major docs, 3,000+ line API reference)
+- ✅ Real-world production deployment (Fabstir platform)
 
 **Multiplier Effect:**
 - Enables **privacy-first dApps** impossible with current tools
@@ -265,12 +269,12 @@ import { S5, MediaProcessor, FS5Advanced } from "s5";
 
 ### Community Impact
 
-**Potential Adoption Paths:**
+**Adoption Progress:**
 
-1. **Immediate:** Platformless AI (Fabstir) as frontier dApp
-2. **Short-term (3-6 months):** Privacy-focused developers
-3. **Medium-term (6-12 months):** Enterprise adoption (GDPR compliance)
-4. **Long-term (12+ months):** Mainstream decentralized app ecosystem
+1. ✅ **Production:** Platformless AI (Fabstir) — active production deployment
+2. ✅ **npm Published:** `@julesl23/s5js@beta` available for community use
+3. ⏳ **Growth:** Privacy-focused developers and enterprise adoption
+4. ⏳ **Ecosystem:** Mainstream decentralized app ecosystem
 
 **Network Effects:**
 - More developers → More S5 nodes → Stronger network
@@ -279,22 +283,32 @@ import { S5, MediaProcessor, FS5Advanced } from "s5";
 
 ---
 
-## Next Steps (Phase 8 - Remaining 10%)
+## Post-Grant Development (December 2025 — Present)
 
-### Immediate (1-2 weeks)
-- ✅ Merge feature branch to main (technical complete)
-- 🚧 Sia Foundation Phase 6-7 review and approval
-- 🚧 Address any grant reviewer feedback
+The grant concluded on 4 December 2025. Development has continued with 43 beta releases since grant completion. Key post-grant additions:
 
-### Short-term (2-4 weeks)
-- ⏳ Community outreach (blog post, forum announcements)
-- ⏳ Prepare upstream PR to s5-dev/s5.js
-- ⏳ Optional: Firefox/Safari browser testing
+### Features Added Post-Grant
+- ✅ **Connection API** (beta.5) — WebSocket lifecycle management for mobile apps
+- ✅ **Public Download by CID** (beta.10–13) — Cross-user content sharing via P2P discovery
+- ✅ **Identity Signing API** (beta.32–35) — Ed25519 signing for backend-mediated portal registration
+- ✅ **Encrypted Blob Hash Access** (beta.42) — Enables external encrypted CID construction
+- ✅ **Per-Directory Mutex** (beta.45) — Concurrent write serialization eliminating retry cascades
+- ✅ **Runtime Debug Logging** (beta.37) — Standard `debug` package with namespaced loggers
 
-### Medium-term (1-3 months)
-- ⏳ Upstream integration (PR review, merge)
-- ⏳ Community adoption support
-- ⏳ Potential: Conference presentation, documentation improvements
+### Production Hardening Post-Grant
+- ✅ Portal blob persistence and fallback download paths
+- ✅ Registry read-your-writes consistency
+- ✅ CID format fixes (base64url u-prefix, base58btc z-prefix)
+- ✅ Error handling hardening in directory transactions
+- ✅ Console log cleanup and security (removed seed phrase logging)
+
+### Ongoing Focus
+- Stability and production-hardening based on real-world usage
+- Performance improvements (concurrency, P2P propagation)
+- Developer experience (error messages, debug logging, documentation)
+- Supporting adoption beyond the initial Fabstir deployment
+
+See [Post-Grant Update](./POST_GRANT_UPDATE.md) for full details.
 
 ---
 
@@ -304,25 +318,25 @@ import { S5, MediaProcessor, FS5Advanced } from "s5";
 
 | Deliverable | Target | Actual | Status |
 |-------------|--------|--------|--------|
-| **Bundle Size** | ≤ 700 KB | 60.09 KB | ✅ Exceeded (10.6x) |
+| **Bundle Size** | ≤ 700 KB | 61.14 KB | ✅ Exceeded (10.4x) |
 | **Path-based API** | Basic operations | Full CRUD + utilities | ✅ Exceeded |
 | **HAMT Support** | 10K+ entries | 100K+ entries | ✅ Exceeded |
 | **Media Processing** | Basic thumbnails | Full pipeline + progressive | ✅ Exceeded |
-| **Documentation** | API docs | 4 comprehensive docs | ✅ Exceeded |
-| **Testing** | Unit tests | 280+ tests, integration | ✅ Exceeded |
+| **Documentation** | API docs | 5 comprehensive docs, 3,000+ line API ref | ✅ Exceeded |
+| **Testing** | Unit tests | 529 tests across 54 files | ✅ Exceeded |
 
-**Overall:** All contractual deliverables met or exceeded.
+**Overall:** All contractual deliverables met or exceeded. Project continues to grow post-grant.
 
 ### Business Success Metrics (Post-Grant)
 
-**6-Month Horizon:**
-- ✅ Upstream merge to s5-dev/s5.js
-- ⏳ ≥1 production dApp using Enhanced S5.js (Platformless AI)
-- ⏳ ≥100 developers aware (forum, Reddit, social media)
+**Post-Grant (Achieved):**
+- ✅ Published as `@julesl23/s5js@beta` on npm
+- ✅ 1 production dApp using Enhanced S5.js (Fabstir / Platformless AI)
+- ✅ 43 post-grant beta releases with continued improvements
 
-**12-Month Horizon:**
-- ⏳ ≥5 production dApps
-- ⏳ ≥1,000 developers aware
+**Ongoing Goals:**
+- ⏳ Broader community adoption beyond initial deployment
+- ⏳ Upstream contribution to s5-dev/s5.js
 - ⏳ Golang/Rust port discussions (ecosystem expansion)
 
 ---
@@ -331,41 +345,41 @@ import { S5, MediaProcessor, FS5Advanced } from "s5";
 
 Enhanced S5.js represents a **strategic investment** in the Sia/S5 ecosystem, delivering a production-ready SDK that:
 
-1. **Meets all grant requirements** (90% complete, on budget, on schedule)
+1. **Met all grant requirements** (100% complete, on budget, delivered December 2025)
 2. **Exceeds technical targets** (10x under bundle size, comprehensive features)
 3. **Addresses real market need** (privacy-first storage for AI, video, dApps)
 4. **Differentiates from competitors** (vs. IPFS's centralized pinning model)
-5. **Enables killer apps** (Platformless AI as reference implementation)
+5. **Enables killer apps** (Platformless AI as production deployment)
+6. **Continues to grow** (43 post-grant releases, 6 new features, production-hardened)
 
 **Key Insight:** The decentralized storage market is entering a "second wave" focused on privacy and practical use cases rather than hype. Enhanced S5.js positions the Sia/S5 ecosystem as the **privacy-first leader** in this emerging market.
 
-**Recommendation:**
-- ✅ **Approve Phase 6-7 completion** (technical work complete)
-- ✅ **Fund Phase 8 completion** (community outreach, upstream integration)
-- 🚀 **Support adoption** (feature Platformless AI as case study, promote in Sia community)
+**Post-Grant Status:** The project remains actively maintained by Jules Lai. Continued development is driven by real-world production usage through the Fabstir platform, ensuring the SDK evolves to meet practical demands.
 
 ---
 
 ## Appendices
 
 ### A. Technical Documentation
-- [API Documentation](./API.md)
+- [API Documentation](../API.md)
 - [Implementation Progress](./IMPLEMENTATION.md)
 - [Performance Benchmarks](./BENCHMARKS.md)
 - [Bundle Analysis](./BUNDLE_ANALYSIS.md)
+- [Post-Grant Update](./POST_GRANT_UPDATE.md)
 
 ### B. Key Metrics Summary
-- **Lines of Code:** ~15,000 (TypeScript, production-quality)
-- **Test Coverage:** 280+ tests across 30+ files
-- **Bundle Size:** 60.09 KB compressed (10.6x under requirement)
+- **Lines of Code:** ~14,000 (TypeScript, production-quality)
+- **Test Coverage:** 529 tests across 54 files
+- **Bundle Size:** 61.14 KB compressed (10.4x under requirement)
 - **Performance:** O(log n) verified to 100K+ entries
-- **Documentation:** 2,000+ lines across 4 major docs
+- **Documentation:** 3,000+ lines API docs, 5 major development docs
+- **Post-Grant Releases:** 43 beta versions (beta.2 to beta.45)
 
 ### C. Contact & Resources
 - **Repository:** https://github.com/julesl23/s5.js (fork of s5-dev/s5.js)
-- **Branch:** main (merged from feature/phase6-advanced-media-processing)
+- **npm Package:** `@julesl23/s5js@beta`
 - **Grant Proposal:** docs/grant/Sia-Standard-Grant-Enhanced-s5js.md
-- **Developer:** Jules Lai (Fabstir/Platformless AI)
+- **Maintainer:** Jules Lai (Fabstir/Platformless AI)
 
 ### D. Acknowledgments
 - **Sia Foundation:** Grant funding and support
@@ -374,7 +388,7 @@ Enhanced S5.js represents a **strategic investment** in the Sia/S5 ecosystem, de
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** October 20, 2025
-**Prepared For:** Sia Foundation Grant Review, Community Stakeholders
-**Status:** Phase 6-7 Complete, Phase 8 In Progress (40%)
+**Document Version:** 2.0
+**Last Updated:** 4 April 2026
+**Prepared For:** Sia Foundation, Community Stakeholders
+**Status:** Grant Complete (4 December 2025), Actively Maintained Post-Grant

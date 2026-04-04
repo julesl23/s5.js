@@ -61,6 +61,7 @@ logs
 docs/design/
 docs/grant/
 screenshots/
+docs/development/
 
 # Docker
 .dockerignore
