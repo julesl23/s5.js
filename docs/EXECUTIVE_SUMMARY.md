@@ -4,9 +4,9 @@
 **Grant Period:** 8 months (July 2025 - December 2025)
 **Grant Completed:** 4 December 2025
 **Funding:** Sia Foundation Standard Grant
-**Current Version:** v0.9.0-beta.45
+**Current Version:** v0.9.0-beta.46
 **Maintainer:** Jules Lai
-**Last Updated:** 4 April 2026
+**Last Updated:** 9 April 2026
 
 ---
 
@@ -48,7 +48,7 @@ Enable developers to build privacy-first, decentralized applications with the si
 - ~800ms per operation on real S5 network
 
 **Quality Metrics:**
-- **529 tests** passing across 54 test files
+- **540 tests** passing across 55 test files
 - **74 dedicated tests** for Advanced CID API
 - **100% success rate** with real S5 portal integration
 - **20/20 browser tests** passing (Chrome/Edge verified)
@@ -190,7 +190,7 @@ import { S5, MediaProcessor, FS5Advanced } from "@julesl23/s5js";
 
 **Code Quality Metrics:**
 - ✅ TypeScript strict mode compliance
-- ✅ 529 unit and integration tests across 54 test files
+- ✅ 540 unit and integration tests across 55 test files
 - ✅ Zero linting errors
 - ✅ Comprehensive documentation (IMPLEMENTATION.md, API.md, BENCHMARKS.md)
 - ✅ Real S5 portal integration verified
@@ -255,7 +255,7 @@ import { S5, MediaProcessor, FS5Advanced } from "@julesl23/s5js";
 **Investment:** $49,600 (8-month grant)
 
 **Deliverables:**
-- ✅ Production-ready SDK (529 tests, 61KB bundle)
+- ✅ Production-ready SDK (540 tests, 61KB bundle)
 - ✅ 10x developer experience improvement (path-based API)
 - ✅ Enterprise-grade features (HAMT, media processing, encryption)
 - ✅ Comprehensive documentation (5 major docs, 3,000+ line API reference)
@@ -285,7 +285,7 @@ import { S5, MediaProcessor, FS5Advanced } from "@julesl23/s5js";
 
 ## Post-Grant Development (December 2025 — Present)
 
-The grant concluded on 4 December 2025. Development has continued with 43 beta releases since grant completion. Key post-grant additions:
+The grant concluded on 4 December 2025. Development has continued with 44 beta releases since grant completion. Key post-grant additions:
 
 ### Features Added Post-Grant
 - ✅ **Connection API** (beta.5) — WebSocket lifecycle management for mobile apps
@@ -293,6 +293,7 @@ The grant concluded on 4 December 2025. Development has continued with 43 beta r
 - ✅ **Identity Signing API** (beta.32–35) — Ed25519 signing for backend-mediated portal registration
 - ✅ **Encrypted Blob Hash Access** (beta.42) — Enables external encrypted CID construction
 - ✅ **Per-Directory Mutex** (beta.45) — Concurrent write serialization eliminating retry cascades
+- ✅ **Cross-Identity Public Directory Read** (beta.46) — Read files from another user's public directory via shared public key
 - ✅ **Runtime Debug Logging** (beta.37) — Standard `debug` package with namespaced loggers
 
 ### Production Hardening Post-Grant
@@ -332,7 +333,7 @@ See [Post-Grant Update](./POST_GRANT_UPDATE.md) for full details.
 **Post-Grant (Achieved):**
 - ✅ Published as `@julesl23/s5js@beta` on npm
 - ✅ 1 production dApp using Enhanced S5.js (Fabstir / Platformless AI)
-- ✅ 43 post-grant beta releases with continued improvements
+- ✅ 44 post-grant beta releases with continued improvements
 
 **Ongoing Goals:**
 - ⏳ Broader community adoption beyond initial deployment
@@ -350,7 +351,7 @@ Enhanced S5.js represents a **strategic investment** in the Sia/S5 ecosystem, de
 3. **Addresses real market need** (privacy-first storage for AI, video, dApps)
 4. **Differentiates from competitors** (vs. IPFS's centralized pinning model)
 5. **Enables killer apps** (Platformless AI as production deployment)
-6. **Continues to grow** (43 post-grant releases, 6 new features, production-hardened)
+6. **Continues to grow** (44 post-grant releases, 7 new features, production-hardened)
 
 **Key Insight:** The decentralized storage market is entering a "second wave" focused on privacy and practical use cases rather than hype. Enhanced S5.js positions the Sia/S5 ecosystem as the **privacy-first leader** in this emerging market.
 
@@ -369,11 +370,11 @@ Enhanced S5.js represents a **strategic investment** in the Sia/S5 ecosystem, de
 
 ### B. Key Metrics Summary
 - **Lines of Code:** ~14,000 (TypeScript, production-quality)
-- **Test Coverage:** 529 tests across 54 files
+- **Test Coverage:** 540 tests across 55 files
 - **Bundle Size:** 61.14 KB compressed (10.4x under requirement)
 - **Performance:** O(log n) verified to 100K+ entries
 - **Documentation:** 3,000+ lines API docs, 5 major development docs
-- **Post-Grant Releases:** 43 beta versions (beta.2 to beta.45)
+- **Post-Grant Releases:** 44 beta versions (beta.2 to beta.46)
 
 ### C. Contact & Resources
 - **Repository:** https://github.com/julesl23/s5.js (fork of s5-dev/s5.js)
@@ -389,6 +390,6 @@ Enhanced S5.js represents a **strategic investment** in the Sia/S5 ecosystem, de
 ---
 
 **Document Version:** 2.0
-**Last Updated:** 4 April 2026
+**Last Updated:** 9 April 2026
 **Prepared For:** Sia Foundation, Community Stakeholders
 **Status:** Grant Complete (4 December 2025), Actively Maintained Post-Grant

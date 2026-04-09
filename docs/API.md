@@ -2441,6 +2441,90 @@ This design makes the API:
 
 For advanced use cases requiring content addressing, access the internal `FileRef` structures through the S5Node API.
 
+## Cross-Identity Public Directory Read (beta.46)
+
+Enables reading files from another user's public (unencrypted) directory tree. This powers multi-user workflows where operators publish data and viewers read it via a shared public key.
+
+### How It Works
+
+FS5 child directories are stored unencrypted — only the root directory is encrypted. The barrier to cross-identity reads is that outsiders cannot compute the directory's registry public key (derived from the owner's identity). These two methods solve that:
+
+1. **Operator** extracts the directory's public key and shares it
+2. **Viewer** uses that key to read files from the directory (no identity required)
+
+### getPublicDirectoryKey()
+
+Extract the 32-byte Ed25519 public key for a directory's registry entry. Requires an initialized identity.
+
+```typescript
+async getPublicDirectoryKey(path: string): Promise<Uint8Array>
+```
+
+**Parameters:**
+- `path` — Directory path (e.g., `"home/public/storefront"`)
+
+**Returns:** 32-byte `Uint8Array` (Ed25519 public key without the 0xed multikey prefix)
+
+```typescript
+// Operator: extract and share the key
+const pubKey = await s5.fs.getPublicDirectoryKey("home/public/storefront");
+const keyString = base64url(pubKey); // Share this with viewers
+```
+
+### readFromPublicDirectory()
+
+Read a file from another user's unencrypted directory tree. Does **not** require identity — only needs network access (`this.api`).
+
+```typescript
+async readFromPublicDirectory(
+  remotePubKey: Uint8Array,
+  subpath: string
+): Promise<Uint8Array | undefined>
+```
+
+**Parameters:**
+- `remotePubKey` — 32-byte Ed25519 public key (from `getPublicDirectoryKey`)
+- `subpath` — Path within the remote directory (e.g., `"config/brand.json"`)
+
+**Returns:** Raw file bytes as `Uint8Array`, or `undefined` if not found, path is invalid, or file is encrypted.
+
+**Throws:** If `remotePubKey` is not exactly 32 bytes.
+
+```typescript
+// Viewer: read from operator's public directory
+const data = await viewerFs.readFromPublicDirectory(operatorPubKey, "config/brand.json");
+if (data) {
+  const config = JSON.parse(new TextDecoder().decode(data));
+}
+```
+
+### Behaviour Details
+
+| Scenario | Result |
+|----------|--------|
+| File found | `Uint8Array` (raw bytes) |
+| File not found | `undefined` |
+| Directory segment missing | `undefined` |
+| No registry entry for key | `undefined` |
+| Encrypted file | `undefined` (viewer cannot decrypt) |
+| Encrypted directory | `undefined` (defensive — child dirs are unencrypted in practice) |
+| Empty subpath | `undefined` |
+| Invalid key length | Throws `Error` |
+
+### End-to-End Example
+
+```typescript
+// === Operator (one-time setup) ===
+await operatorFs.put("home/storefront/catalogue.json", catalogueData);
+const pubKey = await operatorFs.getPublicDirectoryKey("home/storefront");
+// Share pubKey with viewers (e.g., store in platform config)
+
+// === Viewer (reading) ===
+const viewerFs = new FS5(api); // No identity needed
+const data = await viewerFs.readFromPublicDirectory(pubKey, "catalogue.json");
+const catalogue = JSON.parse(new TextDecoder().decode(data!));
+```
+
 ## Performance Considerations
 
 - **Directory Caching**: Directory metadata is cached during path traversal

@@ -2144,6 +2144,111 @@ export class FS5 {
     const mediaExt = new FS5MediaExtensions(this);
     return mediaExt.createImageGallery(galleryPath, images, options);
   }
+
+  /**
+   * Get the 32-byte Ed25519 public key for a directory's registry entry.
+   * Requires initialized identity.
+   */
+  async getPublicDirectoryKey(path: string): Promise<Uint8Array> {
+    const normalized = normalizePath(path);
+    const uri = await this._preprocessLocalPath(normalized);
+    const ks = await this.getKeySet(uri);
+    if (ks.publicKey[0] !== mkeyEd25519) {
+      throw new Error("Directory does not use Ed25519 registry key");
+    }
+    dbg('FS5', 'getPublicDirectoryKey', normalized, { keyLength: ks.publicKey.length - 1 });
+    return ks.publicKey.subarray(1);
+  }
+
+  /**
+   * Read file content from another user's unencrypted public directory.
+   * Does not require identity — only uses this.api.
+   */
+  async readFromPublicDirectory(
+    remotePubKey: Uint8Array,
+    subpath: string
+  ): Promise<Uint8Array | undefined> {
+    if (remotePubKey.length !== 32) {
+      throw new Error("remotePubKey must be exactly 32 bytes");
+    }
+
+    const segments = subpath.split("/").filter(s => s);
+    if (segments.length === 0) return undefined;
+
+    dbg('FS5', 'readFromPublicDirectory', 'ENTER', { segments });
+
+    // Construct root KeySet from remote public key
+    let ks: KeySet = {
+      publicKey: concatBytes(new Uint8Array([mkeyEd25519]), remotePubKey),
+      writeKey: undefined,
+      encryptionKey: undefined,
+    };
+
+    // Load root directory
+    let dirResult: { directory: DirV1; entry?: any } | undefined;
+    try {
+      dirResult = await this._getDirectoryMetadata(ks);
+    } catch (e: any) {
+      if (e.message === "MissingEncryptionKey") return undefined;
+      throw e;
+    }
+    if (!dirResult) return undefined;
+
+    let dir = dirResult.directory;
+
+    // Traverse directory segments (all except last)
+    for (let i = 0; i < segments.length - 1; i++) {
+      const dirRef = await this._getDirectoryFromDirectory(dir, segments[i]);
+      if (!dirRef) return undefined;
+
+      // Construct child KeySet from DirRef link
+      if (dirRef.link.type === 'mutable_registry_ed25519' && dirRef.link.publicKey) {
+        ks = {
+          publicKey: concatBytes(new Uint8Array([mkeyEd25519]), dirRef.link.publicKey),
+          writeKey: undefined,
+          encryptionKey: undefined,
+        };
+      } else if (dirRef.link.type === 'fixed_hash_blake3' && dirRef.link.hash) {
+        ks = {
+          publicKey: concatBytes(new Uint8Array([mhashBlake3Default]), dirRef.link.hash),
+          writeKey: undefined,
+          encryptionKey: undefined,
+        };
+      } else {
+        return undefined;
+      }
+
+      try {
+        dirResult = await this._getDirectoryMetadata(ks);
+      } catch (e: any) {
+        if (e.message === "MissingEncryptionKey") return undefined;
+        throw e;
+      }
+      if (!dirResult) return undefined;
+      dir = dirResult.directory;
+    }
+
+    // Final segment: look up the file
+    const fileName = segments[segments.length - 1];
+    const fileRef = await this._getFileFromDirectory(dir, fileName);
+    if (!fileRef) return undefined;
+
+    // Skip encrypted files — viewer can't decrypt
+    if (fileRef.extra && fileRef.extra.has('encryption')) return undefined;
+
+    // Download file blob
+    try {
+      const data = await this.api.downloadBlobAsBytes(
+        concatBytes(new Uint8Array([MULTIHASH_BLAKE3]), fileRef.hash)
+      );
+      dbg('FS5', 'readFromPublicDirectory', 'SUCCESS', { size: data.length });
+      return data;
+    } catch (e: any) {
+      const msg = e?.message?.toLowerCase() || '';
+      if (msg.includes('404') || msg.includes('not found')) return undefined;
+      throw e;
+    }
+  }
 }
 interface KeySet {
   // has multicodec prefix

@@ -18,6 +18,7 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - 📊 **Bundle Optimization**: Code-splitting support (~70KB gzipped total)
 - 📡 **Connection API**: Monitor and manage P2P connections for mobile apps
 - ✍️ **Identity & Signing API**: Backend-mediated portal registration with Ed25519 signing
+- 👥 **Cross-Identity Read**: Read files from another user's public directory via shared public key
 - ✅ **Real S5 Portal Integration**: Fully tested with s5.vup.cx portal
 
 ## Key Components
@@ -28,6 +29,7 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - **S5UserIdentity**: User identity and authentication
 - **Connection API**: `getConnectionStatus()`, `onConnectionChange()`, `reconnect()` for mobile apps
 - **Signing API**: `getSigningPublicKey()`, `sign()`, `setPortalAuth()` for backend-mediated registration
+- **Cross-Identity Read**: `getPublicDirectoryKey()`, `readFromPublicDirectory()` for multi-user public data sharing
 
 ### Utility Classes
 - **DirectoryWalker**: Recursive directory traversal with cursor support
@@ -174,6 +176,30 @@ document.addEventListener('visibilitychange', async () => {
 
 // Cleanup when done
 unsubscribe();
+```
+
+### Cross-Identity Public Directory Read
+
+Read files from another user's public directory without needing their identity:
+
+```typescript
+// === Operator (one-time setup) ===
+// Write data to a directory
+await operatorFs.put("home/storefront/catalogue.json", catalogueData);
+
+// Extract the directory's public key and share it with viewers
+const pubKey = await operatorFs.getPublicDirectoryKey("home/storefront");
+
+// === Viewer (reading — no identity needed) ===
+const viewerFs = new FS5(api); // No identity required
+const data = await viewerFs.readFromPublicDirectory(pubKey, "catalogue.json");
+if (data) {
+  const catalogue = JSON.parse(new TextDecoder().decode(data));
+}
+
+// Returns undefined for missing files, encrypted files, or invalid keys
+const missing = await viewerFs.readFromPublicDirectory(pubKey, "nonexistent.txt");
+// missing === undefined
 ```
 
 ### Debugging

@@ -1,11 +1,11 @@
 # Enhanced S5.js — Post-Grant Community Update
 
 **Author:** Jules Lai
-**Date:** 4 April 2026
+**Date:** 9 April 2026
 **Grant Completed:** 4 December 2025
-**Current Version:** v0.9.0-beta.45
+**Current Version:** v0.9.0-beta.46
 **Package:** `@julesl23/s5js@beta`
-**Tests Passing:** 529
+**Tests Passing:** 540
 
 ---
 
@@ -19,7 +19,7 @@ This document summarises the work that has continued since grant completion. Enh
 
 ## Summary of Post-Grant Improvements
 
-Since December 2025, **11 commits** have landed across four months of continued development, delivering new features, production-hardening fixes, and developer experience improvements. The test suite has grown from 490 to 529 passing tests.
+Since December 2025, **12 commits** have landed across four months of continued development, delivering new features, production-hardening fixes, and developer experience improvements. The test suite has grown from 490 to 540 passing tests.
 
 ### New Features
 
@@ -30,6 +30,7 @@ Since December 2025, **11 commits** have landed across four months of continued 
 | **Identity Signing API** | beta.32–35 | 2026-01-26 | Ed25519 signing for backend-mediated portal registration — `getSigningPublicKey()`, `sign()`, `setPortalAuth()`, `storePortalCredentials()` |
 | **Encrypted Blob Hash Access** | beta.42 | 2026-03-21 | `uploadBlobEncrypted()` now returns `encryptedBlobHash` and `padding`, enabling callers to construct encrypted CIDs externally |
 | **Per-Directory Mutex** | beta.45 | 2026-04-03 | Concurrent writes to the same directory now serialize via keyed `AsyncMutex`, eliminating retry cascades (30–65s down to 2–10s under contention) |
+| **Cross-Identity Public Directory Read** | beta.46 | 2026-04-09 | `getPublicDirectoryKey()` and `readFromPublicDirectory()` enable reading files from another user's unencrypted directory tree via a shared 32-byte Ed25519 public key — no identity required for the reader |
 | **Runtime Debug Logging** | beta.37 | 2026-01-27 | Standard `debug` package integration with namespaced loggers — enable with `DEBUG=s5js:*` (Node.js) or `localStorage.debug = 's5js:*'` (browser) |
 
 ### Production-Hardening Fixes
@@ -104,16 +105,37 @@ When multiple concurrent `fs.put()` calls target the same directory, they previo
 
 123 concurrency tests and 108 mutex unit tests added.
 
+### Cross-Identity Public Directory Read (beta.46)
+
+Enables multi-user workflows where operators publish data and viewers read it using only a shared public key. FS5 child directories are already stored unencrypted — only the root is encrypted — so no encryption changes were needed.
+
+```typescript
+// Operator: extract and share the directory's public key
+const pubKey = await operatorFs.getPublicDirectoryKey("home/storefront");
+// Share pubKey with viewers (e.g., store in platform config)
+
+// Viewer: read from operator's directory (no identity needed)
+const viewerFs = new FS5(api); // No identity
+const data = await viewerFs.readFromPublicDirectory(pubKey, "catalogue.json");
+const catalogue = JSON.parse(new TextDecoder().decode(data!));
+```
+
+- `getPublicDirectoryKey(path)` — returns 32-byte Ed25519 public key for a directory's registry entry (requires identity)
+- `readFromPublicDirectory(remotePubKey, subpath)` — reads file content as raw `Uint8Array` from another user's directory tree (no identity required)
+- Returns `undefined` for missing files, missing directories, encrypted files, or invalid keys
+- Supports nested subpaths and both Map and HAMT-backed directories
+- 11 tests added
+
 ---
 
 ## Metrics
 
 | Metric | At Grant Completion | Current | Change |
 |--------|-------------------|---------|--------|
-| **Tests passing** | 490 | 529 | +39 |
-| **Beta version** | beta.2 | beta.45 | +43 releases |
+| **Tests passing** | 490 | 540 | +50 |
+| **Beta version** | beta.2 | beta.46 | +44 releases |
 | **Bundle size** | 60.09 KB (brotli) | 61.14 KB (brotli) | +1.05 KB |
-| **Features added** | — | 6 | — |
+| **Features added** | — | 7 | — |
 | **Production fixes** | — | 5 categories | — |
 
 Bundle size remains well under the 700 KB grant target at 61.14 KB (638.86 KB margin).
