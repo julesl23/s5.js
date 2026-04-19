@@ -1,6 +1,8 @@
 import { describe, test, expect, beforeEach } from "vitest";
 import { FS5 } from "../../src/fs/fs5.js";
 import { JSCryptoImplementation } from "../../src/api/crypto/js.js";
+import { mkeyEd25519 } from "../../src/constants.js";
+import { concatBytes } from "@noble/hashes/utils";
 
 // Reuse SimpleMockAPI pattern from path-api-simple.test.ts
 class SimpleMockAPI {
@@ -155,5 +157,83 @@ describe("readFromPublicDirectory", () => {
     const key = await operatorFs.getPublicDirectoryKey("home/testdir");
     const result = await viewerFs.readFromPublicDirectory(key, "bin.dat");
     expect(result).toEqual(binaryData);
+  });
+});
+
+// --- Sub-phase 1.1: getPublicDirectoryKeyFrom tests ---
+
+describe("getPublicDirectoryKeyFrom", () => {
+  let operatorFs: FS5;
+  let viewerFs: FS5;
+  let api: SimpleMockAPI;
+  let identity: SimpleMockIdentity;
+  let testdirKey: Uint8Array;
+
+  beforeEach(async () => {
+    api = new SimpleMockAPI();
+    identity = new SimpleMockIdentity();
+    operatorFs = new FS5(api as any, identity as any);
+    await operatorFs.ensureIdentityInitialized();
+    await operatorFs.put("home/testdir/seed.txt", "x");
+    viewerFs = new FS5(api as any);
+    testdirKey = await operatorFs.getPublicDirectoryKey("home/testdir");
+  });
+
+  test("happy path — returns pubkey matching operator's getPublicDirectoryKey for same path", async () => {
+    await operatorFs.put("home/testdir/followers/alice/follow/marker.txt", "m");
+    const result = await viewerFs.getPublicDirectoryKeyFrom(testdirKey, "followers/alice/follow");
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result!.length).toBe(32);
+    const expected = await operatorFs.getPublicDirectoryKey("home/testdir/followers/alice/follow");
+    expect(result).toEqual(expected);
+  });
+
+  test("empty subpath returns the remote root pubkey unchanged", async () => {
+    const result1 = await viewerFs.getPublicDirectoryKeyFrom(testdirKey, "");
+    expect(result1).toEqual(testdirKey);
+    const result2 = await viewerFs.getPublicDirectoryKeyFrom(testdirKey, "/");
+    expect(result2).toEqual(testdirKey);
+  });
+
+  test("missing intermediate segment returns undefined", async () => {
+    const result = await viewerFs.getPublicDirectoryKeyFrom(testdirKey, "nonexistent/follow");
+    expect(result).toBeUndefined();
+  });
+
+  test("missing final segment returns undefined", async () => {
+    await operatorFs.put("home/testdir/followers/alice/follow/marker.txt", "m");
+    const result = await viewerFs.getPublicDirectoryKeyFrom(testdirKey, "followers/alice/nonexistent");
+    expect(result).toBeUndefined();
+  });
+
+  test("final segment is a file returns undefined", async () => {
+    await operatorFs.put("home/testdir/followers/alice/follow/marker.txt", "m");
+    const result = await viewerFs.getPublicDirectoryKeyFrom(testdirKey, "followers/alice/follow/marker.txt");
+    expect(result).toBeUndefined();
+  });
+
+  test("random remote pubkey returns undefined", async () => {
+    const randomKey = new Uint8Array(32);
+    randomKey.fill(99);
+    const result = await viewerFs.getPublicDirectoryKeyFrom(randomKey, "followers");
+    expect(result).toBeUndefined();
+  });
+
+  test("invalid remote pubkey length throws", async () => {
+    await expect(
+      viewerFs.getPublicDirectoryKeyFrom(new Uint8Array(16), "x")
+    ).rejects.toThrow();
+    await expect(
+      viewerFs.getPublicDirectoryKeyFrom(new Uint8Array(33), "x")
+    ).rejects.toThrow();
+  });
+
+  test("returned pubkey locates the correct registry entry via registryGet", async () => {
+    await operatorFs.put("home/testdir/followers/alice/follow/marker.txt", "m");
+    const pubkey = await viewerFs.getPublicDirectoryKeyFrom(testdirKey, "followers/alice/follow");
+    expect(pubkey).toBeInstanceOf(Uint8Array);
+    const prefixed = concatBytes(new Uint8Array([mkeyEd25519]), pubkey!);
+    const entry = await api.registryGet(prefixed);
+    expect(entry).toBeDefined();
   });
 });

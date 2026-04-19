@@ -29,7 +29,7 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - **S5UserIdentity**: User identity and authentication
 - **Connection API**: `getConnectionStatus()`, `onConnectionChange()`, `reconnect()` for mobile apps
 - **Signing API**: `getSigningPublicKey()`, `sign()`, `setPortalAuth()` for backend-mediated registration
-- **Cross-Identity Read**: `getPublicDirectoryKey()`, `readFromPublicDirectory()` for multi-user public data sharing
+- **Cross-Identity Access**: `getPublicDirectoryKey()` and `readFromPublicDirectory()` for multi-user public data sharing; `getPublicDirectoryKeyFrom()` for resolving sub-directory registry pubkeys under another user's tree (enables live subscriptions via `registryListen`)
 
 ### Utility Classes
 - **DirectoryWalker**: Recursive directory traversal with cursor support
@@ -178,9 +178,9 @@ document.addEventListener('visibilitychange', async () => {
 unsubscribe();
 ```
 
-### Cross-Identity Public Directory Read
+### Cross-Identity Public Directory Access
 
-Read files from another user's public directory without needing their identity:
+Read files and discover registry keys under another user's public directory tree without needing their identity:
 
 ```typescript
 // === Operator (one-time setup) ===
@@ -190,7 +190,7 @@ await operatorFs.put("home/storefront/catalogue.json", catalogueData);
 // Extract the directory's public key and share it with viewers
 const pubKey = await operatorFs.getPublicDirectoryKey("home/storefront");
 
-// === Viewer (reading — no identity needed) ===
+// === Viewer (reading files — no identity needed) ===
 const viewerFs = new FS5(api); // No identity required
 const data = await viewerFs.readFromPublicDirectory(pubKey, "catalogue.json");
 if (data) {
@@ -200,6 +200,20 @@ if (data) {
 // Returns undefined for missing files, encrypted files, or invalid keys
 const missing = await viewerFs.readFromPublicDirectory(pubKey, "nonexistent.txt");
 // missing === undefined
+
+// === Viewer (resolving a sub-directory's pubkey for live subscriptions) ===
+// Get the 32-byte Ed25519 registry pubkey for any directory under the shared key
+const newsPk = await viewerFs.getPublicDirectoryKeyFrom(pubKey, "news");
+if (newsPk) {
+  // Pass to registryListen() for push updates — no polling
+  for await (const entry of api.registryListen(newsPk)) {
+    refreshNewsFeed(entry);
+  }
+}
+
+// Empty subpath returns the input key unchanged (pass-through)
+const root = await viewerFs.getPublicDirectoryKeyFrom(pubKey, "");
+// root === pubKey (byte-for-byte)
 ```
 
 ### Debugging

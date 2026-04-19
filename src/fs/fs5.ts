@@ -2249,6 +2249,65 @@ export class FS5 {
       throw e;
     }
   }
+
+  /**
+   * Get the 32-byte Ed25519 registry pubkey for a directory path under
+   * another user's public directory. Does not require identity.
+   * Returns the pubkey without multicodec prefix, ready for registryListen(pk).
+   */
+  async getPublicDirectoryKeyFrom(
+    remotePubKey: Uint8Array,
+    subpath: string
+  ): Promise<Uint8Array | undefined> {
+    if (remotePubKey.length !== 32) {
+      throw new Error("remotePubKey must be exactly 32 bytes");
+    }
+    const segments = subpath.split("/").filter(s => s);
+    if (segments.length === 0) return remotePubKey.slice();
+
+    dbg('FS5', 'getPublicDirectoryKeyFrom', 'ENTER', { subpath });
+
+    let ks: KeySet = {
+      publicKey: concatBytes(new Uint8Array([mkeyEd25519]), remotePubKey),
+      writeKey: undefined,
+      encryptionKey: undefined,
+    };
+
+    const loadDir = async (): Promise<DirV1 | undefined> => {
+      try {
+        const r = await this._getDirectoryMetadata(ks);
+        return r?.directory;
+      } catch (e: any) {
+        if (e.message === "MissingEncryptionKey") return undefined;
+        throw e;
+      }
+    };
+
+    let dir = await loadDir();
+    if (!dir) return undefined;
+
+    for (let i = 0; i < segments.length - 1; i++) {
+      const dirRef = await this._getDirectoryFromDirectory(dir, segments[i]);
+      if (!dirRef || dirRef.link.type !== 'mutable_registry_ed25519' || !dirRef.link.publicKey) {
+        return undefined;
+      }
+      ks = {
+        publicKey: concatBytes(new Uint8Array([mkeyEd25519]), dirRef.link.publicKey),
+        writeKey: undefined,
+        encryptionKey: undefined,
+      };
+      const next = await loadDir();
+      if (!next) return undefined;
+      dir = next;
+    }
+
+    const finalRef = await this._getDirectoryFromDirectory(dir, segments[segments.length - 1]);
+    if (!finalRef || finalRef.link.type !== 'mutable_registry_ed25519' || !finalRef.link.publicKey) {
+      return undefined;
+    }
+    dbg('FS5', 'getPublicDirectoryKeyFrom', 'SUCCESS', { keyLength: 32 });
+    return finalRef.link.publicKey.slice();
+  }
 }
 interface KeySet {
   // has multicodec prefix

@@ -82,6 +82,10 @@
     - [Processing Strategies](#processing-strategies)
     - [Lazy Loading and Code Splitting](#lazy-loading-and-code-splitting)
     - [Media Processing Examples](#media-processing-examples)
+  - [Cross-Identity Public Directory Access](#cross-identity-public-directory-access-beta46-beta47)
+    - [getPublicDirectoryKey()](#getpublicdirectorykey)
+    - [readFromPublicDirectory()](#readfrompublicdirectory)
+    - [getPublicDirectoryKeyFrom()](#getpublicdirectorykeyfrom)
   - [Performance Considerations](#performance-considerations)
   - [Performance Testing](#performance-testing)
   - [Bundle Size Optimization](#bundle-size-optimization)
@@ -2441,16 +2445,17 @@ This design makes the API:
 
 For advanced use cases requiring content addressing, access the internal `FileRef` structures through the S5Node API.
 
-## Cross-Identity Public Directory Read (beta.46)
+## Cross-Identity Public Directory Access (beta.46, beta.47)
 
-Enables reading files from another user's public (unencrypted) directory tree. This powers multi-user workflows where operators publish data and viewers read it via a shared public key.
+Enables reading files and discovering registry keys from another user's public (unencrypted) directory tree. This powers multi-user workflows where operators publish data and viewers read it (beta.46), and live-subscription use cases where one identity subscribes to updates under another identity's tree via `registryListen(pk)` (beta.47).
 
 ### How It Works
 
-FS5 child directories are stored unencrypted — only the root directory is encrypted. The barrier to cross-identity reads is that outsiders cannot compute the directory's registry public key (derived from the owner's identity). These two methods solve that:
+FS5 child directories are stored unencrypted — only the root directory is encrypted. The barrier to cross-identity reads is that outsiders cannot compute the directory's registry public key (derived from the owner's identity). Three methods solve that:
 
-1. **Operator** extracts the directory's public key and shares it
-2. **Viewer** uses that key to read files from the directory (no identity required)
+1. **Operator** extracts the directory's public key via `getPublicDirectoryKey()` and shares it
+2. **Viewer** uses that key to read files via `readFromPublicDirectory()` (no identity required)
+3. **Viewer** walks into any sub-directory under the shared key and gets its pubkey via `getPublicDirectoryKeyFrom()` — ready to pass to `api.registryListen(pk)` for live updates without polling
 
 ### getPublicDirectoryKey()
 
@@ -2498,7 +2503,42 @@ if (data) {
 }
 ```
 
+### getPublicDirectoryKeyFrom()
+
+Resolve the 32-byte Ed25519 registry public key for any directory path under another user's public tree. Does **not** require identity. The returned pubkey is ready to pass to `api.registryListen(pk)` for live subscriptions.
+
+```typescript
+async getPublicDirectoryKeyFrom(
+  remotePubKey: Uint8Array,
+  subpath: string
+): Promise<Uint8Array | undefined>
+```
+
+**Parameters:**
+- `remotePubKey` — 32-byte Ed25519 public key (from `getPublicDirectoryKey`, or a shared root pubkey)
+- `subpath` — Path within the remote directory (e.g., `"followers/alice/follow"`). Empty string or `"/"` returns the input `remotePubKey` unchanged (pass-through).
+
+**Returns:** 32-byte `Uint8Array` (Ed25519 public key without the 0xed multikey prefix), or `undefined` if any segment is missing, the final segment is a file, the link is immutable (`fixed_hash_blake3`), or an intermediate directory is encrypted.
+
+**Throws:** If `remotePubKey` is not exactly 32 bytes.
+
+```typescript
+// Viewer: discover the registry pubkey for a follower's follow-record dir
+const followPk = await viewerFs.getPublicDirectoryKeyFrom(
+  followerRootPubKey,
+  "home/platform/acme/follow"
+);
+if (followPk) {
+  // Subscribe to live updates — no polling
+  for await (const entry of api.registryListen(followPk)) {
+    handleFollowEvent(entry);
+  }
+}
+```
+
 ### Behaviour Details
+
+#### `readFromPublicDirectory()`
 
 | Scenario | Result |
 |----------|--------|
@@ -2511,6 +2551,19 @@ if (data) {
 | Empty subpath | `undefined` |
 | Invalid key length | Throws `Error` |
 
+#### `getPublicDirectoryKeyFrom()`
+
+| Scenario | Result |
+|----------|--------|
+| Directory found on a mutable-registry (Ed25519) link | 32-byte `Uint8Array` pubkey |
+| Empty subpath (`""` or `"/"`) | input `remotePubKey` unchanged (pass-through) |
+| Any segment missing | `undefined` |
+| Final segment is a file, not a directory | `undefined` |
+| Any segment is a `fixed_hash_blake3` (immutable) link | `undefined` (no registry entry to subscribe to) |
+| No registry entry for remote pubkey | `undefined` |
+| Encrypted intermediate directory | `undefined` (defensive) |
+| Invalid key length | Throws `Error` |
+
 ### End-to-End Example
 
 ```typescript
@@ -2519,10 +2572,19 @@ await operatorFs.put("home/storefront/catalogue.json", catalogueData);
 const pubKey = await operatorFs.getPublicDirectoryKey("home/storefront");
 // Share pubKey with viewers (e.g., store in platform config)
 
-// === Viewer (reading) ===
+// === Viewer A (reading files) ===
 const viewerFs = new FS5(api); // No identity needed
 const data = await viewerFs.readFromPublicDirectory(pubKey, "catalogue.json");
 const catalogue = JSON.parse(new TextDecoder().decode(data!));
+
+// === Viewer B (live-subscribing to a sub-directory) ===
+const subPk = await viewerFs.getPublicDirectoryKeyFrom(pubKey, "news");
+if (subPk) {
+  for await (const entry of api.registryListen(subPk)) {
+    // Fires on every update to the "news" directory
+    refreshNewsFeed(entry);
+  }
+}
 ```
 
 ## Performance Considerations
