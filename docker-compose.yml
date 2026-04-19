@@ -13,6 +13,7 @@ services:
       - "5523:5523" # External access port only
     environment:
       - NODE_ENV=development
+      - PATH=/home/developer/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     stdin_open: true
     tty: true
     networks:
