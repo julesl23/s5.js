@@ -5,6 +5,46 @@ All notable changes to Enhanced s5.js will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Post-grant releases are summarised below. For exhaustive per-version notes (including production-hardening fixes across beta.2–beta.44), see [`docs/POST_GRANT_UPDATE.md`](docs/POST_GRANT_UPDATE.md).
+
+## [0.9.0-beta.47] - 2026-04-19
+
+### Added
+
+- **Cross-Identity Directory Key Lookup** — `FS5.getPublicDirectoryKeyFrom(remotePubKey, subpath)` resolves the 32-byte Ed25519 registry pubkey for any sub-directory under another user's public tree. Returned pubkey is ready to pass to `api.registryListen(pk)` for push-based live subscriptions (no polling). No identity required on the caller side.
+- Empty subpath (`""` or `"/"`) returns the input `remotePubKey` unchanged (pass-through).
+- 8 new tests (total: 548 passing).
+
+### Notes
+
+- Purely additive; no breaking changes, no protocol changes.
+- Returns `undefined` for missing segments, file-as-final, `fixed_hash_blake3` links, or encrypted intermediates.
+- Throws on invalid `remotePubKey` length (must be exactly 32 bytes).
+
+## [0.9.0-beta.46] - 2026-04-09
+
+### Added
+
+- **Cross-Identity Public Directory Read** — two new `FS5` methods enable multi-user data sharing via a shared Ed25519 public key:
+  - `getPublicDirectoryKey(path)` — extract the 32-byte registry pubkey for one of your own directories (requires identity).
+  - `readFromPublicDirectory(remotePubKey, subpath)` — read file content from another user's unencrypted directory tree (no identity required for the reader).
+- Supports nested subpaths and both Map- and HAMT-backed directories.
+- 11 new tests (total: 540 passing).
+
+### Notes
+
+- Purely additive; no breaking changes. FS5 child directories were already stored unencrypted, so no encryption changes were needed.
+
+## [0.9.0-beta.45] - 2026-04-03
+
+### Changed
+
+- **Per-Directory Mutex** — concurrent `fs.put()` calls to the same directory now serialize via a keyed `AsyncMutex`, eliminating retry cascades (30–65s → 2–10s under contention). Different directories remain fully parallel. Zero external dependencies, automatic lock release on error.
+
+### Added
+
+- 123 concurrency tests and 108 mutex unit tests.
+
 ## [0.9.0-beta.1] - 2025-10-31
 
 ### Major Features - Sia Foundation Grant Implementation
