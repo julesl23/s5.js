@@ -188,6 +188,7 @@ export class S5APIWithIdentity implements S5APIInterface {
                 dbg('IDENTITY', 'setupAccount', 'Auth token saved');
             } catch (e: any) {
                 dbgError('IDENTITY', 'setupAccount', 'Login failed', e);
+                throw e;
             }
         } else {
             dbg('IDENTITY', 'setupAccount', 'Using cached auth token');
