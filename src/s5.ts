@@ -24,13 +24,22 @@ export class S5 {
   };
   private authStore: KeyValueStore;
   private identity?: S5UserIdentity;
+  private _fs?: FS5;
+  private readonly _dirCacheTtlMs?: number;
 
   get crypto(): CryptoImplementation {
     return this.node.crypto;
   }
 
   get fs(): FS5 {
-    return new FS5(this.api, this.identity);
+    // Memoized so the directory-metadata cache (and the per-directory mutex) is shared
+    // across calls instead of being discarded on every access. A memoized FS5 holds
+    // `identity` + `api` by reference; clear `_fs` at EVERY site that reassigns
+    // `this.identity` or `this.apiWithIdentity` (today only `recoverIdentityFromSeedPhrase`)
+    // so a new identity never serves another identity's cached directories.
+    return (this._fs ??= new FS5(this.api, this.identity, {
+      directoryCacheTtlMs: this._dirCacheTtlMs,
+    }));
   }
 
   get hasIdentity(): boolean {
@@ -45,14 +54,17 @@ export class S5 {
     node,
     authStore,
     identity,
+    directoryCacheTtlMs,
   }: {
     node: S5Node;
     authStore: KeyValueStore;
     identity?: S5UserIdentity;
+    directoryCacheTtlMs?: number;
   }) {
     this.node = node;
     this.authStore = authStore;
     this.identity = identity;
+    this._dirCacheTtlMs = directoryCacheTtlMs;
   }
 
   static async create({
@@ -64,10 +76,12 @@ export class S5 {
       'wss://z2DWuPbL5pweybXnEB618pMnV58ECj2VPDNfVGm3tFqBvjF@s5.ninja/s5/p2p',
     ],
     skipIdentityLoad = false,
+    directoryCacheTtlMs,
     // TODO autoConnectToNewNodes = false,
   }: {
     initialPeers?: string[];
     skipIdentityLoad?: boolean;
+    directoryCacheTtlMs?: number;
     // autoConnectToNewNodes?: boolean;
   }): Promise<S5> {
     const crypto = new JSCryptoImplementation();
@@ -94,6 +108,7 @@ export class S5 {
         node,
         authStore,
         identity: newIdentity,
+        directoryCacheTtlMs,
       });
       s5.apiWithIdentity = apiWithIdentity;
       return s5;
@@ -102,6 +117,7 @@ export class S5 {
       node,
       authStore,
       identity: undefined,
+      directoryCacheTtlMs,
     });
   }
 
@@ -123,6 +139,10 @@ export class S5 {
     await apiWithIdentity.initStorageServices();
     this.apiWithIdentity = apiWithIdentity;
     this.identity = newIdentity;
+    // Drop the memoized FS5 so it can't keep serving the previous identity's cached
+    // directories. This is the ONLY live-object site that reassigns identity/api;
+    // any future logout/switch method MUST clear `_fs` here too.
+    this._fs = undefined;
   }
 
   async registerOnNewPortal(url: string, inviteCode?: string): Promise<void> {

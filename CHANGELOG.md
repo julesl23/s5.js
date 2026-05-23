@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Post-grant releases are summarised below. For exhaustive per-version notes (including production-hardening fixes across beta.2–beta.44), see [`docs/POST_GRANT_UPDATE.md`](docs/POST_GRANT_UPDATE.md).
 
+## [0.9.0-beta.49] - 2026-05-23
+
+### Changed
+
+- **Directory-Metadata Cache** — `FS5._getDirectoryMetadata()` now has an instance-scoped, read-through cache keyed by the directory's registry public key. Reads sharing a path prefix fetch each ancestor **once** instead of re-walking the whole prefix over the network on every read. Measured on a real consumer page: a 6-read landing page **36s → 6.5s (5.6×)**; a multi-creator page **53 → 29 directory loads**.
+  - **In-flight coalescing**: N concurrent reads of the same uncached directory share ONE network load (the cache slot holds the pending promise, populated synchronously before the first `await`).
+  - **`s5.fs` is now memoized** — the getter previously returned a new `FS5` on every access, so the cache (and the per-directory mutex) only helped callers that happened to reuse one reference. It now returns a stable instance, dropped on identity recovery so a new identity never serves another's cached directories. **Behavior change:** `s5.fs === s5.fs` now holds.
+  - **Correctness**: the write path's revision read bypasses the cache (`{ fresh: true }`) so each retry reads a live revision; every `registrySet` invalidates only the written directory's key (siblings/ancestors stay valid). Misses and the synthetic empty-dir-on-blob-404 are never cached.
+
+### Added
+
+- `directoryCacheTtlMs` option on `S5.create(...)` and `new FS5(api, identity, { directoryCacheTtlMs })` (default **30s**) to tune the cross-identity staleness window.
+- 11 new tests — 9 cache (hit/coalescing, write-path correctness, miss/404/TTL policy) + 2 `s5.fs` memoization/teardown (total: **559** passing).
+
+### Notes
+
+- Purely additive to the public API except the `s5.fs` identity (now a stable reference); no protocol or serialization changes.
+- HAMT is unaffected: the cache holds only the `DirV1` + registry entry; HAMT nodes load downstream from the returned (content-addressed, immutable) DirV1.
+
 ## [0.9.0-beta.47] - 2026-04-19
 
 ### Added

@@ -1,11 +1,11 @@
 # Enhanced S5.js — Post-Grant Community Update
 
 **Author:** Jules Lai
-**Date:** 19 April 2026
+**Date:** 23 May 2026
 **Grant Completed:** 4 December 2025
-**Current Version:** v0.9.0-beta.47
+**Current Version:** v0.9.0-beta.49
 **Package:** `@julesl23/s5js@beta`
-**Tests Passing:** 548
+**Tests Passing:** 559
 
 ---
 
@@ -19,7 +19,7 @@ This document summarises the work that has continued since grant completion. Enh
 
 ## Summary of Post-Grant Improvements
 
-Since December 2025, **15 commits** have landed across four and a half months of continued development, delivering new features, production-hardening fixes, and developer experience improvements. The test suite has grown from 490 to 548 passing tests.
+Since December 2025, **17 commits** have landed across roughly five and a half months of continued development, delivering new features, production-hardening fixes, and developer experience improvements. The test suite has grown from 490 to 559 passing tests.
 
 ### New Features
 
@@ -32,6 +32,7 @@ Since December 2025, **15 commits** have landed across four and a half months of
 | **Per-Directory Mutex** | beta.45 | 2026-04-03 | Concurrent writes to the same directory now serialize via keyed `AsyncMutex`, eliminating retry cascades (30–65s down to 2–10s under contention) |
 | **Cross-Identity Public Directory Read** | beta.46 | 2026-04-09 | `getPublicDirectoryKey()` and `readFromPublicDirectory()` enable reading files from another user's unencrypted directory tree via a shared 32-byte Ed25519 public key — no identity required for the reader |
 | **Cross-Identity Directory Key Lookup** | beta.47 | 2026-04-19 | `getPublicDirectoryKeyFrom()` resolves the 32-byte Ed25519 registry pubkey for any sub-directory under another user's tree — ready to pass to `api.registryListen(pk)` for live push subscriptions without polling |
+| **Directory-Metadata Cache** | beta.49 | 2026-05-23 | Instance-scoped read-through cache with in-flight coalescing — reads sharing a path prefix fetch each ancestor once instead of re-walking the whole prefix. A real landing page dropped from 36s to 6.5s (5.6×). `s5.fs` is now memoized so the cache (and the per-directory mutex) is shared across calls; configurable TTL via `directoryCacheTtlMs` |
 | **Runtime Debug Logging** | beta.37 | 2026-01-27 | Standard `debug` package integration with namespaced loggers — enable with `DEBUG=s5js:*` (Node.js) or `localStorage.debug = 's5js:*'` (browser) |
 
 ### Production-Hardening Fixes
@@ -44,6 +45,7 @@ These fixes were identified and resolved through real-world production deploymen
 | **Registry Revision Conflicts** | beta.18–20 | 2026-01-25 | Fixed "Revision number too low" errors when registry has stale entries from another portal — proper revision preservation on 404, retry with re-fetch, and `_createDirectory()` now queries existing revisions |
 | **Error Handling Hardening** | beta.41, 44 | 2026-02-03, 2026-03-22 | Fixed `dbgError()` crash on non-Error objects, prevented error masking in `runTransactionOnDirectory` catch block, `createFile()` now throws proper Error instances |
 | **CID Format Fixes** | beta.43 | 2026-03-21 | Fixed `detectCIDFormat()` and `parseCID()` using wrong base64 decoder for u-prefix CIDs — was causing `downloadByCID` failures with encrypted CIDs |
+| **Login Failure Surfacing** | beta.48 | 2026-04-24 | `setupAccount()` now re-throws portal login failures instead of silently leaving a half-configured account (`Bearer undefined`) that returned 401 on every authenticated upload — callers can now detect the failure and re-login |
 | **Console Log Cleanup** | beta.2 | 2025-12-06 | Removed seed phrase from console output (security), reduced active log statements by 45% |
 
 ---
@@ -143,19 +145,36 @@ for await (const entry of api.registryListen(newsPk!)) {
 - Supports nested subpaths and both Map and HAMT-backed directories
 - 19 tests added across both betas (11 + 8)
 
+### Directory-Metadata Cache (beta.49)
+
+`FS5._getDirectoryMetadata()` is the universal directory-read primitive — a `registryGet` plus a `downloadBlobAsBytes`, two network round-trips per directory — and it was previously uncached. Any two reads sharing a path prefix re-fetched the entire shared prefix (`root`, `home`, …) over the network every time, so a page doing N reads paid roughly N × prefix-depth round-trips. A real consumer landing page doing ~6 reads under a shared prefix took **36 seconds**; an instance-scoped read-through cache cut it to **6.5 seconds (5.6×)**, and a multi-creator page dropped from **53 to 29** directory loads.
+
+```typescript
+// Optional: tune the cross-identity staleness window (default 30s)
+const s5 = await S5.create({ initialPeers: [...], directoryCacheTtlMs: 30000 });
+```
+
+Key properties:
+
+- **In-flight coalescing**: N concurrent reads of the same uncached directory share ONE network load — the cache stores the pending promise, populated synchronously before the first `await`.
+- **`s5.fs` is now memoized**: previously `get fs()` returned a new `FS5` on every access, so an instance cache (or the per-directory mutex) only helped callers that happened to reuse one reference. The getter now returns a stable instance, dropped on identity recovery so a new identity never serves another's cached directories. This also makes the beta.45 per-directory mutex effective process-wide for `s5.fs` callers. **Behaviour change:** `s5.fs === s5.fs` now holds.
+- **Correctness**: the write path reads revisions live (`{ fresh: true }`, bypassing the cache) so retries never spin on a stale revision, and every `registrySet` invalidates only the written directory's key (siblings/ancestors stay valid); misses and the synthetic empty-directory-on-404 are never cached. HAMT is unaffected — the cache holds only the `DirV1` + registry entry, and HAMT nodes load downstream from the content-addressed, immutable directory.
+
+11 tests added (9 cache + 2 `s5.fs` memoization).
+
 ---
 
 ## Metrics
 
 | Metric | At Grant Completion | Current | Change |
 |--------|-------------------|---------|--------|
-| **Tests passing** | 490 | 548 | +58 |
-| **Beta version** | beta.2 | beta.47 | +45 releases |
-| **Bundle size** | 60.09 KB (brotli) | 61.14 KB (brotli) | +1.05 KB |
-| **Features added** | — | 8 | — |
-| **Production fixes** | — | 5 categories | — |
+| **Tests passing** | 490 | 559 | +69 |
+| **Beta version** | beta.2 | beta.49 | +47 releases |
+| **Bundle size** | 60.09 KB (brotli) | 69.81 KB (brotli) | +9.72 KB |
+| **Features added** | — | 9 | — |
+| **Production fixes** | — | 6 categories | — |
 
-Bundle size remains well under the 700 KB grant target at 61.14 KB (638.86 KB margin).
+Bundle size remains well under the 700 KB grant target at 69.81 KB (630.19 KB margin). The increase since grant completion reflects the cross-identity directory APIs (beta.46–47) and the directory-metadata cache (beta.49).
 
 ---
 
@@ -168,6 +187,7 @@ Enhanced S5.js is deployed in production as part of the Fabstir platform (Platfo
 - Blob upload, download, and P2P propagation
 - Registry consistency across browser sessions
 - Concurrent directory writes from multiple AI agents
+- Directory read latency on multi-read pages (the cache was driven by a real 36s → 6.5s page-load measurement)
 
 ---
 
@@ -176,7 +196,7 @@ Enhanced S5.js is deployed in production as part of the Fabstir platform (Platfo
 Enhanced S5.js will continue to be maintained and improved. Current areas of focus:
 
 - **Stability**: Continued production-hardening based on real-world usage
-- **Performance**: Concurrency improvements (per-directory mutex is the latest example)
+- **Performance**: Concurrency and caching improvements (the directory-metadata cache and per-directory mutex are the latest examples)
 - **Developer experience**: Better error messages, debug logging, and documentation
 - **Ecosystem**: Supporting adoption beyond the initial Fabstir deployment
 

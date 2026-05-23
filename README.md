@@ -7,6 +7,7 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - 🚀 **Path-based API**: Simple `get()`, `put()`, `delete()`, `list()` operations
 - 📁 **Directory Support**: Full directory tree management with recursive operations
 - 🔄 **Cursor Pagination**: Efficient handling of large directories
+- ⚡ **Directory Caching**: Read-through metadata cache with in-flight coalescing — reads sharing a path prefix fetch each ancestor once (up to 5.6× faster on multi-read pages)
 - 🔐 **Built-in Encryption**: Automatic encryption for private data
 - 📦 **CBOR Serialization**: Deterministic encoding for cross-platform compatibility
 - 🌐 **Browser & Node.js**: Works in both environments
@@ -15,7 +16,7 @@ An enhanced JavaScript/TypeScript SDK for the S5 decentralized storage network, 
 - 📋 **Batch Operations**: High-level copy/delete operations with progress tracking
 - 🖼️ **Media Processing**: WASM-based image metadata extraction with Canvas fallback
 - 🎨 **Color Analysis**: Dominant color extraction and palette generation
-- 📊 **Bundle Optimization**: Code-splitting support (~70KB gzipped total)
+- 📊 **Bundle Optimization**: Code-splitting support (~70KB brotli total)
 - 📡 **Connection API**: Monitor and manage P2P connections for mobile apps
 - ✍️ **Identity & Signing API**: Backend-mediated portal registration with Ed25519 signing
 - 👥 **Cross-Identity Read**: Read files from another user's public directory via shared public key
@@ -361,16 +362,16 @@ For production deployments, these benchmarks confirm the implementation is ready
 The library supports multiple import strategies to optimize bundle size:
 
 ```javascript
-// Full bundle (~60KB compressed with brotli)
+// Full bundle (~70KB compressed with brotli)
 import { S5, MediaProcessor } from "s5";
 
-// Core only - no media features (~60KB compressed)
+// Core only - no media features (~68KB compressed)
 import { S5, FS5 } from "s5/core";
 
 // Media only - for lazy loading (~10KB compressed)
 import { MediaProcessor } from "s5/media";
 
-// Advanced CID API - for power users (~60KB compressed)
+// Advanced CID API - for power users (~69KB compressed)
 import { FS5Advanced, formatCID, parseCID } from "s5/advanced";
 
 // Dynamic import for code-splitting

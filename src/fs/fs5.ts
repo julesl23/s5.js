@@ -13,7 +13,7 @@ import { base64UrlNoPaddingEncode } from "../util/base64.js";
 import { deriveHashInt, deriveHashString } from "../util/derive_hash.js";
 import { DirV1, FileRef, DirRef, DirLink } from "./dirv1/types.js";
 import { DirV1Serialiser } from "./dirv1/serialisation.js";
-import { concatBytes } from "@noble/hashes/utils";
+import { concatBytes, bytesToHex } from "@noble/hashes/utils";
 import { encodeLittleEndian } from "../util/little_endian.js";
 import { BlobIdentifier } from "../identifier/blob.js";
 import { padFileSize } from "../encryption/padding.js";
@@ -136,14 +136,36 @@ function mapToObject(value: any): any {
   return value;
 }
 
+// Default time-to-live for cached directory metadata. Bounds how long another
+// identity's write to a directory you've cached can go unseen; your own writes
+// self-invalidate via per-key eviction. Configurable per FS5 instance.
+const DIR_METADATA_CACHE_TTL_MS = 30000;
+
 export class FS5 {
   readonly api: S5APIInterface;
   readonly identity?: S5UserIdentity;
   private readonly directoryLocks = new AsyncMutex();
+  /**
+   * Read-through cache for `_getDirectoryMetadata`, keyed by `bytesToHex(ks.publicKey)`.
+   * Stores the in-flight Promise (not just the resolved value) so concurrent reads of
+   * the same uncached directory share ONE network load. Only successful, real downloads
+   * are cached (misses and synthetic-404 empty dirs evict themselves). See the doc
+   * comment on `_getDirectoryMetadata` for the TTL stale-but-consistent property.
+   */
+  private readonly _dirMetaCache = new Map<
+    string,
+    { promise: Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined>; expires: number }
+  >();
+  private readonly _dirMetaTtlMs: number;
 
-  constructor(api: S5APIInterface, identity?: S5UserIdentity) {
+  constructor(
+    api: S5APIInterface,
+    identity?: S5UserIdentity,
+    options?: { directoryCacheTtlMs?: number }
+  ) {
     this.api = api;
     this.identity = identity;
+    this._dirMetaTtlMs = options?.directoryCacheTtlMs ?? DIR_METADATA_CACHE_TTL_MS;
   }
 
   // Phase 2: Path-based API methods
@@ -1116,7 +1138,9 @@ export class FS5 {
       let dir: { directory: DirV1; entry?: RegistryEntry } | undefined;
       try {
         dbg('DIRECTORY', 'runTransactionOnDirectory', 'Fetching directory metadata...');
-        dir = await this._getDirectoryMetadata(ks);
+        // Bypass the cache: each retry must read the live revision, else the loop
+        // would spin on a constant stale revision and fail.
+        dir = await this._getDirectoryMetadata(ks, { fresh: true });
         dbg('DIRECTORY', 'runTransactionOnDirectory', 'Got directory metadata', {
           hasDirectory: !!dir?.directory,
           hasEntry: !!dir?.entry,
@@ -1203,6 +1227,9 @@ export class FS5 {
 
         dbg('REGISTRY', 'runTransactionOnDirectory', 'Setting registry entry...');
         await this.api.registrySet(entry);
+        // Invalidate only the written directory's key (siblings/ancestors stay valid:
+        // a child's content change does not alter the parent's stable DirRef link).
+        this._dirMetaCache.delete(bytesToHex(ks.publicKey));
         dbg('REGISTRY', 'runTransactionOnDirectory', 'Registry entry set successfully');
 
         dbg('DIRECTORY', 'runTransactionOnDirectory', 'SUCCESS', { revision: revisionToUse });
@@ -1346,6 +1373,8 @@ export class FS5 {
 
     dbg('REGISTRY', '_createDirectory', 'Setting registry entry...');
     await this.api.registrySet(entry);
+    // Invalidate the newly-written directory's key (ks.publicKey === kp.publicKey).
+    this._dirMetaCache.delete(bytesToHex(ks.publicKey));
     dbg('REGISTRY', '_createDirectory', 'Registry entry set successfully');
 
     // Create DirRef pointing to the new directory with mutable registry link
@@ -1526,9 +1555,16 @@ export class FS5 {
     ]);
   }
 
-  private async _getDirectoryMetadata(
+  /**
+   * Core directory-metadata fetch (two network round-trips, uncached). Returns an
+   * internal `cacheable` flag so the caching wrapper can distinguish a genuine
+   * directory (cacheable) from the synthetic empty dir returned on a blob-404
+   * (NOT cacheable — the blob may simply be propagating). The no-entry path
+   * returns `undefined` (a miss, also not cached).
+   */
+  private async _fetchDirectoryMetadata(
     ks: KeySet
-  ): Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined> {
+  ): Promise<{ directory: DirV1; entry?: RegistryEntry; cacheable: boolean } | undefined> {
     dbg('FS5', '_getDirectoryMetadata', 'ENTER', { publicKey: ks.publicKey });
 
     let entry: RegistryEntry | undefined;
@@ -1587,6 +1623,7 @@ export class FS5 {
             files: new Map(),
           },
           entry,  // Preserve registry entry for correct revision calculation
+          cacheable: false,  // synthetic empty dir: blob may be propagating, don't pin it
         };
       }
       throw error;
@@ -1609,7 +1646,7 @@ export class FS5 {
         dirCount: directory.dirs?.size,
         entryRevision: entry?.revision
       });
-      return { directory, entry };
+      return { directory, entry, cacheable: true };
     } else {
       const directory = DirV1Serialiser.deserialise(metadataBytes);
       dbg('FS5', '_getDirectoryMetadata', 'SUCCESS (unencrypted)', {
@@ -1617,7 +1654,71 @@ export class FS5 {
         dirCount: directory.dirs?.size,
         entryRevision: entry?.revision
       });
-      return { directory, entry };
+      return { directory, entry, cacheable: true };
+    }
+  }
+
+  /**
+   * Read-through, promise-coalescing cache over `_fetchDirectoryMetadata`, keyed by
+   * the directory's registry public key. Transparent to all callers (same return
+   * type as before).
+   *
+   * - Coalescing: the cache slot is populated **synchronously, before the first
+   *   `await`**, so N concurrent reads of the same uncached directory share ONE load.
+   * - Success-only: misses (`undefined`), synthetic-404 empty dirs (`cacheable: false`),
+   *   and rejected loads evict themselves so nothing stale is pinned.
+   * - `{ fresh: true }` bypasses both the cache read and the cache write (used by the
+   *   write path so each revision read is live).
+   *
+   * TTL note (stale-but-consistent): a cached parent's contents — including its
+   * `sharding.root.cid` for HAMT directories — may be up to `_dirMetaTtlMs` stale for
+   * *external* writers. HAMT nodes themselves are content-addressed and immutable, so
+   * what is loaded downstream from a cached DirV1 stays consistent; the write path uses
+   * `{ fresh: true }` to avoid acting on a stale revision.
+   */
+  private async _getDirectoryMetadata(
+    ks: KeySet,
+    opts?: { fresh?: boolean }
+  ): Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined> {
+    const key = bytesToHex(ks.publicKey);
+
+    if (!opts?.fresh) {
+      const cached = this._dirMetaCache.get(key);
+      if (cached && cached.expires > Date.now()) {
+        return cached.promise;
+      }
+    }
+
+    const rawPromise = this._fetchDirectoryMetadata(ks);
+    // Strip the internal `cacheable` flag before exposing to callers.
+    const promise = rawPromise.then((res) =>
+      res === undefined ? undefined : { directory: res.directory, entry: res.entry }
+    );
+
+    if (!opts?.fresh) {
+      // Populate synchronously (before any await) so concurrent readers coalesce.
+      this._dirMetaCache.set(key, { promise, expires: Date.now() + this._dirMetaTtlMs });
+      if (this._dirMetaCache.size > 100) this._cleanupDirMetaCache();
+      // Evict misses / synthetic-404 / rejections — but only if this slot is still ours.
+      const evictIfStale = () => {
+        if (this._dirMetaCache.get(key)?.promise === promise) {
+          this._dirMetaCache.delete(key);
+        }
+      };
+      rawPromise.then(
+        (res) => { if (res === undefined || res.cacheable === false) evictIfStale(); },
+        () => evictIfStale()
+      );
+    }
+
+    return promise;
+  }
+
+  /** Remove expired entries from the directory-metadata cache (mirror of registry.ts cleanup). */
+  private _cleanupDirMetaCache(): void {
+    const now = Date.now();
+    for (const [k, v] of this._dirMetaCache) {
+      if (v.expires <= now) this._dirMetaCache.delete(k);
     }
   }
 

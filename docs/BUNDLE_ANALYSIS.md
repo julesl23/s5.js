@@ -1,6 +1,6 @@
 # S5.js Bundle Analysis Report
 
-**Generated:** 2025-11-12T18:01:42.819Z
+**Generated:** 2026-05-23T06:21:42.289Z
 
 ## Executive Summary
 
@@ -10,20 +10,20 @@ This report analyzes bundle sizes for different entry points of the S5.js librar
 
 | Bundle | Raw | Gzip | Brotli | Status |
 |--------|-----|------|--------|--------|
-| Core | 214.66 KB | 71.74 KB | 59.58 KB | ✅ Pass |
+| Core | 252.55 KB | 82.28 KB | 68.45 KB | ✅ Pass |
 | Media | 35.98 KB | 11.03 KB | 9.79 KB | ✅ Pass |
-| Advanced | 218.57 KB | 72.86 KB | 60.74 KB | ✅ Pass |
-| Full | 221.00 KB | 73.45 KB | 61.12 KB | ✅ Pass |
+| Advanced | 255.57 KB | 83.53 KB | 69.36 KB | ✅ Pass |
+| Full | 258.07 KB | 84.15 KB | 69.81 KB | ✅ Pass |
 
 ## Tree-Shaking Analysis
 
 The modular export structure enables consumers to import only what they need:
 
-- **Core only:** 59.58 KB (excludes media processing)
+- **Core only:** 68.45 KB (excludes media processing)
 - **Media only:** 9.79 KB (media processing modules)
-- **Full bundle:** 61.12 KB (all features)
-- **Combined (Core + Media):** 69.37 KB
-- **Shared code savings:** 8.25 KB (11.9% efficiency)
+- **Full bundle:** 69.81 KB (all features)
+- **Combined (Core + Media):** 78.25 KB
+- **Shared code savings:** 8.44 KB (10.8% efficiency)
 
 ## Detailed Breakdown
 
@@ -34,12 +34,12 @@ The modular export structure enables consumers to import only what they need:
 **Entry Point:** `dist/src/exports/core.js`
 
 **Sizes:**
-- Raw: 214.66 KB
-- Gzipped: 71.74 KB (33.4% of raw)
-- Brotli: 59.58 KB (27.8% of raw)
+- Raw: 252.55 KB
+- Gzipped: 82.28 KB (32.6% of raw)
+- Brotli: 68.45 KB (27.1% of raw)
 
 **Metadata:**
-- Input files: 295
+- Input files: 301
 - Output modules: 1
 
 ### Media
@@ -64,12 +64,12 @@ The modular export structure enables consumers to import only what they need:
 **Entry Point:** `dist/src/exports/advanced.js`
 
 **Sizes:**
-- Raw: 218.57 KB
-- Gzipped: 72.86 KB (33.3% of raw)
-- Brotli: 60.74 KB (27.8% of raw)
+- Raw: 255.57 KB
+- Gzipped: 83.53 KB (32.7% of raw)
+- Brotli: 69.36 KB (27.1% of raw)
 
 **Metadata:**
-- Input files: 298
+- Input files: 303
 - Output modules: 1
 
 ### Full
@@ -79,17 +79,17 @@ The modular export structure enables consumers to import only what they need:
 **Entry Point:** `dist/src/index.js`
 
 **Sizes:**
-- Raw: 221.00 KB
-- Gzipped: 73.45 KB (33.2% of raw)
-- Brotli: 61.12 KB (27.7% of raw)
+- Raw: 258.07 KB
+- Gzipped: 84.15 KB (32.6% of raw)
+- Brotli: 69.81 KB (27.0% of raw)
 
 **Metadata:**
-- Input files: 297
+- Input files: 302
 - Output modules: 1
 
 ## Recommendations
 
-✅ **Full bundle size is within the 700KB limit** (61.12 KB)
+✅ **Full bundle size is within the 700KB limit** (69.81 KB)
 
 ### For Application Developers:
 
@@ -115,9 +115,9 @@ The modular export structure enables consumers to import only what they need:
 
 **Status:** ✅ **COMPLIANT**
 
-- Full bundle (brotli): 61.12 KB
+- Full bundle (brotli): 69.81 KB
 - Target: 700 KB
-- Margin: 638.88 KB under budget
+- Margin: 630.19 KB under budget
 
 ## Technical Implementation
 
