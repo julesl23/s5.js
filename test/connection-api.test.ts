@@ -488,12 +488,18 @@ describe("Connection API", () => {
 
         const reconnectPromise = p2p.reconnect();
 
+        // Attach the rejection handler BEFORE advancing timers. Advancing drives
+        // reconnect() to its throw; if nothing is attached at that moment Node flags the
+        // rejection as unhandled (then logs PromiseRejectionHandledWarning when the
+        // assertion attaches a tick later). The test still passed, but vitest exits 1 on
+        // an unhandled rejection, which silently truncated `test:run && build`.
+        const rejects = expect(reconnectPromise).rejects.toThrow('Reconnection timeout');
+
         // Don't complete the new connection - let it timeout
         // Advance time by 10 seconds
         await vi.advanceTimersByTimeAsync(10100);
 
-        // Should throw timeout error
-        await expect(reconnectPromise).rejects.toThrow('Reconnection timeout');
+        await rejects;
       } finally {
         vi.useRealTimers();
       }

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Post-grant releases are summarised below. For exhaustive per-version notes (including production-hardening fixes across beta.2–beta.44), see [`docs/POST_GRANT_UPDATE.md`](docs/POST_GRANT_UPDATE.md).
 
+## [0.9.0-beta.55] - 2026-09-02
+
+### Fixed
+
+- **Critical liveness fix — `S5Node.downloadBlobAsBytes` could hang forever.** The 10s budget was evaluated only *between* `while` iterations while the `fetch` inside the `for` loop carried no `AbortSignal`, so a single P2P-advertised location that accepted the connection and never responded parked the `await` indefinitely. The function neither returned nor threw. Because it never threw, the `catch` in `identity/api.ts` never fired and the **portal fallback never ran** — a working route to the data (measured at 0.2s by the reporter) was there the whole time. A process restart cleared `p2p.blobLocations`, which is why fresh discovery worked until stale locations accumulated again. Reported by the Fabstir node/bridge developer.
+  - This also **disabled beta.54's repair**: `repairDirectory` and `ensureIdentityInitialized({ repair: true })` await this same call, so a directory with a stale hanging location made them hang too — the same "no way back" symptom the repair was written to cure, one layer down.
+  - Every wait on the blob path is now bounded, with a deliberate **connect/read split**: a per-attempt *headers* budget (3s — the reported failure is "accepts the connection but never responds") and a separate *body* budget (60s, armed only once headers arrive). The global `timeoutMs` continues to bound the discovery loop only, so an in-flight transfer is never killed by it. A single blunt per-attempt signal would have aborted the body too and cut off slow-but-alive peers mid-transfer — trading a hang for a data-availability regression on large files.
+  - The thrown message still contains `not found`, so the FS layer still types it as a **retryable `S5DirectoryLoadError`** and beta.54's contract is preserved. Covered by a dedicated seam test.
+- **A definitively-unavailable blob no longer costs the full `timeoutMs`.** Once every known location had been tried, the `for` body was skipped on each pass — the loop could make no progress — yet it kept spinning on `sleep(10)` until the deadline. With a directory node fanning out to many children, that was minutes. "Still discovering" and "every known location has failed" are now distinguished: the latter gets a short `exhaustedGraceMs` (default 1000) instead of the whole budget, and the grace **resets** whenever an untried location appears, so a late-arriving healthy peer is still used. Zero discovered locations is *not* exhaustion — that is discovery, and it keeps the full budget. Safe to keep short because a failure falls through to the portal fallback (0.2s measured). Raised by the Fabstir v2 developer on top of the node developer's report.
+- **`S5Node.ensureInitialized()` no longer spins forever** — it now rejects after `timeoutMs` (default 30000), with a message distinguishing "never initialised" from "initialised but not connected". **Behaviour change:** `S5.create()` on a slow or absent network now rejects instead of hanging. `src/server.ts` already raced it with its own timeout and is unaffected.
+- **Portal upload and the portal download fallback are bounded too** (`src/identity/api.ts`). The fallback is the escape hatch for a hung P2P download, so it must not be able to hang itself; an unbounded upload would hang every `put()`.
+- **`npm run test:run` now exits 0.** `test/connection-api.test.ts` attached its rejection assertion *after* advancing fake timers, so the rejection was momentarily unhandled — vitest exits non-zero on that even with all tests passing, which silently truncated `type-check && test:run && build` before the build ever ran.
+
+### Added
+
+- **`abortable(promise, signal)`** (`src/util/abortable.ts`) — settles with the promise, or rejects the moment the signal fires. Passing a signal to `fetch` *asks* a runtime to abort the socket; it does not guarantee the call returns. Every network wait on the blob path is wrapped so the guarantee is ours rather than the runtime's.
+
+### Known limitation
+
+- `src/account/login.ts`, `src/account/register.ts` and `src/media/wasm/loader.ts` fetches remain **unbounded**. "Every network wait is bounded" is true of the blob path, not yet of the whole library. Deliberate: the auth path is the one thing that must not wobble in a release about to be live-tested, and no auth hang has been reported.
+
 ## [0.9.0-beta.54] - 2026-09-01
 
 > Version numbers `beta.51`–`beta.53` are deliberately skipped: they were used by a downstream consumer for local `dist/`-only patches that were never built from this source.

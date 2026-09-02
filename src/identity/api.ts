@@ -10,6 +10,17 @@ import { S5Node } from "../node/node.js";
 import { RegistryEntry } from "../registry/entry.js";
 import { StreamMessage } from "../stream/message.js";
 import { areArraysEqual } from "../util/arrays.js";
+import { abortable } from "../util/abortable.js";
+
+/**
+ * Portal request budgets. Every portal fetch is bounded: an unbounded one would let a
+ * portal that accepts the connection and never responds park the call forever, which is
+ * exactly the failure this release exists to remove — and the download fallback is the
+ * escape hatch for a hung P2P download, so it must not be able to hang itself.
+ */
+const PORTAL_HEADERS_TIMEOUT_MS = 15000;
+const PORTAL_BODY_TIMEOUT_MS = 120000;
+const PORTAL_UPLOAD_TIMEOUT_MS = 120000;
 import { base64UrlNoPaddingDecode, base64UrlNoPaddingEncode } from "../util/base64.js";
 import { HiddenJSONResponse, TrustedHiddenDBProvider } from "./hidden_db.js";
 import { S5UserIdentity } from "./identity.js";
@@ -430,13 +441,31 @@ export class S5APIWithIdentity implements S5APIInterface {
                 const authHeader = portal.headers['Authorization'] || portal.headers['authorization'] || '';
 
                 // Use environment-specific fetch (undici in Node.js, native in browser)
-                const res = await fetch(uploadUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': authHeader
-                    },
-                    body: formData,
-                });
+                // Bounded like every other network wait: a portal that accepts the
+                // connection and never responds must not park the upload forever (that
+                // would hang every put()). Generous budget — uploads are legitimately
+                // large and slow; the goal is bounding a hang, not policing throughput.
+                const upController = new AbortController();
+                const upTimer = setTimeout(
+                    () => upController.abort(new Error(`portal upload timeout after ${PORTAL_UPLOAD_TIMEOUT_MS}ms`)),
+                    PORTAL_UPLOAD_TIMEOUT_MS
+                );
+                let res: any;
+                try {
+                    res = await abortable(
+                        fetch(uploadUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': authHeader
+                            },
+                            body: formData,
+                            signal: upController.signal,
+                        } as any),
+                        upController.signal
+                    );
+                } finally {
+                    clearTimeout(upTimer);
+                }
                 if (!res.ok) {
                     const errorText = await res.text();
                     console.log(`[upload] Failed with status ${res.status}, response: ${errorText}`);
@@ -526,12 +555,40 @@ export class S5APIWithIdentity implements S5APIInterface {
 
                 try {
                     const { fetch } = await this.getHttpClient();
-                    const res = await fetch(downloadUrl, {
-                        headers: portal.headers
-                    });
+                    // This fallback is the path a hung P2P download is supposed to escape
+                    // to, so it must never be able to hang itself. Headers/body split as in
+                    // S5Node.downloadBlobAsBytes.
+                    const dlController = new AbortController();
+                    let dlHeadersTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(
+                        () => dlController.abort(new Error(`portal headers timeout after ${PORTAL_HEADERS_TIMEOUT_MS}ms`)),
+                        PORTAL_HEADERS_TIMEOUT_MS
+                    );
+                    let dlBodyTimer: ReturnType<typeof setTimeout> | undefined;
+                    let res: any;
+                    let bytes: Uint8Array | undefined;
+                    try {
+                        res = await abortable(
+                            fetch(downloadUrl, {
+                                headers: portal.headers,
+                                signal: dlController.signal,
+                            } as any),
+                            dlController.signal
+                        );
+                        clearTimeout(dlHeadersTimer);
+                        dlHeadersTimer = undefined;
+                        if (res.ok) {
+                            dlBodyTimer = setTimeout(
+                                () => dlController.abort(new Error(`portal body timeout after ${PORTAL_BODY_TIMEOUT_MS}ms`)),
+                                PORTAL_BODY_TIMEOUT_MS
+                            );
+                            bytes = new Uint8Array(await abortable(res.arrayBuffer(), dlController.signal));
+                        }
+                    } finally {
+                        clearTimeout(dlHeadersTimer);
+                        clearTimeout(dlBodyTimer);
+                    }
 
-                    if (res.ok) {
-                        const bytes = new Uint8Array(await res.arrayBuffer());
+                    if (res.ok && bytes) {
                         // Verify hash matches
                         const downloadedHash = await this.crypto.hashBlake3(bytes);
                         if (areArraysEqual(downloadedHash, hash.subarray(1))) {
