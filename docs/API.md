@@ -58,6 +58,8 @@
     - [Cursor Stability](#cursor-stability)
   - [Error Handling](#error-handling)
     - [Common Errors](#common-errors)
+    - [Unavailable Directories — `S5DirectoryLoadError`](#unavailable-directories--s5directoryloaderror)
+    - [repairDirectory(path)](#repairdirectorypath)
     - [Invalid Cursor Errors](#invalid-cursor-errors)
   - [Examples](#examples)
     - [File Management](#file-management)
@@ -1359,6 +1361,105 @@ try {
   await s5.fs.delete("home"); // Cannot delete root
 } catch (error) {
   console.error("Cannot delete root directory");
+}
+```
+
+### Unavailable Directories — `S5DirectoryLoadError`
+
+A directory that **cannot be loaded right now** is reported differently from one that is
+**genuinely absent**:
+
+| Situation | Behaviour |
+| --- | --- |
+| No registry entry — the directory does not exist | reads return `undefined` |
+| Registry entry exists, but the blob fails to download (404) | throws `S5DirectoryLoadError` with `retryable: true` |
+| Structurally incomplete (e.g. a root with neither `home` nor `archive`) | throws `S5DirectoryLoadError` with `retryable: false` |
+
+Never treat a `retryable` error as "empty". Doing so is what silently orphaned user
+subtrees before beta.50: an empty directory republished at a valid next revision
+disconnects everything below it.
+
+```typescript
+import { isS5DirectoryLoadError } from "@julesl23/s5js";
+
+try {
+  const data = await s5.fs.get("home/notes/today.md");
+} catch (error) {
+  if (isS5DirectoryLoadError(error) && error.retryable) {
+    // Transient: retry with backoff. NOT an empty directory.
+    console.warn(`${error.path} is temporarily unavailable`);
+  }
+}
+```
+
+The error names the directory that failed — `error.path` (`""` for the filesystem root)
+and `error.publicKey` (its hex registry key) — which is the *directory* that could not be
+loaded, not the path you originally asked for. Use `isS5DirectoryLoadError()` rather than
+`instanceof`; it works across bundler boundaries.
+
+### repairDirectory(path)
+
+The escape hatch for a blob that is **genuinely gone** — a storage-backend outage during
+which the registry advanced to a revision whose blob never persisted. Such a directory can
+otherwise be neither read nor written, and nothing beneath it can even be addressed.
+
+```typescript
+const result = await s5.fs.repairDirectory("home/fabstir/operators");
+```
+
+Call it **reactively**, with the path from a failure you have actually observed — never
+speculatively, and never in a loop over your whole tree.
+
+```typescript
+try {
+  await s5.fs.put("home/fabstir/operators/summary.json", data);
+} catch (error) {
+  if (isS5DirectoryLoadError(error) && error.retryable) {
+    await retryWithBackoff();                          // 1. retry first
+    const r = await s5.fs.repairDirectory(error.path); // 2. only then repair
+    if (r.repaired) await s5.fs.put(path, data);       // 3. retry the write
+  }
+}
+```
+
+#### Returns
+
+`RepairResult` — `repaired: false` **always means nothing was written**:
+
+| `reason` | Meaning |
+| --- | --- |
+| `"loadable"` | Re-checked at repair time and the blob came back. No-op. |
+| `"absent"` | No registry entry; nothing to repair. A normal write will create it. |
+| `"not-derivable"` | The parent links this name to a key that is not the one derived from the path (an externally-linked directory). Refuses rather than write to the wrong key. |
+
+`{ repaired: true, path, publicKey, previousRevision, newRevision, relinked? }` republishes
+the directory at `newRevision`.
+
+#### Safety and loss
+
+- **It re-reads the directory, cache bypassed, before writing anything.** A 404 that was
+  genuinely transient and has since cleared returns `reason: "loadable"` and writes
+  nothing — so an observed failure can never be turned into a rebuild after the fact.
+- **A non-root repair is lossy but not destructive.** The lost blob held the child names,
+  so the replacement is empty. The children survive: their keys derive from the parent
+  write key plus the name, so re-writing a known path (`put("home/x/y/z")`) **re-links**
+  the intact `y` subtree. The tree heals as your app names paths. This is also why there
+  is no recursive or bulk repair — there is nothing to enumerate.
+- **Root repair (`repairDirectory("")`) is lossless.** Every path is confined to `home/`
+  or `archive/`, so both are re-linked in the same write (reported in `relinked`) and the
+  children are never written to. A custom directory created via `createDirectory("", name)`
+  would lose its root link; its data stays at a derivable key and can be re-linked by name.
+
+`ensureIdentityInitialized({ repair: true })` uses the same primitive for the root, so a
+login blocked by a missing root blob recovers in place:
+
+```typescript
+try {
+  await s5.fs.ensureIdentityInitialized();
+} catch (error) {
+  if (isS5DirectoryLoadError(error) && error.path === "") {
+    await s5.fs.ensureIdentityInitialized({ repair: true });
+  }
 }
 ```
 

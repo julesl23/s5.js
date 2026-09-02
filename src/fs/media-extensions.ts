@@ -11,6 +11,7 @@ import type {
 import type { ImageMetadata } from '../media/types.js';
 import { MediaProcessor } from '../media/index.js';
 import { ThumbnailGenerator } from '../media/thumbnail/generator.js';
+import { isS5DirectoryLoadError } from './errors.js';
 
 /**
  * Media extensions for FS5
@@ -101,6 +102,14 @@ export class FS5MediaExtensions {
     try {
       thumbnailData = await this.fs5.get(thumbnailPath);
     } catch (error) {
+      // A retryable load error means the cached thumbnail (or its parent dir) is
+      // transiently unavailable, NOT absent — surface it so the caller can retry
+      // and reuse the cached thumbnail, instead of redundantly re-downloading the
+      // full source image and regenerating/overwriting a thumbnail that is merely
+      // propagating. A genuinely-absent thumbnail returns undefined (no throw).
+      if (isS5DirectoryLoadError(error) && (error as any).retryable) {
+        throw error;
+      }
       // Thumbnail directory might not exist yet, which is fine
       thumbnailData = undefined;
     }

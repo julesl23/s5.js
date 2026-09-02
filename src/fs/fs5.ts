@@ -13,6 +13,12 @@ import { base64UrlNoPaddingEncode } from "../util/base64.js";
 import { deriveHashInt, deriveHashString } from "../util/derive_hash.js";
 import { DirV1, FileRef, DirRef, DirLink } from "./dirv1/types.js";
 import { DirV1Serialiser } from "./dirv1/serialisation.js";
+import {
+  S5DirectoryLoadError,
+  as404DirLoadError,
+  isS5DirectoryLoadError,
+  type RepairResult,
+} from "./errors.js";
 import { concatBytes, bytesToHex } from "@noble/hashes/utils";
 import { encodeLittleEndian } from "../util/little_endian.js";
 import { BlobIdentifier } from "../identifier/blob.js";
@@ -226,10 +232,16 @@ export class FS5 {
         throw new Error(`Unsupported encryption algorithm: ${algorithm}`);
       }
     } else {
-      // Download unencrypted file data
-      data = await this.api.downloadBlobAsBytes(
-        new Uint8Array([MULTIHASH_BLAKE3, ...fileRef.hash])
-      );
+      // Download unencrypted file data. A present FileRef whose content blob 404s
+      // is "unavailable" (transient propagation), not "absent" — type it retryable
+      // so consumers (e.g. BatchOperations.copyDirectory) don't silently skip it.
+      try {
+        data = await this.api.downloadBlobAsBytes(
+          new Uint8Array([MULTIHASH_BLAKE3, ...fileRef.hash])
+        );
+      } catch (e) {
+        throw as404DirLoadError(e, "file-content blob");
+      }
     }
 
     debug.fs5(' Download complete', {
@@ -450,9 +462,7 @@ export class FS5 {
       // Check if directory is sharded
       if (dir.header.sharding?.root?.cid) {
         // Load HAMT, insert, and save
-        const hamtData = await this.api.downloadBlobAsBytes(
-          dir.header.sharding.root.cid
-        );
+        const hamtData = await this._downloadHamtRoot(dir.header.sharding.root.cid);
         const hamt = await HAMT.deserialise(hamtData, this.api);
 
         await hamt.insert(`f:${fileName}`, fileRef);
@@ -609,9 +619,7 @@ export class FS5 {
       // Check if directory is sharded
       if (dir.header.sharding?.root?.cid) {
         // Load HAMT
-        const hamtData = await this.api.downloadBlobAsBytes(
-          dir.header.sharding.root.cid
-        );
+        const hamtData = await this._downloadHamtRoot(dir.header.sharding.root.cid);
         const hamt = await HAMT.deserialise(hamtData, this.api);
 
         // Try to delete as file first
@@ -721,9 +729,7 @@ export class FS5 {
     // Check if this is a sharded directory
     if (dir.header.sharding?.root?.cid) {
       // Use HAMT-based listing
-      const hamtData = await this.api.downloadBlobAsBytes(
-        dir.header.sharding.root.cid
-      );
+      const hamtData = await this._downloadHamtRoot(dir.header.sharding.root.cid);
       const hamt = await HAMT.deserialise(hamtData, this.api);
 
       let count = 0;
@@ -839,10 +845,17 @@ export class FS5 {
     encryptionKey: Uint8Array,
     size: number
   ): Promise<Uint8Array> {
-    // Download encrypted blob
-    const encryptedData = await this.api.downloadBlobAsBytes(
-      new Uint8Array([MULTIHASH_BLAKE3, ...hash])
-    );
+    // Download encrypted blob. A 404 of a referenced file's content blob is
+    // "unavailable" (transient), not "absent" — type it retryable so consumers
+    // don't treat a transiently-unavailable file as missing/skippable.
+    let encryptedData: Uint8Array;
+    try {
+      encryptedData = await this.api.downloadBlobAsBytes(
+        new Uint8Array([MULTIHASH_BLAKE3, ...hash])
+      );
+    } catch (e) {
+      throw as404DirLoadError(e, "file-content blob");
+    }
 
     const maxChunkSizeAsPowerOf2 = 18;
     const maxChunkSize = 262144; // 256 KiB
@@ -1027,9 +1040,7 @@ export class FS5 {
         if (dir.header.sharding?.root?.cid) {
           dbg('DIRECTORY', 'createDirectory', 'Loading HAMT for sharded directory...');
           // Load HAMT
-          const hamtData = await this.api.downloadBlobAsBytes(
-            dir.header.sharding.root.cid
-          );
+          const hamtData = await this._downloadHamtRoot(dir.header.sharding.root.cid);
           const hamt = await HAMT.deserialise(hamtData, this.api);
 
           // Check if already exists
@@ -1140,7 +1151,10 @@ export class FS5 {
         dbg('DIRECTORY', 'runTransactionOnDirectory', 'Fetching directory metadata...');
         // Bypass the cache: each retry must read the live revision, else the loop
         // would spin on a constant stale revision and fail.
-        dir = await this._getDirectoryMetadata(ks, { fresh: true });
+        dir = await this._getDirectoryMetadata(ks, {
+          fresh: true,
+          path: this._pathLabelFromUri(uri),
+        });
         dbg('DIRECTORY', 'runTransactionOnDirectory', 'Got directory metadata', {
           hasDirectory: !!dir?.directory,
           hasEntry: !!dir?.entry,
@@ -1150,13 +1164,17 @@ export class FS5 {
         });
       } catch (metadataError: any) {
         dbgError('DIRECTORY', 'runTransactionOnDirectory', `_getDirectoryMetadata failed (attempt ${attempt})`, metadataError);
-        if (attempt < maxRetries) {
+        // Retry only transient failures. An explicitly non-retryable error
+        // (retryable === false) will not improve by retrying, so surface it now.
+        const nonRetryable = metadataError?.retryable === false;
+        if (!nonRetryable && attempt < maxRetries) {
           await new Promise(r => setTimeout(r, 100 * attempt));
           continue;
         }
+        // Preserve the original (typed) error so the retryable marker survives.
         return new DirectoryTransactionResult(
           DirectoryTransactionResultType.Error,
-          new Error(`Failed to get directory metadata: ${metadataError?.message || metadataError}`)
+          metadataError
         );
       }
 
@@ -1271,37 +1289,298 @@ export class FS5 {
     }
   }
 
-  // In ensureIdentityInitialized method
-  public async ensureIdentityInitialized(): Promise<void> {
-    const res = await this.runTransactionOnDirectory(
-      await this._buildRootWriteURI(),
-      async (dir, writeKey) => {
-        const names = ["home", "archive"];
-        let hasChanges = false;
+  /**
+   * Ensure the identity's root directory has its `home` and `archive`
+   * subdirectories. Safe to call on every connect.
+   *
+   * CRITICAL: this must distinguish a genuinely *new* identity from an
+   * *existing* one that transiently failed to load, and must NEVER recreate
+   * home/archive in the latter case — doing so republishes them empty at a
+   * valid next revision and orphans the entire user subtree.
+   *
+   * - Root has no registry entry            -> genuinely new -> create home/archive.
+   * - Root entry exists but the blob 404s   -> transient: _getDirectoryMetadata
+   *                                            throws a RETRYABLE error here; we
+   *                                            surface it (caller retries), never
+   *                                            recreate.
+   * - Root loads fine WITH home & archive    -> already initialised -> no-op.
+   * - Root loads fine but MISSING home/archive (no transient failure) -> a
+   *   structurally incomplete root (e.g. a crash mid-setup). Retrying can't fix
+   *   it, so throw a NON-retryable error pointing at the explicit repair path,
+   *   instead of recreating (which risks orphaning if our read is ever wrong).
+   *
+   * @param opts.repair  Opt-in heal for a genuinely-incomplete root. Creation
+   *   is still guarded by `_createDirectory`, which links to (never overwrites)
+   *   any populated directory found at a child key.
+   */
+  public async ensureIdentityInitialized(opts?: { repair?: boolean }): Promise<void> {
+    const rootUri = await this._buildRootWriteURI();
+    const rootKs = await this.getKeySet(rootUri);
 
-        for (const name of names) {
-          if (!dir.dirs.has(name)) {
-            // Create the subdirectory and get its reference
-            const dirRef = await this._createDirectory(name, writeKey);
-            dir.dirs.set(name, dirRef);
+    // Read the root directly. A transient 404 on an existing root throws a
+    // retryable error here (Fix B) rather than masquerading as an empty dir, so
+    // we can never reach the recreate path on a transient *blob* failure.
+    // A root whose blob is unretrievable throws here (the beta.50 guard). Without an
+    // explicit repair that MUST surface — recreating home/archive over a transient
+    // failure is the orphaning bug. With `{ repair: true }`, delegate to the same
+    // path-scoped primitive a consumer would call: it re-checks the blob (so a 404
+    // that has since cleared is a no-op) and rebuilds the root with home/archive
+    // RE-LINKED, which makes root recovery lossless. Bounded to a single attempt.
+    let rootMeta: { directory: DirV1; entry?: RegistryEntry } | undefined;
+    let repairAttempted = false;
+    for (;;) {
+      try {
+        rootMeta = await this._getDirectoryMetadata(rootKs, { fresh: true, path: "" });
+        break;
+      } catch (e: any) {
+        if (repairAttempted || !opts?.repair || !isS5DirectoryLoadError(e) || !e.retryable) {
+          throw e;
+        }
+        repairAttempted = true;
+        await this.repairDirectory("");
+      }
+    }
+
+    // A `registryGet` that returns undefined (no entry) is AMBIGUOUS in a DHT: it
+    // means EITHER a genuinely new identity OR a transient lookup miss (P2P
+    // slowness on reconnect — registryGet returns undefined, it does not throw).
+    // Concluding "new" on a transient miss and creating empty home/archive can
+    // orphan an existing user's data for that session. So before treating the
+    // root as genuinely new, confirm the miss with a few bounded retries to give
+    // a slow lookup a chance to resolve. (This is the registry-lookup analogue of
+    // Fix B's blob-404 typing; the registry layer cannot distinguish absent from
+    // unavailable, so the safe default for this high-stakes, once-per-connect path
+    // is to retry rather than immediately recreate. Cost falls only on a genuinely
+    // new identity's first connect.) See docs IMPLEMENTATION note on the residual
+    // registry absent-vs-unavailable ambiguity.
+    for (let attempt = 0; rootMeta === undefined && attempt < 2; attempt++) {
+      await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+      rootMeta = await this._getDirectoryMetadata(rootKs, { fresh: true, path: "" });
+    }
+
+    const rootExists = rootMeta?.entry !== undefined;
+    const dir = rootMeta?.directory;
+    // HAMT-aware presence check: in normal usage the root holds only home/archive
+    // (the path API confines writes to home/ and archive/), so it is never sharded
+    // and this resolves from the inline map with no extra I/O. But if the root were
+    // ever sharded, reading the inline map directly would miss home/archive (they'd
+    // live in the HAMT) and misclassify a healthy root as incomplete — so resolve
+    // through _getDirectoryFromDirectory, which checks the HAMT when present.
+    const hasHome = dir ? !!(await this._getDirectoryFromDirectory(dir, "home"))?.link : false;
+    const hasArchive = dir ? !!(await this._getDirectoryFromDirectory(dir, "archive"))?.link : false;
+
+    if (dir && hasHome && hasArchive) {
+      return; // already initialised
+    }
+
+    // A root that EXISTS yet loaded with NEITHER home nor archive is anomalous:
+    // a healthy initialised root always has both, and a transient 404 would have
+    // thrown above (Fix B). This is the orphaning pattern — recreating both here
+    // is exactly what wiped data. It is not transient, so retrying won't help.
+    // Refuse by default and expose an explicit, opt-in repair so the guard never
+    // permanently strands an identity.
+    //
+    // A root that has ONE of home/archive but not the other is a legitimate
+    // partial state (e.g. a `put` created `home` before init ran), so we fall
+    // through and add only the missing one. `_createDirectory` (Fix C) still
+    // guarantees we never overwrite a populated directory while doing so.
+    if (rootExists && !hasHome && !hasArchive && !opts?.repair) {
+      throw new S5DirectoryLoadError(
+        "Root directory exists but contains neither home nor archive " +
+        "(incomplete or corrupt initialisation). Refusing to recreate both " +
+        "automatically — that is the data-orphaning pattern. Call " +
+        "ensureIdentityInitialized({ repair: true }) to heal it.",
+        { retryable: false }
+      );
+    }
+
+    // Either genuinely new (no root entry) or an explicit repair: create the
+    // missing subdirectories. _createDirectory guarantees we never overwrite an
+    // existing populated directory while doing so.
+    const res = await this.runTransactionOnDirectory(
+      rootUri,
+      async (d, writeKey) => {
+        let hasChanges = false;
+        for (const name of ["home", "archive"]) {
+          const existingRef = d.dirs.get(name);
+          if (!existingRef || !existingRef.link) {
+            d.dirs.set(name, await this._createDirectory(name, writeKey));
             hasChanges = true;
-          } else {
-            // Verify the existing reference is valid
-            const existingRef = dir.dirs.get(name);
-            if (!existingRef || !existingRef.link) {
-              // Fix broken reference
-              const dirRef = await this._createDirectory(name, writeKey);
-              dir.dirs.set(name, dirRef);
-              hasChanges = true;
-            }
           }
         }
-
-        // Always return the directory if we made changes
-        return hasChanges ? dir : undefined;
+        return hasChanges ? d : undefined;
       }
     );
-    res.unwrap();
+    if (res.type === DirectoryTransactionResultType.Error) {
+      // Preserve the typed (retryable) error so callers can act on it.
+      throw res.e ?? res;
+    }
+  }
+
+  /**
+   * Repair ONE directory whose blob is unretrievable, after a specific failure.
+   *
+   * beta.50 made a directory-blob 404 throw a retryable `S5DirectoryLoadError`
+   * rather than synthesising an empty directory — the right call, since treating a
+   * transient 404 as "empty" is what silently orphaned user subtrees. But when a
+   * blob is *genuinely* gone (a storage outage during which the registry advanced to
+   * a revision whose blob never persisted), that guard leaves no way back: the
+   * directory can neither be read nor written, and nothing beneath it can even be
+   * addressed. This is the escape hatch.
+   *
+   * It is deliberately REACTIVE and single-directory: call it with the path from a
+   * failure you have actually observed (`err.path`), never speculatively.
+   *
+   * **Safety property (contract, not just implementation):** the directory is
+   * re-read here with the cache bypassed. If the blob comes back, this is a no-op
+   * (`reason: "loadable"`, zero writes) — so a 404 that was genuinely transient and
+   * has since resolved can never be turned into a rebuild. Retry with backoff first;
+   * repair is the escape hatch, not the retry.
+   *
+   * **Loss:** for a non-root path the replacement is EMPTY — the lost blob held the
+   * child names, so there is nothing to enumerate. The subtree is not destroyed:
+   * child keys derive from the parent write key plus the name, so re-writing a known
+   * path re-links the surviving children. For the root (`""`) the repair is lossless:
+   * `home`/`archive` are conventional and are re-linked in the same write.
+   *
+   * @param path Logical path of the directory to repair (`""` for the filesystem root).
+   */
+  public async repairDirectory(path: string): Promise<RepairResult> {
+    const logical = path.split("/").filter((s) => s).join("/");
+    // Validates the path and gives us the same lock key ordinary writes use, so a
+    // repair can never race a concurrent transaction on the same directory.
+    const uri = await this._preprocessLocalPath(logical);
+    const release = await this.directoryLocks.acquire(uri);
+    try {
+      dbg('DIRECTORY', 'repairDirectory', 'ENTER', { path: logical });
+      const ks = await this._deriveKeySetForPath(logical);
+      const publicKey = bytesToHex(ks.publicKey);
+
+      // Never write to a key the parent links elsewhere (an externally-linked or
+      // mounted directory): repair needs the DERIVED write key, so if the derived
+      // public key is not the one in the parent's link, refuse rather than write to
+      // the wrong directory.
+      if (logical !== "" && !(await this._pathIsDerivable(logical, ks))) {
+        dbg('DIRECTORY', 'repairDirectory', 'Parent links a non-derived key - refusing', { path: logical });
+        return { repaired: false, reason: "not-derivable", path: logical, publicKey };
+      }
+
+      // Re-check with the cache bypassed — the safety property.
+      let meta: { directory: DirV1; entry?: RegistryEntry } | undefined | null;
+      try {
+        meta = await this._getDirectoryMetadata(ks, { fresh: true, path: logical });
+      } catch (e: any) {
+        // Only an unretrievable blob is repairable. Anything else (a transport
+        // error, MissingEncryptionKey, ...) is not this function's business.
+        if (!isS5DirectoryLoadError(e) || !e.retryable) throw e;
+        meta = null;
+      }
+      if (meta !== null) {
+        const reason = meta === undefined ? "absent" : "loadable";
+        dbg('DIRECTORY', 'repairDirectory', 'Nothing to repair', { path: logical, reason });
+        return { repaired: false, reason, path: logical, publicKey };
+      }
+
+      // The blob is unretrievable but the entry tells us the revision to advance past.
+      const entry = await this.api.registryGet(ks.publicKey);
+      if (entry === undefined) {
+        return { repaired: false, reason: "absent", path: logical, publicKey };
+      }
+      const previousRevision = entry.revision;
+      const newRevision = previousRevision + 1;
+
+      const replacement: DirV1 = {
+        magic: "S5.pro",
+        header: {},
+        dirs: new Map(),
+        files: new Map(),
+      };
+      const relinked: string[] = [];
+      if (logical === "") {
+        // Root repair is lossless: every path is confined to home/ or archive/
+        // (_preprocessLocalPath), so re-linking both reconstructs the root exactly.
+        // `linkIfPresent` keeps this working when a child's blob is missing too —
+        // a DirRef carries only the deterministic public key, so the child is never
+        // written to at all.
+        for (const name of ["home", "archive"]) {
+          replacement.dirs.set(
+            name,
+            await this._createDirectory(name, ks.writeKey!, {
+              linkIfPresent: true,
+              path: name,
+            })
+          );
+          relinked.push(name);
+        }
+      }
+
+      const serialized = DirV1Serialiser.serialise(replacement);
+      const newBytes =
+        ks.encryptionKey !== undefined
+          ? await encryptMutableBytes(serialized, ks.encryptionKey, this.api.crypto)
+          : serialized;
+      const cid = await this.api.uploadBlob(new Blob([newBytes as BlobPart]));
+      const kp = await this.api.crypto.newKeyPairEd25519(ks.writeKey!);
+      const newEntry = await createRegistryEntry(
+        kp,
+        cid.hash,
+        newRevision,
+        this.api.crypto
+      );
+      await this.api.registrySet(newEntry);
+      this._dirMetaCache.delete(publicKey);
+
+      dbg('DIRECTORY', 'repairDirectory', 'REPAIRED', { path: logical, previousRevision, newRevision, relinked });
+      return relinked.length > 0
+        ? { repaired: true, path: logical, publicKey, previousRevision, newRevision, relinked }
+        : { repaired: true, path: logical, publicKey, previousRevision, newRevision };
+    } finally {
+      release();
+    }
+  }
+
+  /**
+   * Keyset for a path derived purely from the identity's root write key — no reads.
+   *
+   * `getKeySet` resolves a child's public key by READING its parent, so it cannot
+   * address a descendant of an unloadable directory, which is exactly the situation
+   * a repair has to work in. Child write keys are deterministic
+   * (`_deriveWriteKeyForChildDirectory`), so the whole chain can be derived offline.
+   * The shape matches `getKeySet`'s: nested directories carry no encryption key
+   * (they are written unencrypted); the root keeps its encrypted-mutable keyset.
+   */
+  private async _deriveKeySetForPath(logical: string): Promise<KeySet> {
+    const rootKs = await this.getKeySet(await this._buildRootWriteURI());
+    if (logical === "") return rootKs;
+    let writeKey = rootKs.writeKey!;
+    for (const segment of logical.split("/")) {
+      writeKey = await this._deriveWriteKeyForChildDirectory(writeKey, segment);
+    }
+    const publicKey = (await this.api.crypto.newKeyPairEd25519(writeKey)).publicKey;
+    return { publicKey, writeKey, encryptionKey: undefined };
+  }
+
+  /**
+   * Does the parent link this name to the key we derived? Used to refuse repairing a
+   * directory that was linked in from elsewhere rather than created by
+   * `_createDirectory`. An unloadable or silent parent is not evidence against the
+   * derivation (that is the case repair exists for), so those answer `true`.
+   */
+  private async _pathIsDerivable(logical: string, ks: KeySet): Promise<boolean> {
+    const segments = logical.split("/");
+    const name = segments.pop()!;
+    let parentDir: DirV1 | undefined;
+    try {
+      parentDir = await this._loadDirectory(segments.join("/"));
+    } catch {
+      return true; // parent unloadable — the derivation stands alone
+    }
+    if (!parentDir) return true;
+    const ref = await this._getDirectoryFromDirectory(parentDir, name);
+    if (!ref || ref.link.type !== "mutable_registry_ed25519" || !ref.link.publicKey) {
+      return true;
+    }
+    return bytesToHex(ref.link.publicKey) === bytesToHex(ks.publicKey.subarray(1));
   }
 
   /**
@@ -1323,7 +1602,8 @@ export class FS5 {
 
   async _createDirectory(
     name: string,
-    parentWriteKey: Uint8Array
+    parentWriteKey: Uint8Array,
+    opts?: { linkIfPresent?: boolean; path?: string }
   ): Promise<DirRef> {
     dbg('DIRECTORY', '_createDirectory', 'ENTER', { name, parentWriteKey });
 
@@ -1334,28 +1614,85 @@ export class FS5 {
     const ks = await this._deriveKeySetFromWriteKey(newWriteKey);
     dbg('DIRECTORY', '_createDirectory', 'Derived keyset', { publicKey: ks.publicKey });
 
-    // Create empty DirV1
+    const kp = await this.api.crypto.newKeyPairEd25519(newWriteKey);
+
+    // Defense-in-depth: NEVER overwrite a live directory with a fresh empty blob.
+    // The target's registry key is deterministic, so an entry already living here
+    // means a directory exists at this key. Republishing an empty blob over it
+    // (the root data-loss bug, via a wrongly-"missing" home/archive) would orphan
+    // its contents. So before writing anything, load what's there:
+    //   - non-empty & loadable  -> link to the EXISTING directory, write nothing.
+    //   - 404 / unloadable       -> refuse (retryable); the blob may be propagating
+    //                               and could be a populated directory.
+    //   - absent or empty        -> safe to create/recreate.
+    // Note: `delete` only removes EMPTY directories and never clears the child's
+    // registry entry, so a normal delete->recreate leaves an empty entry here and
+    // is unaffected by this guard.
+    dbg('REGISTRY', '_createDirectory', 'Checking existing directory at target key...', { publicKey: kp.publicKey });
+    let existing: { directory: DirV1; entry?: RegistryEntry } | undefined;
+    try {
+      existing = await this._getDirectoryMetadata(ks, { fresh: true, path: opts?.path });
+    } catch (e: any) {
+      // A directory whose blob we cannot load may still be linked to safely: a
+      // DirRef carries only the public key, which is deterministic, so linking
+      // writes NOTHING to the child. `repairDirectory` opts into this so a root
+      // rebuild can re-link home/archive even when their blobs are also missing;
+      // ordinary writes keep the loud refusal below (they asked to create, and a
+      // silent link to an unreadable directory would hide the failure).
+      if (opts?.linkIfPresent && isS5DirectoryLoadError(e)) {
+        const entry = await this.api.registryGet(ks.publicKey);
+        if (entry !== undefined) {
+          dbg('DIRECTORY', '_createDirectory', 'Unloadable but present - linking without writing', { name });
+          return {
+            link: {
+              type: "mutable_registry_ed25519",
+              publicKey: kp.publicKey.subarray(1),
+            },
+            ts_seconds: Math.floor(Date.now() / 1000),
+          };
+        }
+      }
+      if (e instanceof S5DirectoryLoadError) throw e;
+      throw new S5DirectoryLoadError(
+        `Cannot verify the existing directory '${name}' before (re)creating it; ` +
+        `refusing to overwrite to avoid orphaning data.`,
+        { retryable: true, cause: e, path: opts?.path, publicKey: bytesToHex(ks.publicKey) }
+      );
+    }
+    if (existing) {
+      const d = existing.directory;
+      const isNonEmpty =
+        d.dirs.size > 0 || d.files.size > 0 || !!d.header?.sharding?.root?.cid;
+      // `linkIfPresent` (repair) also links to an existing EMPTY directory: it is
+      // already there, so republishing an identical empty blob would only burn a
+      // revision. Ordinary creates keep recreating over an empty entry, which is
+      // what makes delete->recreate work (delete leaves an empty entry behind).
+      if (isNonEmpty || opts?.linkIfPresent) {
+        dbg('DIRECTORY', '_createDirectory', 'Existing non-empty directory found - linking to it (no overwrite)', { name });
+        return {
+          link: {
+            type: "mutable_registry_ed25519",
+            publicKey: kp.publicKey.subarray(1),
+          },
+          ts_seconds: Math.floor(Date.now() / 1000),
+        };
+      }
+      // Existing but empty (and loadable): safe to (re)create over it.
+    }
+    const existingEntry = existing?.entry;
+    const revision = (existingEntry?.revision ?? 0) + 1;
+
+    // Create + upload the empty directory blob (only now that we know it's safe).
     const emptyDir: DirV1 = {
       magic: "S5.pro",
       header: {},
       dirs: new Map(),
       files: new Map(),
     };
-
-    // Serialize and upload
     const serialized = DirV1Serialiser.serialise(emptyDir);
     dbg('UPLOAD', '_createDirectory', 'Uploading empty directory blob...', { byteLength: serialized.length });
     const cid = await this.api.uploadBlob(new Blob([serialized as BlobPart]));
     dbg('UPLOAD', '_createDirectory', 'Upload complete', { cidHash: cid.hash });
-
-    // Create registry entry for the new directory
-    const kp = await this.api.crypto.newKeyPairEd25519(newWriteKey);
-
-    // Check for existing registry entry to get correct revision
-    // (P2P network may have stale entries from other portals)
-    dbg('REGISTRY', '_createDirectory', 'Checking for existing registry entry...', { publicKey: kp.publicKey });
-    const existingEntry = await this.api.registryGet(kp.publicKey);
-    const revision = (existingEntry?.revision ?? 0) + 1;
 
     dbg('REVISION', '_createDirectory', 'Revision calculation', {
       name,
@@ -1440,10 +1777,13 @@ export class FS5 {
     }
     const pathSegments = uri.split("/");
     const lastPathSegment = pathSegments[pathSegments.length - 1];
-    const parentKeySet = await this.getKeySet(
-      uri.substring(0, uri.length - (lastPathSegment.length + 1))
-    );
-    const parentDirectory = await this._getDirectoryMetadata(parentKeySet);
+    const parentUri = uri.substring(0, uri.length - (lastPathSegment.length + 1));
+    const parentKeySet = await this.getKeySet(parentUri);
+    // Attribute a load failure to the PARENT directory being read here — that is
+    // the directory a consumer would repair, not the path originally requested.
+    const parentDirectory = await this._getDirectoryMetadata(parentKeySet, {
+      path: this._pathLabelFromUri(parentUri),
+    });
 
     // TODO Custom
     if (parentDirectory === undefined) {
@@ -1490,6 +1830,20 @@ export class FS5 {
     };
 
     return ks;
+  }
+
+  /**
+   * Logical path label for an `fs5://` write URI, used to attribute directory-load
+   * failures (`S5DirectoryLoadError.path`) to the directory that actually failed.
+   * The root URI carries no pathname, so it labels as `""` — the same string
+   * `repairDirectory("")` takes.
+   */
+  private _pathLabelFromUri(uri: string): string {
+    try {
+      return new URL(uri).pathname.replace(/^\/+/, "");
+    } catch {
+      return "";
+    }
   }
 
   private async _preprocessLocalPath(path: string): Promise<string> {
@@ -1556,6 +1910,23 @@ export class FS5 {
   }
 
   /**
+   * Download a HAMT shard-root blob, re-typing a 404 as a retryable
+   * S5DirectoryLoadError (the shard root is a SEPARATE blob from the directory
+   * metadata, so Layer B's metadata-404 typing does not cover it). Without this,
+   * a transient 404 of a sharded directory's HAMT blob throws a plain Error that
+   * the walker treats as "skip/empty" — silently dropping a large subtree from
+   * walk/count/copyDirectory/deleteDirectory. Internal HAMT node loads are typed
+   * the same way in `HAMT._loadNode`.
+   */
+  private async _downloadHamtRoot(cid: Uint8Array): Promise<Uint8Array> {
+    try {
+      return await this.api.downloadBlobAsBytes(cid);
+    } catch (e) {
+      throw as404DirLoadError(e, "HAMT shard-root blob");
+    }
+  }
+
+  /**
    * Core directory-metadata fetch (two network round-trips, uncached). Returns an
    * internal `cacheable` flag so the caching wrapper can distinguish a genuine
    * directory (cacheable) from the synthetic empty dir returned on a blob-404
@@ -1563,7 +1934,8 @@ export class FS5 {
    * returns `undefined` (a miss, also not cached).
    */
   private async _fetchDirectoryMetadata(
-    ks: KeySet
+    ks: KeySet,
+    opts?: { allowEmptyOn404?: boolean; path?: string }
   ): Promise<{ directory: DirV1; entry?: RegistryEntry; cacheable: boolean } | undefined> {
     dbg('FS5', '_getDirectoryMetadata', 'ENTER', { publicKey: ks.publicKey });
 
@@ -1610,21 +1982,48 @@ export class FS5 {
       if (message.includes('404') ||
           message.includes('not found') ||
           error?.status === 404) {
-        // Registry entry exists but blob is gone - return empty directory with entry
-        // This preserves entry.revision so callers use (revision + 1) instead of 1
-        dbg('FS5', '_getDirectoryMetadata', '404 detected - returning empty directory with existing entry revision', {
+        // The registry entry exists (or we have a fixed content hash) but the
+        // blob failed to download. This is overwhelmingly a TRANSIENT condition
+        // (propagation lag, a GC race, a flaky peer) — NOT a genuinely empty
+        // directory. Returning a synthetic empty dir here is what silently
+        // orphaned entire subtrees: ensureIdentityInitialized saw home/archive
+        // "missing" and re-published them empty at a valid next revision.
+        //
+        // So by default we throw a RETRYABLE error and let the caller (the
+        // transaction retry loop, or the consumer's connect/read) retry. The
+        // legacy "treat 404 as empty so a rewrite can proceed" behaviour is
+        // preserved ONLY behind an explicit opt-in, off for init and all reads.
+        if (opts?.allowEmptyOn404) {
+          dbg('FS5', '_getDirectoryMetadata', '404 detected - allowEmptyOn404: returning empty directory with existing entry revision', {
+            entryRevision: entry?.revision
+          });
+          return {
+            directory: {
+              magic: "S5.pro",
+              header: {},
+              dirs: new Map(),
+              files: new Map(),
+            },
+            entry,  // Preserve registry entry for correct revision calculation
+            cacheable: false,  // synthetic empty dir: blob may be propagating, don't pin it
+          };
+        }
+        dbg('FS5', '_getDirectoryMetadata', '404 detected - throwing retryable load error', {
           entryRevision: entry?.revision
         });
-        return {
-          directory: {
-            magic: "S5.pro",
-            header: {},
-            dirs: new Map(),
-            files: new Map(),
-          },
-          entry,  // Preserve registry entry for correct revision calculation
-          cacheable: false,  // synthetic empty dir: blob may be propagating, don't pin it
-        };
+        throw new S5DirectoryLoadError(
+          "Directory blob is temporarily unavailable (404); this is likely a " +
+          "transient propagation failure — retry. Refusing to treat it as an " +
+          "empty directory (that would orphan existing data). If it never " +
+          "recovers, repair this one directory explicitly with " +
+          "fs.repairDirectory(err.path).",
+          {
+            retryable: true,
+            cause: error,
+            path: opts?.path,
+            publicKey: bytesToHex(ks.publicKey),
+          }
+        );
       }
       throw error;
     }
@@ -1678,7 +2077,7 @@ export class FS5 {
    */
   private async _getDirectoryMetadata(
     ks: KeySet,
-    opts?: { fresh?: boolean }
+    opts?: { fresh?: boolean; allowEmptyOn404?: boolean; path?: string }
   ): Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined> {
     const key = bytesToHex(ks.publicKey);
 
@@ -1689,11 +2088,19 @@ export class FS5 {
       }
     }
 
-    const rawPromise = this._fetchDirectoryMetadata(ks);
+    const rawPromise = this._fetchDirectoryMetadata(ks, {
+      allowEmptyOn404: opts?.allowEmptyOn404,
+      path: opts?.path,
+    });
     // Strip the internal `cacheable` flag before exposing to callers.
     const promise = rawPromise.then((res) =>
       res === undefined ? undefined : { directory: res.directory, entry: res.entry }
     );
+    // Shield the shared/cached promise object so a rejected load (e.g. the
+    // retryable 404 thrown by _fetchDirectoryMetadata) never trips Node's
+    // unhandled-rejection detector via the *cached* reference. Live callers
+    // still receive the rejection through their own `await promise`.
+    promise.catch(() => {});
 
     if (!opts?.fresh) {
       // Populate synchronously (before any await) so concurrent readers coalesce.
@@ -1794,7 +2201,9 @@ export class FS5 {
   private async _loadDirectory(path: string): Promise<DirV1 | undefined> {
     const preprocessedPath = await this._preprocessLocalPath(path);
     const ks = await this.getKeySet(preprocessedPath);
-    const metadata = await this._getDirectoryMetadata(ks);
+    const metadata = await this._getDirectoryMetadata(ks, {
+      path: this._pathLabelFromUri(preprocessedPath),
+    });
     return metadata?.directory;
   }
 
@@ -1840,8 +2249,11 @@ export class FS5 {
             await this.createDirectory(parentPath, dirName);
             dbg('DIRECTORY', '_updateDirectory', 'Directory created', { currentPath });
           } catch (createError: any) {
-            // Ignore "same name" (race condition) and "does not exist" (parent will be created in next iteration)
-            // DirectoryTransactionResult stores error in .e, not .message
+            // Ignore "same name" (race condition) and "does not exist" (parent will be created in next iteration).
+            // unwrap() throws the underlying error directly, so the message is on
+            // createError.message; the .e fallbacks are kept defensively. A typed
+            // S5DirectoryLoadError (e.g. a transient 404) matches neither phrase and
+            // is correctly re-thrown to the caller.
             const errorStr = createError?.message || createError?.e?.message || createError?.e || createError?.toString?.() || '';
             if (!errorStr.toString().includes('same name') && !errorStr.toString().includes('does not exist')) {
               throw createError;
@@ -2086,9 +2498,7 @@ export class FS5 {
   ): Promise<FileRef | undefined> {
     if (dir.header.sharding?.root?.cid) {
       // Load HAMT and query
-      const hamtData = await this.api.downloadBlobAsBytes(
-        dir.header.sharding.root.cid
-      );
+      const hamtData = await this._downloadHamtRoot(dir.header.sharding.root.cid);
       const hamt = await HAMT.deserialise(hamtData, this.api);
       return (await hamt.get(`f:${fileName}`)) as FileRef | undefined;
     } else {
@@ -2109,9 +2519,7 @@ export class FS5 {
   ): Promise<DirRef | undefined> {
     if (dir.header.sharding?.root?.cid) {
       // Load HAMT and query
-      const hamtData = await this.api.downloadBlobAsBytes(
-        dir.header.sharding.root.cid
-      );
+      const hamtData = await this._downloadHamtRoot(dir.header.sharding.root.cid);
       const hamt = await HAMT.deserialise(hamtData, this.api);
       return (await hamt.get(`d:${dirName}`)) as DirRef | undefined;
     } else {
@@ -2437,7 +2845,14 @@ class DirectoryTransactionResult extends Error {
 
   unwrap(): void {
     if (this.type === DirectoryTransactionResultType.Error) {
-      throw this;
+      // Throw the underlying error (preserving its type — incl. the `code` /
+      // `retryable` on S5DirectoryLoadError — and its real message) rather than
+      // the opaque empty-message wrapper. This makes write paths
+      // (put/delete/createDirectory/createFile) reject with the SAME typed error
+      // reads already throw, so `isS5DirectoryLoadError(err)` / `err.retryable`
+      // work uniformly. The internal `_updateDirectory` existence-loop catch
+      // classifies on `.message` (matched below), which is unaffected.
+      throw this.e ?? this;
     }
   }
 

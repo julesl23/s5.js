@@ -174,7 +174,10 @@ describe("FS5 directory-metadata cache", () => {
     expect(await cold.get("home/a/x.txt")).toBe("xdata"); // not pinned to the miss
   });
 
-  test("synthetic empty-dir on blob-404 is not cached", async () => {
+  test("a transient blob-404 throws (retryable) and is not cached", async () => {
+    // A 404 on a KNOWN directory is a transient failure, not an empty dir:
+    // get() must throw a retryable error (never return undefined / synthesize
+    // empty), and must not pin the bad state — a later read re-downloads.
     const cold = new FS5(api as any, identity as any);
     let n = 0;
     const orig = api.downloadBlobAsBytes.bind(api);
@@ -184,7 +187,7 @@ describe("FS5 directory-metadata cache", () => {
       return orig(h);
     });
 
-    expect(await cold.get("home/a/x.txt")).toBeUndefined(); // 404 -> synthetic empty -> file not found
+    await expect(cold.get("home/a/x.txt")).rejects.toMatchObject({ retryable: true });
     expect(await cold.get("home/a/x.txt")).toBe("xdata"); // re-downloaded, not served from a pinned empty dir
   });
 

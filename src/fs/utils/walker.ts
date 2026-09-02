@@ -2,6 +2,7 @@ import { FS5 } from "../fs5.js";
 import { debug } from "../../util/debug.js";
 import { FileRef, DirRef, ListOptions } from "../dirv1/types.js";
 import { encodeS5, decodeS5 } from "../dirv1/cbor-config.js";
+import { isS5DirectoryLoadError } from "../errors.js";
 
 /**
  * Options for walking directories
@@ -195,7 +196,16 @@ export class DirectoryWalker {
         }
 
       } catch (error) {
-        // Skip directories that can't be read
+        // A transient/unavailable directory (retryable load error) must NOT be
+        // silently treated as empty: doing so makes walk/count/copyDirectory/
+        // deleteDirectory return INCOMPLETE results reported as success — exactly
+        // the "treat unavailable as empty" failure the data-loss fix forbids.
+        // Surface it so callers abort/retry (the walk cursor is preserved on the
+        // caller side). Genuinely-unreadable dirs (parse/permission/etc.) are
+        // still skipped as before.
+        if (isS5DirectoryLoadError(error) && error.retryable) {
+          throw error;
+        }
         console.warn(`Failed to read directory ${state.path}:`, error);
         state.path = "";
         state.dirCursor = undefined;

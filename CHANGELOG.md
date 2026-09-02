@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Post-grant releases are summarised below. For exhaustive per-version notes (including production-hardening fixes across beta.2–beta.44), see [`docs/POST_GRANT_UPDATE.md`](docs/POST_GRANT_UPDATE.md).
 
+## [0.9.0-beta.54] - 2026-09-01
+
+> Version numbers `beta.51`–`beta.53` are deliberately skipped: they were used by a downstream consumer for local `dist/`-only patches that were never built from this source.
+
+### Fixed
+
+- **The documented root repair was unreachable.** `ensureIdentityInitialized` read the root *before* consulting `opts.repair`, so the read threw and the repair branch never ran — `ensureIdentityInitialized({ repair: true })`, the remedy named in the guard's own error message, behaved identically to the plain call. An identity whose registry entry existed but whose root blob was gone could not be recovered through the public API. It now recovers in place, **losslessly**: the root is rebuilt with the *existing* `home`/`archive` re-linked (their keys are deterministic), in a single registry write, and neither child is written to.
+
+### Added
+
+- **`fs.repairDirectory(path)`** — a path-scoped escape hatch for a directory whose blob is genuinely unretrievable (a storage outage during which the registry advanced to a revision whose blob never persisted). One directory per call, used **reactively** with the path from an observed failure. Returns a `RepairResult` (exported type).
+  - **Safety property (contract):** it re-reads the directory with the cache bypassed and returns `{ repaired: false, reason: "loadable" }` without writing if the blob has come back — a 404 that was genuinely transient can never be turned into a rebuild after the fact. Other no-write outcomes are `"absent"` (no registry entry) and `"not-derivable"` (the parent links a key we would not derive, i.e. an externally-linked directory).
+  - A non-root repair is **lossy but not destructive**: the lost blob held the child names, so the replacement is empty — but child keys derive from the parent write key plus the name, so re-writing a known path re-links the surviving subtree. There is deliberately no recursive or bulk repair; a lost directory's children cannot be enumerated.
+  - `repairDirectory("")` subsumes the root case, and `ensureIdentityInitialized({ repair: true })` delegates to it.
+- **`S5DirectoryLoadError` now names its target:** `error.path` (the *directory* that failed — `""` for the root, not the path originally requested) and `error.publicKey` (hex registry key). Without attribution a path-scoped repair is not expressible, which is why the first consumer-side workaround reached for a session-wide "treat 404 as empty" mode. Attribution is additive: `retryable` and `code` are unchanged, and sites that cannot know the path (HAMT-internal blobs, cross-identity public reads) leave it `undefined` rather than guess.
+
+### Changed
+
+- **No guard was relaxed.** `_fetchDirectoryMetadata` still refuses to synthesise an empty directory on a 404, and `allowEmptyOn404` is still set by no caller. Repair performs its own diagnostic read and targeted write under the existing per-directory mutex, so the strict default holds on every other path.
+- `_createDirectory` gained an internal `linkIfPresent` option (used only by repair) that links to whatever already exists at a child key — including an unloadable or empty one — without writing to it. Ordinary creates keep beta.50's loud refusal on an unconfirmable child.
+
+## [0.9.0-beta.50] - 2026-06-15
+
+### Fixed
+
+- **Critical data-loss fix — `ensureIdentityInitialized` no longer orphans the filesystem on a transient root-load 404.** A momentary blob 404 during a routine login could make the root load as a synthetic *empty* directory, so `ensureIdentityInitialized` saw `home`/`archive` "missing" and re-published them empty at a valid next revision — silently orphaning the entire user subtree. Fixed with three independent layers:
+  - **`_fetchDirectoryMetadata` no longer fakes "empty" on a 404.** A 404 of a *known* directory blob now throws a retryable `S5DirectoryLoadError` (the legacy behaviour is gated behind an off-by-default `allowEmptyOn404` no caller sets). The transaction retry loop handles transient cases; a persistent 404 surfaces as an error, never a wipe.
+  - **`ensureIdentityInitialized({ repair? })` only initialises a genuinely new root.** It heals a partial root (exactly one of `home`/`archive` present), but a root that exists yet has *neither* throws a **non-retryable** error (opt-in `{ repair: true }` heal) instead of recreating both.
+  - **`_createDirectory` never overwrites a live directory** — it links to an existing non-empty directory (or refuses on a 404) instead of republishing an empty blob.
+
+### Added
+
+- **`S5DirectoryLoadError`** (exported from `@julesl23/s5js`, `/core`, `/advanced`) with `retryable: boolean`, stable `code === "S5_DIRECTORY_LOAD_ERROR"`, and the `isS5DirectoryLoadError()` type guard. Consumers MUST treat `retryable` as "retry with backoff", never as "absent/empty".
+
+### Changed
+
+- **Typed retryable errors now propagate uniformly to consumers.** `fs.get()` throws on a transient 404 of a known directory (was silent `undefined`); a genuinely-absent directory (no registry entry) still returns `undefined`. Writes (`put`/`delete`/`createDirectory`/`createFile`) reject with the same typed error via `DirectoryTransactionResult.unwrap()`. `DirectoryWalker` and `BatchOperations.copyDirectory`/`deleteDirectory` re-throw a retryable error instead of silently reporting an incomplete walk/copy/delete as success. HAMT shard-root and internal-node blob 404s, and file-content blob 404s, are typed the same way.
+
+> Consumer-side rollout: honour `retryable` (retry/backoff, never catch-and-treat-as-empty); `connect()` must fail-and-retry rather than proceed "logged in but empty." See `docs/development/MESSAGE-S5-DEVELOPER-DATALOSS-FIX.md`.
+
 ## [0.9.0-beta.49] - 2026-05-23
 
 ### Changed

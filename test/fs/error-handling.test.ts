@@ -104,8 +104,10 @@ describe("Error Handling in runTransactionOnDirectory", () => {
         .createFile("home", "test.txt", { ts: Date.now(), data: null })
         .catch((e: any) => e);
 
-      // DirectoryTransactionResult.e holds the original thrown value
-      expect(error.e).toBeInstanceOf(Error);
+      // unwrap() now throws the underlying typed error directly (not the opaque
+      // DirectoryTransactionResult wrapper), so the rejection IS a proper Error.
+      expect(error).toBeInstanceOf(Error);
+      expect(String(error.message)).toContain("same name");
     });
 
     test("duplicate filename error message contains 'same name'", async () => {
@@ -115,7 +117,7 @@ describe("Error Handling in runTransactionOnDirectory", () => {
         .createFile("home", "test.txt", { ts: Date.now(), data: null })
         .catch((e: any) => e);
 
-      const msg = error?.e?.message || error?.e || String(error);
+      const msg = error?.message || error?.e?.message || String(error);
       expect(msg).toContain("same name");
     });
   });

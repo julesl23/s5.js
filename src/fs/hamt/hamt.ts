@@ -4,6 +4,7 @@ import { HAMTBitmapOps, HAMTHasher } from "./utils.js";
 import { S5APIInterface } from "../../api/s5.js";
 import { encodeS5, decodeS5 } from "../dirv1/cbor-config.js";
 import { base64UrlNoPaddingEncode } from "../../util/base64.js";
+import { as404DirLoadError } from "../errors.js";
 
 /**
  * Hash Array Mapped Trie implementation for efficient large directory storage
@@ -369,8 +370,16 @@ export class HAMT {
       return cached;
     }
 
-    // Load from storage
-    const data = await this.api.downloadBlobAsBytes(cid);
+    // Load from storage. A 404 here (a sharded directory's internal HAMT node
+    // transiently unavailable) is re-typed as a retryable S5DirectoryLoadError so
+    // consumers (walker/batch/list) surface it instead of silently dropping the
+    // sharded subtree — see as404DirLoadError.
+    let data: Uint8Array;
+    try {
+      data = await this.api.downloadBlobAsBytes(cid);
+    } catch (e) {
+      throw as404DirLoadError(e, "HAMT node blob");
+    }
     const node = this._deserializeNode(data);
     
     // Add to cache

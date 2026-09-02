@@ -27,6 +27,7 @@
  */
 
 import type { FS5 } from './fs5.js';
+import { isS5DirectoryLoadError } from './errors.js';
 
 /**
  * Advanced CID-aware file system operations
@@ -323,14 +324,28 @@ export class FS5Advanced {
             }
           }
         } catch (error) {
-          // Skip entries that cause errors
+          // A transiently-unavailable entry/subtree (retryable load error) is NOT
+          // a skippable per-entry error — skipping it would report an EXISTING CID
+          // as "not found". Surface it so cidToPath/getByCID retry rather than
+          // returning a false absent (which could cause a wrong re-upload / false
+          // data-loss to the user).
+          if (isS5DirectoryLoadError(error) && (error as any).retryable) {
+            throw error;
+          }
+          // Skip entries that cause non-retryable errors (parse, etc.)
           continue;
         }
       }
 
       return null;
     } catch (error) {
-      // If directory doesn't exist or can't be read, return null
+      // A retryable load error means this directory is transiently unavailable,
+      // not absent — never collapse it to "CID not found". Propagate so the
+      // caller can retry.
+      if (isS5DirectoryLoadError(error) && (error as any).retryable) {
+        throw error;
+      }
+      // Directory genuinely doesn't exist / non-retryable read failure: return null.
       return null;
     }
   }

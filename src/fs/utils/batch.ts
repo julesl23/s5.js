@@ -3,6 +3,7 @@ import { debug } from "../../util/debug.js";
 import { DirectoryWalker, WalkOptions } from "./walker.js";
 import { FileRef, DirRef, PutOptions } from "../dirv1/types.js";
 import { encodeS5, decodeS5 } from "../dirv1/cbor-config.js";
+import { isS5DirectoryLoadError } from "../errors.js";
 
 /**
  * Options for batch operations
@@ -127,9 +128,12 @@ export class BatchOperations {
             // It's a directory - create it
             await this._ensureDirectory(targetPath);
           } else {
-            // It's a file - copy it
+            // It's a file - copy it. Only skip a GENUINELY-absent file
+            // (get() === undefined); a present file may decode to a falsy value
+            // (empty string, 0, false) which must still be copied, and a transient
+            // content-404 now throws retryable (handled by the catch below).
             const fileData = await this.fs.get(path);
-            if (!fileData) continue;
+            if (fileData === undefined) continue;
 
             const putOptions: PutOptions = {};
             if (preserveMetadata) {
@@ -156,13 +160,20 @@ export class BatchOperations {
           }
 
         } catch (error) {
+          // A retryable directory-load error (a transiently-unavailable source
+          // dir) is NOT a per-entry failure to skip/continue — skipping it would
+          // silently omit part of the source. Surface it (typed) regardless of
+          // onError so the caller retries the whole copy.
+          if (isS5DirectoryLoadError(error) && (error as any).retryable) {
+            throw error;
+          }
           state.failed++;
           const err = error as Error;
           state.errors.push({ path, error: err });
 
           // Handle error based on mode
-          const errorAction = typeof onError === "function" 
-            ? onError(err, path) 
+          const errorAction = typeof onError === "function"
+            ? onError(err, path)
             : onError;
 
           if (errorAction === "stop") {
@@ -172,7 +183,14 @@ export class BatchOperations {
       }
 
     } catch (error) {
-      // Operation was interrupted
+      // A retryable directory-load error from the walk means the tree was only
+      // PARTIALLY traversed (a subtree was transiently unavailable). Surface it
+      // rather than returning a clean-looking result, so a partly-destructive op
+      // can't silently report incomplete work as success; callers retry.
+      if (isS5DirectoryLoadError(error) && (error as any).retryable) {
+        throw error;
+      }
+      // Operation was interrupted (genuine/non-retryable): resume cursor.
       return {
         ...state,
         cursor: state.lastCursor
@@ -248,12 +266,18 @@ export class BatchOperations {
             }
 
           } catch (error) {
+            // A retryable load error (a transiently-unavailable directory whose
+            // delete couldn't be confirmed) is not a per-entry failure to skip —
+            // surface it (typed) regardless of onError so the caller retries.
+            if (isS5DirectoryLoadError(error) && (error as any).retryable) {
+              throw error;
+            }
             state.failed++;
             const err = error as Error;
             state.errors.push({ path: entryPath, error: err });
 
-            const errorAction = typeof onError === "function" 
-              ? onError(err, entryPath) 
+            const errorAction = typeof onError === "function"
+              ? onError(err, entryPath)
               : onError;
 
             if (errorAction === "stop") {
@@ -267,11 +291,19 @@ export class BatchOperations {
           await this.fs.delete(path);
           state.success++;
         } catch (error) {
+          // A retryable load error (the top directory's own metadata transiently
+          // unavailable) must be surfaced regardless of onError — never buried as
+          // a counted failure — so the caller retries the whole delete.
+          if (isS5DirectoryLoadError(error) && (error as any).retryable) {
+            throw error;
+          }
           state.failed++;
           const err = error as Error;
           state.errors.push({ path, error: err });
-          
-          if (onError === "stop") {
+
+          // Honor BOTH string and function forms of onError (was string-only).
+          const errorAction = typeof onError === "function" ? onError(err, path) : onError;
+          if (errorAction === "stop") {
             throw err;
           }
         }
@@ -300,7 +332,14 @@ export class BatchOperations {
       }
 
     } catch (error) {
-      // Operation was interrupted
+      // A retryable directory-load error from the walk means the tree was only
+      // PARTIALLY traversed (a subtree was transiently unavailable). Surface it
+      // rather than returning a clean-looking result, so a partly-destructive op
+      // can't silently report incomplete work as success; callers retry.
+      if (isS5DirectoryLoadError(error) && (error as any).retryable) {
+        throw error;
+      }
+      // Operation was interrupted (genuine/non-retryable): resume cursor.
       return {
         ...state,
         cursor: state.lastCursor
