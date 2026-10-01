@@ -209,6 +209,14 @@ export class DirV1Serialiser {
     
     // Convert header Map to object if needed
     const headerObj = header instanceof Map ? Object.fromEntries(header) : header;
+    // The decoder returns EVERY CBOR map as a Map, including the ones nested in the sharding
+    // header, which the writer encoded from plain objects. Restore that shape: every reader
+    // checks `header.sharding.root.cid`, and on a Map that is undefined — a sharded directory
+    // then read as empty, and the next write replaced it with a one-entry directory.
+    // Decode-side only: re-serialising yields the original bytes.
+    if (headerObj && headerObj.sharding instanceof Map) {
+      headerObj.sharding = this.stringKeyedMapsToObjects(headerObj.sharding);
+    }
     
     // Deserialise directories
     const dirs = this.deserialiseDirs(dirsMap);
@@ -234,6 +242,15 @@ export class DirV1Serialiser {
     };
   }
   
+  /** Recursively turn string-keyed Maps back into plain objects (other values untouched). */
+  private static stringKeyedMapsToObjects(value: any): any {
+    if (!(value instanceof Map)) return value;
+    if (![...value.keys()].every((k) => typeof k === "string")) return value;
+    const out: Record<string, any> = {};
+    for (const [k, v] of value) out[k] = this.stringKeyedMapsToObjects(v);
+    return out;
+  }
+
   // Deserialise directories map
   private static deserialiseDirs(dirsMap: Map<string, any>): Map<string, DirRef> {
     const result = new Map<string, DirRef>();

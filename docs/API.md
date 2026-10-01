@@ -737,11 +737,21 @@ async get(path: string, options?: GetOptions): Promise<any | undefined>
 - **path** (string): The file path (e.g., "home/documents/file.txt")
 - **options** (GetOptions, optional): Configuration options
   - `defaultMediaType` (string): Default media type for content interpretation
+  - `fresh` (boolean): Bypass the 30 s directory cache for **every** directory on the path
+    (beta.56). Use it when another tab or device may have just changed the tree and the
+    answer must be certain — see [Fresh reads](#fresh-reads-beta56).
 
 #### Returns
 
 - The decoded file data (string, object, or Uint8Array)
 - `undefined` if the file doesn't exist
+
+#### Throws
+
+- `Directory "…" does not exist` — a directory on the path is not linked by its parent
+  (with `fresh: true`, a certain absence)
+- `S5DirectoryLoadError` (`retryable: true`) — a directory on the path exists but cannot be
+  loaded right now; see [Unavailable Directories](#unavailable-directories--s5directoryloaderror)
 
 #### Data Decoding
 
@@ -814,17 +824,18 @@ await s5.fs.put("home/backup.txt", "content", {
 });
 ```
 
-### getMetadata(path)
+### getMetadata(path, options?)
 
 Retrieve metadata about a file or directory without downloading the content.
 
 ```typescript
-async getMetadata(path: string): Promise<Record<string, any> | undefined>
+async getMetadata(path: string, options?: { fresh?: boolean }): Promise<Record<string, any> | undefined>
 ```
 
 #### Parameters
 
 - **path** (string): The file or directory path
+- **options.fresh** (boolean, optional): bypass the directory cache for every directory read (beta.56)
 
 #### Returns
 
@@ -922,6 +933,7 @@ async *list(path: string, options?: ListOptions): AsyncIterableIterator<ListResu
 - **options** (ListOptions, optional): Configuration options
   - `limit` (number): Maximum items to return
   - `cursor` (string): Resume from a previous position
+  - `fresh` (boolean): Bypass the directory cache for every directory read (beta.56)
 
 #### Yields
 
@@ -1265,6 +1277,7 @@ interface PutOptions {
 ```typescript
 interface GetOptions {
   defaultMediaType?: string; // Default media type for content interpretation
+  fresh?: boolean; // Bypass the directory cache on every directory read (beta.56)
 }
 ```
 
@@ -1274,6 +1287,7 @@ interface GetOptions {
 interface ListOptions {
   limit?: number; // Maximum items to return
   cursor?: string; // Pagination cursor from previous result
+  fresh?: boolean; // Bypass the directory cache on every directory read (beta.56)
 }
 ```
 
@@ -1371,13 +1385,32 @@ A directory that **cannot be loaded right now** is reported differently from one
 
 | Situation | Behaviour |
 | --- | --- |
-| No registry entry — the directory does not exist | reads return `undefined` |
-| Registry entry exists, but the blob fails to download (404) | throws `S5DirectoryLoadError` with `retryable: true` |
-| Structurally incomplete (e.g. a root with neither `home` nor `archive`) | throws `S5DirectoryLoadError` with `retryable: false` |
+| The parent does not link it — the directory does not exist | `Directory "…" does not exist` (reading a *file* the parent does not hold → `undefined`). With `fresh: true` this is a **certain** absence. |
+| Registry entry exists, but the blob fails to download | `S5DirectoryLoadError`, `retryable: true`, `reason: 'blob-unavailable'` |
+| No local registry entry and **no connected peer** could be asked | `S5DirectoryLoadError`, `retryable: true`, `reason: 'registry-unavailable'` (beta.56) |
+| The parent **links** it, but its registry entry cannot be found | `S5DirectoryLoadError`, `retryable: true`, `reason: 'entry-unavailable'` (beta.56 — was `undefined` / empty) |
+| Structurally incomplete (e.g. a root with neither `home` nor `archive`) | `S5DirectoryLoadError`, `retryable: false` |
 
 Never treat a `retryable` error as "empty". Doing so is what silently orphaned user
 subtrees before beta.50: an empty directory republished at a valid next revision
-disconnects everything below it.
+disconnects everything below it. None of the retryable errors uses the wording
+`does not exist` or `Path not found`, so code that treats those as absence stays correct.
+
+**Behaviour change (beta.56).** A directory reached through its parent's link was always
+published before it was linked, so a missing registry entry for it can only mean
+"unavailable", never "absent". Reads (`get`, `list`, `getMetadata`, `pathToCID`) and writes
+now throw `reason: 'entry-unavailable'` where they used to return `undefined`, yield nothing,
+or — on a write — rebuild the directory empty at revision 1 over its real contents.
+
+**Behaviour change (beta.56).** With **no connected peer**, a registry read that has no local
+entry is not an answer: it throws `reason: 'registry-unavailable'`. Keys this origin already
+knows (any entry in the local/shared IndexedDB registry) are still returned, so reads and
+writes of existing directories keep working offline; **creating a new directory** while
+disconnected is refused (retryable) — it could not verify that nothing already lives there.
+Cross-identity public reads (`readFromPublicDirectory`, `getPublicDirectoryKeyFrom`) keep
+returning `undefined` in that case. The registry-level error is also exported:
+`S5RegistryUnavailableError` / `isS5RegistryUnavailableError()` (`code:
+'S5_REGISTRY_UNAVAILABLE'`), raised by `registryGet(pk, { requireAnswer: true })`.
 
 ```typescript
 import { isS5DirectoryLoadError } from "@julesl23/s5js";
@@ -1395,7 +1428,24 @@ try {
 The error names the directory that failed — `error.path` (`""` for the filesystem root)
 and `error.publicKey` (its hex registry key) — which is the *directory* that could not be
 loaded, not the path you originally asked for. Use `isS5DirectoryLoadError()` rather than
-`instanceof`; it works across bundler boundaries.
+`instanceof`; it works across bundler boundaries. `repairDirectory` only acts on
+`reason: 'blob-unavailable'`.
+
+### Fresh reads (beta.56)
+
+Each `FS5` instance caches directory metadata for 30 s. Tabs of one origin share the
+registry but not that cache, so a default read can be up to 30 s behind another tab. Pass
+`{ fresh: true }` to `get`, `list`, `getMetadata` or `FS5Advanced.pathToCID` when the answer
+must be current: every directory on the path is re-read from the registry (an unchanged
+directory is not re-downloaded — its blob is content-addressed and cached in memory), and a
+fresh read that finds a newer directory evicts the stale cached copy, so later default reads
+never see an older state.
+
+Writes always resolve their path fresh: `put`, `delete`, `createDirectory`, `createFile`,
+`BatchOperations`' existence and emptiness checks, and `repairDirectory`'s checks never
+decide from a cached directory. `delete()` of something under a missing directory now
+returns `false` **without writing** (it used to create the missing parents), and a directory
+delete judges emptiness fresh — and treats a sharded directory as non-empty.
 
 ### repairDirectory(path)
 
@@ -2823,16 +2873,19 @@ const advanced = new FS5Advanced(s5.fs);
 **Throws:**
 - `Error` if fs5 is null or undefined
 
-#### pathToCID(path)
+#### pathToCID(path, options?)
 
 Extract the CID (Content Identifier) from a file or directory path.
 
 ```typescript
-async pathToCID(path: string): Promise<Uint8Array>
+async pathToCID(path: string, options?: { fresh?: boolean }): Promise<Uint8Array>
 ```
 
 **Parameters:**
 - `path: string` - The file or directory path
+- `options.fresh?: boolean` - bypass the directory cache on every directory read (beta.56).
+  A directory that cannot be loaded right now throws a retryable `S5DirectoryLoadError`,
+  never `Path not found`.
 
 **Returns:**
 - `Promise<Uint8Array>` - The CID as a 32-byte Uint8Array

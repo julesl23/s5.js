@@ -34,6 +34,68 @@ import { encodeS5, decodeS5 } from "./dirv1/cbor-config.js";
 import { base64UrlNoPaddingDecode } from "../util/base64.js";
 import { HAMT } from "./hamt/hamt.js";
 import { AsyncMutex } from "../util/async-mutex.js";
+import { isS5RegistryUnavailableError } from "../node/errors.js";
+
+/**
+ * Cross-identity public reads are best-effort and read-only (no orphan risk), so they keep
+ * their "`undefined` when it cannot be read" contract when no peer could be asked (beta.56).
+ */
+function isRegistryUnavailableLoad(e: unknown): boolean {
+  return isS5DirectoryLoadError(e) && e.reason === "registry-unavailable";
+}
+
+/**
+ * The registry key (multicodec-prefixed) a directory link points at — the one mapping used by
+ * path resolution (`getKeySet`) and by delete inside a sharded parent.
+ */
+function linkPublicKey(link: DirLink): Uint8Array {
+  if (link.type === "mutable_registry_ed25519") {
+    if (!link.publicKey) {
+      throw new Error("Missing public key for mutable registry link");
+    }
+    return concatBytes(new Uint8Array([mkeyEd25519]), link.publicKey);
+  }
+  if (link.type === "fixed_hash_blake3") {
+    if (!link.hash) {
+      throw new Error("Missing hash for fixed hash link");
+    }
+    // For fixed hash links, we don't have a public key
+    return new Uint8Array([mhashBlake3Default, ...link.hash]);
+  }
+  throw new Error(`Unsupported directory link type: ${(link as { type?: unknown }).type}`);
+}
+
+/** Marker on `getKeySet`'s "not linked by its parent" errors (the message is unchanged). */
+const PATH_NOT_FOUND = "S5_PATH_NOT_FOUND";
+
+/**
+ * `getKeySet`'s certain-absence error. The message is kept byte-for-byte (consumers parse
+ * `Directory "…" does not exist`); the `code` is what FS5 itself tests, so an unrelated error
+ * that merely mentions "does not exist" can never make a write create directories.
+ */
+function pathNotFound(message: string): Error {
+  return Object.assign(new Error(message), { code: PATH_NOT_FOUND });
+}
+
+/** Did key-set resolution fail because a directory on the path is not linked by its parent? */
+function isPathResolutionMiss(e: unknown): boolean {
+  return (e as { code?: unknown } | null)?.code === PATH_NOT_FOUND;
+}
+
+/**
+ * Empty = no inline files, no inline dirs, and NOT sharded. A sharded directory's inline maps
+ * are always empty (its entries live in the HAMT), so ignoring sharding made a 1000+ entry
+ * directory look empty — deletable, and overwritable by `_createDirectory`. Any sharding
+ * header counts, whatever shape it decoded to.
+ */
+function isDirectoryEmpty(d: DirV1): boolean {
+  return d.files.size === 0 && d.dirs.size === 0 && !d.header?.sharding;
+}
+
+/** Identity of a directory's registry entry, for "did this directory change?" checks. */
+function entryFingerprint(entry: RegistryEntry | undefined): string {
+  return entry === undefined ? "none" : `${entry.revision}:${bytesToHex(entry.data)}`;
+}
 
 // Media type mappings
 const MEDIA_TYPE_MAP: Record<string, string> = {
@@ -85,6 +147,10 @@ const MEDIA_TYPE_MAP: Record<string, string> = {
 
 const mhashBlake3 = 0x1e;
 const mhashBlake3Default = 0x1f;
+
+/** Directory-blob cache bounds (see `FS5._dirBlobCache`). */
+const DIR_BLOB_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+const DIR_BLOB_CACHE_MAX_ENTRY_BYTES = 1024 * 1024;
 
 const CID_TYPE_FS5_DIRECTORY = 0x5d;
 const CID_TYPE_ENCRYPTED_MUTABLE = 0x5e;
@@ -160,9 +226,26 @@ export class FS5 {
    */
   private readonly _dirMetaCache = new Map<
     string,
-    { promise: Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined>; expires: number }
+    {
+      promise: Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined>;
+      expires: number;
+      /** Registry-entry fingerprint once the load settled (undefined while in flight). */
+      settled?: string;
+    }
   >();
   private readonly _dirMetaTtlMs: number;
+
+  /**
+   * Directory blobs by content hash (beta.56). A blob is addressed by its hash, so an entry
+   * here can never be stale — it lets a fresh read of an unchanged directory cost one
+   * registry read and no download, which is what makes resolving every write fresh
+   * affordable. In memory only, never persisted: it holds directory metadata. Bounded LRU.
+   * Filled only by downloads (never by uploads). Bypassed by `repairDirectory`, whose
+   * question is whether the NETWORK still has the blob.
+   */
+  private readonly _dirBlobCache = new Map<string, Uint8Array>();
+  private _dirBlobCacheBytes = 0;
+  private readonly _dirBlobDownloads = new Map<string, Promise<Uint8Array>>();
 
   constructor(
     api: S5APIInterface,
@@ -201,7 +284,7 @@ export class FS5 {
     const dirPath = segments.slice(0, -1).join("/") || "";
 
     // Load the parent directory
-    const dir = await this._loadDirectory(dirPath);
+    const dir = await this._loadDirectory(dirPath, { fresh: options?.fresh });
     if (!dir) {
       return undefined;
     }
@@ -498,14 +581,16 @@ export class FS5 {
    * @returns Metadata object or undefined if not found
    */
   public async getMetadata(
-    path: string
+    path: string,
+    options?: { fresh?: boolean }
   ): Promise<Record<string, any> | undefined> {
+    const fresh = options?.fresh;
     path = normalizePath(path);
     const segments = path.split("/").filter((s) => s);
 
     if (segments.length === 0) {
       // Root directory metadata
-      const dir = await this._loadDirectory("");
+      const dir = await this._loadDirectory("", { fresh });
       if (!dir) return undefined;
 
       const oldestTimestamp = this._getOldestTimestamp(dir);
@@ -541,7 +626,7 @@ export class FS5 {
     const parentPath = segments.slice(0, -1).join("/") || "";
 
     // Load parent directory
-    const parentDir = await this._loadDirectory(parentPath);
+    const parentDir = await this._loadDirectory(parentPath, { fresh });
     if (!parentDir) return undefined;
 
     // Check if it's a file (supports HAMT)
@@ -559,7 +644,7 @@ export class FS5 {
     const dirRef = await this._getDirectoryFromDirectory(parentDir, itemName);
     if (dirRef) {
       // Load the directory to get its metadata
-      const dir = await this._loadDirectory(segments.join("/"));
+      const dir = await this._loadDirectory(segments.join("/"), { fresh });
       if (!dir) return undefined;
 
       const oldestTimestamp = this._getOldestTimestamp(dir);
@@ -611,6 +696,8 @@ export class FS5 {
 
     let deleted = false;
 
+    // createParents: false — deleting something under a missing directory deletes nothing,
+    // so it must write nothing (it used to create the missing parents on the way).
     await this._updateDirectory(parentPath, async (dir, writeKey) => {
       if (!dir) {
         return undefined; // Parent doesn't exist
@@ -641,13 +728,9 @@ export class FS5 {
         const dirKey = `d:${itemName}`;
         const dirRef = await hamt.get(dirKey);
         if (dirRef) {
-          // Check if directory is empty
-          const targetDir = await this._loadDirectory(segments.join("/"));
-          if (
-            targetDir &&
-            targetDir.files.size === 0 &&
-            targetDir.dirs.size === 0
-          ) {
+          // Check if directory is empty — fresh, through the link we already hold: the path
+          // resolver is not HAMT-aware and cannot address a child of a sharded directory.
+          if (await this._isLinkedDirectoryEmpty(dirRef as DirRef, segments.join("/"))) {
             deleted = await hamt.delete(dirKey);
             if (deleted) {
               // Save updated HAMT
@@ -677,13 +760,10 @@ export class FS5 {
 
         // Check if it's a directory
         if (dir.dirs.has(itemName)) {
-          // Check if directory is empty
-          const targetDir = await this._loadDirectory(segments.join("/"));
-          if (
-            targetDir &&
-            targetDir.files.size === 0 &&
-            targetDir.dirs.size === 0
-          ) {
+          // Check if directory is empty — FRESH (another tab may have just added a child),
+          // and sharding-aware (a sharded directory's inline maps are always empty).
+          const targetDir = await this._loadDirectory(segments.join("/"), { fresh: true });
+          if (targetDir && isDirectoryEmpty(targetDir)) {
             dir.dirs.delete(itemName);
             deleted = true;
             debug.fs5(' Delete complete', {
@@ -697,7 +777,7 @@ export class FS5 {
       }
 
       return undefined; // No changes
-    });
+    }, { createParents: false });
 
     return deleted;
   }
@@ -712,7 +792,7 @@ export class FS5 {
     options?: ListOptions
   ): AsyncIterableIterator<ListResult> {
     path = normalizePath(path);
-    const dir = await this._loadDirectory(path);
+    const dir = await this._loadDirectory(path, { fresh: options?.fresh });
 
     if (!dir) {
       return; // Directory doesn't exist - return empty iterator
@@ -1130,20 +1210,38 @@ export class FS5 {
     try {
     dbg('DIRECTORY', 'runTransactionOnDirectory', 'ENTER', { uri: uri.slice(0, 80) });
 
-    const ks = await this.getKeySet(uri);
-    if (ks.writeKey == null) {
-      dbgError('DIRECTORY', 'runTransactionOnDirectory', 'Missing write access', { uri });
-      throw new Error(`Missing write access for ${uri}`);
-    }
-    dbg('DIRECTORY', 'runTransactionOnDirectory', 'Got keyset', {
-      hasWriteKey: !!ks.writeKey,
-      hasEncryptionKey: !!ks.encryptionKey,
-      publicKey: ks.publicKey
-    });
-
     const maxRetries = 5;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       dbg('DIRECTORY', 'runTransactionOnDirectory', `Attempt ${attempt}/${maxRetries}`, { uri: uri.slice(0, 50) });
+
+      // Resolve the key set FRESH, on every attempt: whether each ancestor still links the
+      // next is exactly what another tab may have just changed. A key set resolved through
+      // the 30 s cache can name a directory another tab deleted (the write lands unlinked —
+      // lost) or miss one it just created. Resolution failures are THROWN, before the
+      // transaction function runs, so a caller can tell "a directory on this path does not
+      // exist" from a failed update (see `_updateDirectory`). Only a retryable load error is
+      // retried here — resolution reads the network too, and a transient 404 must not fail a
+      // write that the target read below would have retried.
+      let ks: KeySet;
+      try {
+        ks = await this.getKeySet(uri, { fresh: true });
+      } catch (resolutionError: any) {
+        if (isS5DirectoryLoadError(resolutionError) && resolutionError.retryable && attempt < maxRetries) {
+          dbgError('DIRECTORY', 'runTransactionOnDirectory', `Key-set resolution failed (attempt ${attempt}), retrying`, resolutionError);
+          await new Promise(r => setTimeout(r, 100 * attempt));
+          continue;
+        }
+        throw resolutionError;
+      }
+      if (ks.writeKey == null) {
+        dbgError('DIRECTORY', 'runTransactionOnDirectory', 'Missing write access', { uri });
+        throw new Error(`Missing write access for ${uri}`);
+      }
+      dbg('DIRECTORY', 'runTransactionOnDirectory', 'Got keyset', {
+        hasWriteKey: !!ks.writeKey,
+        hasEncryptionKey: !!ks.encryptionKey,
+        publicKey: ks.publicKey
+      });
 
       // Re-fetch directory metadata on each attempt to get current revision
       let dir: { directory: DirV1; entry?: RegistryEntry } | undefined;
@@ -1151,9 +1249,13 @@ export class FS5 {
         dbg('DIRECTORY', 'runTransactionOnDirectory', 'Fetching directory metadata...');
         // Bypass the cache: each retry must read the live revision, else the loop
         // would spin on a constant stale revision and fail.
+        const label = this._pathLabelFromUri(uri);
         dir = await this._getDirectoryMetadata(ks, {
           fresh: true,
-          path: this._pathLabelFromUri(uri),
+          path: label,
+          // A linked directory with no entry must never be rebuilt from an empty one
+          // (that republished it at revision 1 over its real contents).
+          requireEntry: label !== "",
         });
         dbg('DIRECTORY', 'runTransactionOnDirectory', 'Got directory metadata', {
           hasDirectory: !!dir?.directory,
@@ -1333,7 +1435,13 @@ export class FS5 {
         rootMeta = await this._getDirectoryMetadata(rootKs, { fresh: true, path: "" });
         break;
       } catch (e: any) {
-        if (repairAttempted || !opts?.repair || !isS5DirectoryLoadError(e) || !e.retryable) {
+        if (
+          repairAttempted ||
+          !opts?.repair ||
+          !isS5DirectoryLoadError(e) ||
+          !e.retryable ||
+          e.reason !== "blob-unavailable"
+        ) {
           throw e;
         }
         repairAttempted = true;
@@ -1468,11 +1576,15 @@ export class FS5 {
       // Re-check with the cache bypassed — the safety property.
       let meta: { directory: DirV1; entry?: RegistryEntry } | undefined | null;
       try {
-        meta = await this._getDirectoryMetadata(ks, { fresh: true, path: logical });
+        // bypassBlobCache: the question is whether the NETWORK still has the blob; bytes
+        // this instance happens to hold must not turn "lost" into "loadable".
+        meta = await this._getDirectoryMetadata(ks, { fresh: true, path: logical, bypassBlobCache: true });
       } catch (e: any) {
-        // Only an unretrievable blob is repairable. Anything else (a transport
-        // error, MissingEncryptionKey, ...) is not this function's business.
-        if (!isS5DirectoryLoadError(e) || !e.retryable) throw e;
+        // Only an unretrievable BLOB is repairable. Anything else (a transport error,
+        // MissingEncryptionKey, a registry nobody could be asked, ...) is not this
+        // function's business — rebuilding because the registry was unreachable would
+        // replace a healthy directory once a peer answers the follow-up read below.
+        if (!isS5DirectoryLoadError(e) || !e.retryable || e.reason !== "blob-unavailable") throw e;
         meta = null;
       }
       if (meta !== null) {
@@ -1571,7 +1683,8 @@ export class FS5 {
     const name = segments.pop()!;
     let parentDir: DirV1 | undefined;
     try {
-      parentDir = await this._loadDirectory(segments.join("/"));
+      // Fresh: this read gates a WRITE (the repair), so it must not trust a cached parent.
+      parentDir = await this._loadDirectory(segments.join("/"), { fresh: true });
     } catch {
       return true; // parent unloadable — the derivation stands alone
     }
@@ -1661,8 +1774,7 @@ export class FS5 {
     }
     if (existing) {
       const d = existing.directory;
-      const isNonEmpty =
-        d.dirs.size > 0 || d.files.size > 0 || !!d.header?.sharding?.root?.cid;
+      const isNonEmpty = !isDirectoryEmpty(d);
       // `linkIfPresent` (repair) also links to an existing EMPTY directory: it is
       // already there, so republishing an identical empty blob would only burn a
       // revision. Ordinary creates keep recreating over an empty entry, which is
@@ -1737,7 +1849,12 @@ export class FS5 {
     };
   }
 
-  private async getKeySet(uri: string): Promise<KeySet> {
+  /**
+   * Resolve a directory URI to its key set by reading each parent. `fresh` reads every
+   * ancestor past the 30 s directory cache: whether a parent links a child is exactly what
+   * another tab may have just changed.
+   */
+  private async getKeySet(uri: string, opts?: { fresh?: boolean }): Promise<KeySet> {
     const url = new URL(uri);
     if (url.pathname.length < 2) {
       const cid = Multibase.decodeString(url.host);
@@ -1778,49 +1895,34 @@ export class FS5 {
     const pathSegments = uri.split("/");
     const lastPathSegment = pathSegments[pathSegments.length - 1];
     const parentUri = uri.substring(0, uri.length - (lastPathSegment.length + 1));
-    const parentKeySet = await this.getKeySet(parentUri);
+    const parentKeySet = await this.getKeySet(parentUri, opts);
     // Attribute a load failure to the PARENT directory being read here — that is
     // the directory a consumer would repair, not the path originally requested.
+    const parentLabel = this._pathLabelFromUri(parentUri);
     const parentDirectory = await this._getDirectoryMetadata(parentKeySet, {
-      path: this._pathLabelFromUri(parentUri),
+      fresh: opts?.fresh,
+      path: parentLabel,
+      // A non-root parent was itself reached through a link, so it cannot be absent.
+      requireEntry: parentLabel !== "",
     });
 
     // TODO Custom
     if (parentDirectory === undefined) {
-      throw new Error(`Parent Directory of "${uri}" does not exist`);
+      throw pathNotFound(`Parent Directory of "${uri}" does not exist`);
     }
 
     const dir = parentDirectory.directory.dirs.get(lastPathSegment);
     if (dir == undefined) {
-      throw new Error(`Directory "${uri}" does not exist`);
+      throw pathNotFound(`Directory "${uri}" does not exist`);
     }
     let writeKey: Uint8Array | undefined;
-    let publicKey: Uint8Array;
-
-    // Handle different directory link types
-    if (dir.link.type === "mutable_registry_ed25519") {
-      if (!dir.link.publicKey) {
-        throw new Error("Missing public key for mutable registry link");
-      }
-      publicKey = concatBytes(
-        new Uint8Array([mkeyEd25519]),
-        dir.link.publicKey
+    const publicKey = linkPublicKey(dir.link);
+    // Derive write key from parent's write key if available (mutable links only)
+    if (dir.link.type === "mutable_registry_ed25519" && parentKeySet.writeKey) {
+      writeKey = await this._deriveWriteKeyForChildDirectory(
+        parentKeySet.writeKey,
+        lastPathSegment
       );
-      // Derive write key from parent's write key if available
-      if (parentKeySet.writeKey) {
-        writeKey = await this._deriveWriteKeyForChildDirectory(
-          parentKeySet.writeKey,
-          lastPathSegment
-        );
-      }
-    } else if (dir.link.type === "fixed_hash_blake3") {
-      if (!dir.link.hash) {
-        throw new Error("Missing hash for fixed hash link");
-      }
-      // For fixed hash links, we don't have a public key
-      publicKey = new Uint8Array([mhashBlake3Default, ...dir.link.hash]);
-    } else {
-      throw new Error(`Unsupported directory link type: ${dir.link.type}`);
     }
 
     const ks = {
@@ -1935,7 +2037,7 @@ export class FS5 {
    */
   private async _fetchDirectoryMetadata(
     ks: KeySet,
-    opts?: { allowEmptyOn404?: boolean; path?: string }
+    opts?: { allowEmptyOn404?: boolean; path?: string; bypassBlobCache?: boolean }
   ): Promise<{ directory: DirV1; entry?: RegistryEntry; cacheable: boolean } | undefined> {
     dbg('FS5', '_getDirectoryMetadata', 'ENTER', { publicKey: ks.publicKey });
 
@@ -1947,7 +2049,26 @@ export class FS5 {
       dbg('FS5', '_getDirectoryMetadata', 'Using fixed hash (blake3)', { hash });
     } else {
       dbg('REGISTRY', '_getDirectoryMetadata', 'Fetching registry entry...');
-      entry = await this.api.registryGet(ks.publicKey);
+      try {
+        // Always ask for an answer: an empty read that could not reach ANY peer is not the
+        // protocol's "absent" (it has no negative reply) — it is a guess, and guessing
+        // "absent" is how an offline tab invents a new identity or an empty directory.
+        entry = await this.api.registryGet(ks.publicKey, { requireAnswer: true });
+      } catch (e) {
+        if (!isS5RegistryUnavailableError(e)) throw e;
+        throw new S5DirectoryLoadError(
+          "Directory is unavailable: this node has no registry entry for it and no connected " +
+          "peer could be asked. Retry once connected; refusing to treat it as absent or empty " +
+          "(that would orphan existing data).",
+          {
+            retryable: true,
+            reason: "registry-unavailable",
+            cause: e,
+            path: opts?.path,
+            publicKey: bytesToHex(ks.publicKey),
+          }
+        );
+      }
 
       if (entry === undefined) {
         dbg('FS5', '_getDirectoryMetadata', 'No registry entry found - returning undefined');
@@ -1960,10 +2081,14 @@ export class FS5 {
       });
 
       const data = entry.data;
+      // A COPY, not a view: the prefix byte is rewritten below and again inside the
+      // download (S5Node sets it to 0x1f). On a view that rewrote `entry.data` itself, so the
+      // same registry entry read differently depending on whether a download ran — which
+      // made unchanged directories look changed to the fresh-read eviction check.
       if (data[0] == mhashBlake3 || data[0] == mhashBlake3Default) {
-        hash = data.subarray(0, 33);
+        hash = data.slice(0, 33);
       } else {
-        hash = data.subarray(2, 35);
+        hash = data.slice(2, 35);
       }
       hash[0] = mhashBlake3;
       dbg('FS5', '_getDirectoryMetadata', 'Extracted hash from entry', { hash });
@@ -1973,7 +2098,7 @@ export class FS5 {
     let metadataBytes: Uint8Array;
     try {
       dbg('DOWNLOAD', '_getDirectoryMetadata', 'Downloading blob...');
-      metadataBytes = await this.api.downloadBlobAsBytes(hash);
+      metadataBytes = await this._downloadDirectoryBlob(hash, opts?.bypassBlobCache);
       dbg('DOWNLOAD', '_getDirectoryMetadata', 'Downloaded blob', { byteLength: metadataBytes.length });
     } catch (error: any) {
       const message = error?.message?.toLowerCase() || '';
@@ -2019,6 +2144,7 @@ export class FS5 {
           "fs.repairDirectory(err.path).",
           {
             retryable: true,
+            reason: "blob-unavailable",
             cause: error,
             path: opts?.path,
             publicKey: bytesToHex(ks.publicKey),
@@ -2077,25 +2203,35 @@ export class FS5 {
    */
   private async _getDirectoryMetadata(
     ks: KeySet,
-    opts?: { fresh?: boolean; allowEmptyOn404?: boolean; path?: string }
+    opts?: {
+      fresh?: boolean;
+      allowEmptyOn404?: boolean;
+      path?: string;
+      requireEntry?: boolean;
+      bypassBlobCache?: boolean;
+    }
   ): Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined> {
     const key = bytesToHex(ks.publicKey);
 
     if (!opts?.fresh) {
       const cached = this._dirMetaCache.get(key);
       if (cached && cached.expires > Date.now()) {
-        return cached.promise;
+        return this._withRequiredEntry(cached.promise, ks, opts);
       }
     }
 
     const rawPromise = this._fetchDirectoryMetadata(ks, {
       allowEmptyOn404: opts?.allowEmptyOn404,
       path: opts?.path,
+      bypassBlobCache: opts?.bypassBlobCache,
     });
-    // Strip the internal `cacheable` flag before exposing to callers.
-    const promise = rawPromise.then((res) =>
-      res === undefined ? undefined : { directory: res.directory, entry: res.entry }
-    );
+    // Strip the internal `cacheable` flag before exposing to callers. A fresh read also
+    // evicts a cached slot it has just proved stale — here, before any caller resumes, so a
+    // default read issued after a fresh one can never see an older state (monotonic reads).
+    const promise = rawPromise.then((res) => {
+      if (opts?.fresh) this._evictIfChanged(key, ks, res);
+      return res === undefined ? undefined : { directory: res.directory, entry: res.entry };
+    });
     // Shield the shared/cached promise object so a rejected load (e.g. the
     // retryable 404 thrown by _fetchDirectoryMetadata) never trips Node's
     // unhandled-rejection detector via the *cached* reference. Live callers
@@ -2104,8 +2240,16 @@ export class FS5 {
 
     if (!opts?.fresh) {
       // Populate synchronously (before any await) so concurrent readers coalesce.
-      this._dirMetaCache.set(key, { promise, expires: Date.now() + this._dirMetaTtlMs });
+      const slot: { promise: typeof promise; expires: number; settled?: string } = {
+        promise,
+        expires: Date.now() + this._dirMetaTtlMs,
+      };
+      this._dirMetaCache.set(key, slot);
       if (this._dirMetaCache.size > 100) this._cleanupDirMetaCache();
+      rawPromise.then(
+        (res) => { if (res !== undefined) slot.settled = entryFingerprint(res.entry); },
+        () => {}
+      );
       // Evict misses / synthetic-404 / rejections — but only if this slot is still ours.
       const evictIfStale = () => {
         if (this._dirMetaCache.get(key)?.promise === promise) {
@@ -2118,7 +2262,105 @@ export class FS5 {
       );
     }
 
-    return promise;
+    return this._withRequiredEntry(promise, ks, opts);
+  }
+
+  /**
+   * `requireEntry`: the caller reached this directory through its parent's `DirRef`, and
+   * `_createDirectory` publishes a directory's registry entry BEFORE its parent links it — so
+   * a linked directory cannot be genuinely absent. A miss here is "unavailable" (propagation,
+   * a lost broadcast), never "empty": treating it as empty is what rebuilt linked directories
+   * at revision 1 over their real contents.
+   *
+   * Applied per caller AFTER the (possibly shared, coalesced) load, so a caller without
+   * `requireEntry` sharing the same in-flight promise keeps its own semantics.
+   */
+  private _withRequiredEntry(
+    promise: Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined>,
+    ks: KeySet,
+    opts?: { path?: string; requireEntry?: boolean }
+  ): Promise<{ directory: DirV1; entry?: RegistryEntry } | undefined> {
+    if (!opts?.requireEntry) return promise;
+    return promise.then((res) => {
+      if (res !== undefined) return res;
+      // Wording: must not read as certain absence (`does not exist` / `Path not found`)
+      // nor as a create race (`same name`) — consumers and the parent walk parse those.
+      throw new S5DirectoryLoadError(
+        "Linked directory is unavailable: its parent links it (so it was published), but " +
+        "this node has no registry entry for it and no peer supplied one — likely a " +
+        "propagation delay; retry. Refusing to treat it as empty (that would orphan existing data).",
+        {
+          retryable: true,
+          reason: "entry-unavailable",
+          path: opts.path,
+          publicKey: bytesToHex(ks.publicKey),
+        }
+      );
+    });
+  }
+
+  /**
+   * After a fresh read of `key`, drop the cached slot iff it is not known to hold the same
+   * registry entry: still in flight, or settled on a different revision/data. Unchanged
+   * directories stay cached — writes resolve their whole path fresh (beta.56), and dropping
+   * every unchanged ancestor on every write would undo the cache (beta.49: "a write evicts
+   * only its own directory key"). Deleting is always safe; it only costs a re-fetch.
+   */
+  private _evictIfChanged(
+    key: string,
+    ks: KeySet,
+    res: { entry?: RegistryEntry } | undefined
+  ): void {
+    if (ks.publicKey[0] == mhashBlake3Default) return; // content-addressed: immutable
+    const slot = this._dirMetaCache.get(key);
+    if (!slot) return;
+    const fresh = res === undefined ? undefined : entryFingerprint(res.entry);
+    if (slot.settled === undefined || slot.settled !== fresh) {
+      this._dirMetaCache.delete(key);
+    }
+  }
+
+  /**
+   * Download a directory blob through the content-addressed cache (see `_dirBlobCache`).
+   * Concurrent downloads of one blob share a single request. The caller gets exactly what the
+   * API returned; the cache keeps its own copy and hands out copies, so no caller can mutate
+   * a cached blob.
+   */
+  private async _downloadDirectoryBlob(hash: Uint8Array, bypassCache?: boolean): Promise<Uint8Array> {
+    // Key by the 32-byte digest: byte 0 (the multihash type) is rewritten in place along the
+    // download path (`hash[0] = mhashBlake3` above, and again in S5Node); the digest never is.
+    const digest = bytesToHex(hash.subarray(1, 33));
+    if (!bypassCache) {
+      const hit = this._dirBlobCache.get(digest);
+      if (hit !== undefined) {
+        this._dirBlobCache.delete(digest); // LRU: most recently used goes last
+        this._dirBlobCache.set(digest, hit);
+        return hit.slice();
+      }
+      const pending = this._dirBlobDownloads.get(digest);
+      if (pending !== undefined) return (await pending).slice();
+    }
+
+    const download = this.api.downloadBlobAsBytes(hash);
+    if (!bypassCache) this._dirBlobDownloads.set(digest, download);
+    try {
+      const bytes = await download;
+      this._rememberDirectoryBlob(digest, bytes);
+      return bytes;
+    } finally {
+      if (this._dirBlobDownloads.get(digest) === download) this._dirBlobDownloads.delete(digest);
+    }
+  }
+
+  private _rememberDirectoryBlob(digest: string, bytes: Uint8Array): void {
+    if (bytes.length > DIR_BLOB_CACHE_MAX_ENTRY_BYTES || this._dirBlobCache.has(digest)) return;
+    this._dirBlobCache.set(digest, bytes.slice());
+    this._dirBlobCacheBytes += bytes.length;
+    for (const [oldest, old] of this._dirBlobCache) {
+      if (this._dirBlobCacheBytes <= DIR_BLOB_CACHE_MAX_BYTES) break;
+      this._dirBlobCache.delete(oldest);
+      this._dirBlobCacheBytes -= old.length;
+    }
   }
 
   /** Remove expired entries from the directory-metadata cache (mirror of registry.ts cleanup). */
@@ -2194,15 +2436,42 @@ export class FS5 {
   }
 
   /**
+   * Is the directory `ref` links to empty? Read FRESH (this decides a delete, and another tab
+   * may have just added a child) through the link the caller already holds. Used inside a
+   * sharded parent, where `getKeySet` (not HAMT-aware) cannot address the child. A linked
+   * directory whose entry is missing throws (retryable), never "empty".
+   */
+  private async _isLinkedDirectoryEmpty(ref: DirRef, path: string): Promise<boolean> {
+    let publicKey: Uint8Array;
+    try {
+      publicKey = linkPublicKey(ref.link);
+    } catch {
+      return false; // a link we cannot read is never judged empty
+    }
+    const meta = await this._getDirectoryMetadata(
+      { publicKey, writeKey: undefined, encryptionKey: undefined },
+      { fresh: true, path, requireEntry: true }
+    );
+    return meta !== undefined && isDirectoryEmpty(meta.directory);
+  }
+
+  /**
    * Load a directory at the specified path
    * @param path Path to the directory (e.g., "home/docs")
    * @returns The DirV1 object or undefined if not found
    */
-  private async _loadDirectory(path: string): Promise<DirV1 | undefined> {
+  private async _loadDirectory(
+    path: string,
+    opts?: { fresh?: boolean }
+  ): Promise<DirV1 | undefined> {
     const preprocessedPath = await this._preprocessLocalPath(path);
-    const ks = await this.getKeySet(preprocessedPath);
+    const ks = await this.getKeySet(preprocessedPath, { fresh: opts?.fresh });
+    const label = this._pathLabelFromUri(preprocessedPath);
     const metadata = await this._getDirectoryMetadata(ks, {
-      path: this._pathLabelFromUri(preprocessedPath),
+      fresh: opts?.fresh,
+      path: label,
+      // Every non-root directory was reached through its parent's link (getKeySet).
+      requireEntry: label !== "",
     });
     return metadata?.directory;
   }
@@ -2212,12 +2481,50 @@ export class FS5 {
    * @param path Path to the directory
    * @param updater Function to update the directory
    */
+  /**
+   * Apply `updater` to the directory at `path`.
+   *
+   * Transaction-first (beta.56): run the transaction — its key-set resolution is fresh —
+   * and only if resolution reports that a directory on the path does not exist, create the
+   * missing directories and transact again. Resolution failures are thrown before the
+   * updater runs, while the updater's own errors come back inside the result, so the updater
+   * can never run twice. (The old shape walked and re-resolved every prefix from the root
+   * on every write: O(depth²) directory reads, affordable only through a cache that another
+   * tab can make stale.)
+   *
+   * `createParents: false` (used by `delete`): a missing directory on the path means there
+   * is nothing to update — return without writing anything.
+   */
   private async _updateDirectory(
     path: string,
-    updater: DirectoryTransactionFunction
+    updater: DirectoryTransactionFunction,
+    opts?: { createParents?: boolean }
   ): Promise<void> {
     dbg('FS5', '_updateDirectory', 'ENTER', { path });
+    const preprocessedPath = await this._preprocessLocalPath(path || "home");
 
+    let result: DirectoryTransactionResult;
+    try {
+      result = await this.runTransactionOnDirectory(preprocessedPath, updater);
+    } catch (e) {
+      if (!isPathResolutionMiss(e)) throw e;
+      if (opts?.createParents === false) {
+        dbg('FS5', '_updateDirectory', 'A directory on the path does not exist - nothing to update', { path });
+        return;
+      }
+      await this._createMissingDirectories(path);
+      result = await this.runTransactionOnDirectory(preprocessedPath, updater);
+    }
+
+    dbg('FS5', '_updateDirectory', 'Transaction complete, unwrapping result...', {
+      resultType: result.type
+    });
+    result.unwrap();
+    dbg('FS5', '_updateDirectory', 'SUCCESS', { path });
+  }
+
+  /** Create every missing directory along `path` (reads fresh; see `_updateDirectory`). */
+  private async _createMissingDirectories(path: string): Promise<void> {
     // Create intermediate directories if needed
     const segments = path.split("/").filter((s) => s);
     dbg('FS5', '_updateDirectory', 'Path segments', { segments, count: segments.length });
@@ -2237,7 +2544,8 @@ export class FS5 {
       // Check if this directory exists
       try {
         dbg('FS5', '_updateDirectory', 'Loading directory to check existence...', { currentPath });
-        const dir = await this._loadDirectory(currentPath);
+        // Fresh: this walk decides what to CREATE, so it must not trust a cached parent.
+        const dir = await this._loadDirectory(currentPath, { fresh: true });
         if (!dir) {
           // Create this directory
           dbg('DIRECTORY', '_updateDirectory', 'Directory missing - creating', {
@@ -2255,7 +2563,10 @@ export class FS5 {
             // S5DirectoryLoadError (e.g. a transient 404) matches neither phrase and
             // is correctly re-thrown to the caller.
             const errorStr = createError?.message || createError?.e?.message || createError?.e || createError?.toString?.() || '';
-            if (!errorStr.toString().includes('same name') && !errorStr.toString().includes('does not exist')) {
+            // "same name": a concurrent create won (fine). A typed path miss: the parent is created
+            // in the next iteration. Anything else — including an unrelated error that merely
+            // says "does not exist" — is a real failure.
+            if (!errorStr.toString().includes('same name') && !isPathResolutionMiss(createError)) {
               throw createError;
             }
             dbg('DIRECTORY', '_updateDirectory', 'Directory creation deferred or already exists', { currentPath });
@@ -2264,6 +2575,9 @@ export class FS5 {
           dbg('FS5', '_updateDirectory', 'Directory exists', { currentPath });
         }
       } catch (error: any) {
+        // A directory that exists but cannot be loaded right now is NOT missing: creating
+        // it can only fail ("same name") or, worse, decide from a guess. Surface it.
+        if (isS5DirectoryLoadError(error)) throw error;
         // Directory might not exist, try to create it
         dbg('DIRECTORY', '_updateDirectory', 'Error loading directory - attempting create', {
           currentPath,
@@ -2278,7 +2592,10 @@ export class FS5 {
           // Ignore "same name" (race condition) and "does not exist" (parent will be created in next iteration)
           // DirectoryTransactionResult stores error in .e, not .message
           const errorStr = createError?.message || createError?.e?.message || createError?.e || createError?.toString?.() || '';
-          if (!errorStr.toString().includes('same name') && !errorStr.toString().includes('does not exist')) {
+          // "same name": a concurrent create won (fine). A typed path miss: the parent is created
+          // in the next iteration. Anything else — including an unrelated error that merely
+          // says "does not exist" — is a real failure.
+          if (!errorStr.toString().includes('same name') && !isPathResolutionMiss(createError)) {
             throw createError;
           }
           dbg('DIRECTORY', '_updateDirectory', 'Directory creation deferred or already exists', { currentPath });
@@ -2286,20 +2603,6 @@ export class FS5 {
       }
     }
 
-    // Now perform the update
-    const preprocessedPath = await this._preprocessLocalPath(path || "home");
-    dbg('FS5', '_updateDirectory', 'Running transaction', { preprocessedPath });
-
-    const result = await this.runTransactionOnDirectory(
-      preprocessedPath,
-      updater
-    );
-
-    dbg('FS5', '_updateDirectory', 'Transaction complete, unwrapping result...', {
-      resultType: result.type
-    });
-    result.unwrap();
-    dbg('FS5', '_updateDirectory', 'SUCCESS', { path });
   }
 
   /**
@@ -2698,7 +3001,7 @@ export class FS5 {
     try {
       dirResult = await this._getDirectoryMetadata(ks);
     } catch (e: any) {
-      if (e.message === "MissingEncryptionKey") return undefined;
+      if (e.message === "MissingEncryptionKey" || isRegistryUnavailableLoad(e)) return undefined;
       throw e;
     }
     if (!dirResult) return undefined;
@@ -2730,7 +3033,7 @@ export class FS5 {
       try {
         dirResult = await this._getDirectoryMetadata(ks);
       } catch (e: any) {
-        if (e.message === "MissingEncryptionKey") return undefined;
+        if (e.message === "MissingEncryptionKey" || isRegistryUnavailableLoad(e)) return undefined;
         throw e;
       }
       if (!dirResult) return undefined;
@@ -2787,7 +3090,7 @@ export class FS5 {
         const r = await this._getDirectoryMetadata(ks);
         return r?.directory;
       } catch (e: any) {
-        if (e.message === "MissingEncryptionKey") return undefined;
+        if (e.message === "MissingEncryptionKey" || isRegistryUnavailableLoad(e)) return undefined;
         throw e;
       }
     };

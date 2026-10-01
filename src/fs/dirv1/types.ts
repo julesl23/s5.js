@@ -122,11 +122,20 @@ export interface ListResult {
 
 export interface GetOptions {
   defaultMediaType?: string;
+  /**
+   * Bypass the 30 s directory cache for EVERY directory read this call makes (the whole
+   * path, not just the last directory), so the result reflects the latest registry entries.
+   * Use it when another tab or device may have just changed the tree and the answer must
+   * be certain — e.g. treating `Directory "…" does not exist` as a real absence.
+   */
+  fresh?: boolean;
 }
 
 export interface ListOptions {
   limit?: number;
   cursor?: string;
+  /** Bypass the directory cache for every directory read in this call (see `GetOptions.fresh`). */
+  fresh?: boolean;
   // filter?: (item: ListResult) => boolean; // Reserved for future
 }
 

@@ -168,7 +168,12 @@ describe("FS5 directory-metadata cache", () => {
 
     const cold = new FS5(api as any, identity as any);
     api.registry.delete(cKey);
-    expect(await cold.get("home/a/x.txt")).toBeUndefined(); // miss
+    // beta.56 (D3b): "a" is linked from "home", so a registry miss for it is
+    // "unavailable" (retryable), no longer a silent undefined.
+    await expect(cold.get("home/a/x.txt")).rejects.toMatchObject({
+      retryable: true,
+      reason: "entry-unavailable",
+    });
 
     api.registry.set(cKey, saved);
     expect(await cold.get("home/a/x.txt")).toBe("xdata"); // not pinned to the miss

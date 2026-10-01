@@ -24,7 +24,11 @@ export interface S5APIInterface {
     pinHash(hash: Uint8Array): Promise<void>;
     unpinHash(hash: Uint8Array): Promise<void>;
 
-    registryGet(pk: Uint8Array): Promise<RegistryEntry | undefined>;
+    /// Read a registry entry. `requireAnswer`: reject with a retryable
+    /// `S5RegistryUnavailableError` (instead of resolving `undefined`) when there is no
+    /// local entry and no connected peer could be asked — the one case where `undefined`
+    /// would be a guess rather than the protocol's "absent" (it has no negative reply).
+    registryGet(pk: Uint8Array, opts?: { requireAnswer?: boolean }): Promise<RegistryEntry | undefined>;
     registryListen(pk: Uint8Array): AsyncIterator<RegistryEntry>;
     registrySet(entry: RegistryEntry): Promise<void>;
 

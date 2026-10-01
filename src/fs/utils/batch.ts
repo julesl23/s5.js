@@ -311,7 +311,8 @@ export class BatchOperations {
       } else {
         // Non-recursive delete - only delete if empty
         const entries = [];
-        for await (const entry of this.fs.list(path, { limit: 1 })) {
+        // Fresh: an emptiness check that decides a delete must not trust a cached listing.
+        for await (const entry of this.fs.list(path, { limit: 1, fresh: true })) {
           entries.push(entry);
         }
 
@@ -359,8 +360,9 @@ export class BatchOperations {
     }
 
     try {
-      // Check if directory already exists
-      const metadata = await this.fs.getMetadata(path);
+      // Check if directory already exists. Fresh: this decides whether to CREATE, and a
+      // cached answer can be up to 30 s behind another tab.
+      const metadata = await this.fs.getMetadata(path, { fresh: true });
       if (metadata && metadata.type === "directory") {
         return; // Already exists
       }
@@ -370,6 +372,9 @@ export class BatchOperations {
         throw new Error(`Path ${path} exists but is a file, not a directory`);
       }
     } catch (error) {
+      // A directory on the path that cannot be loaded right now is not "missing":
+      // surface it (typed, retryable) instead of trying to create over it.
+      if (isS5DirectoryLoadError(error)) throw error;
       // Directory doesn't exist, need to create it
     }
 
@@ -386,7 +391,7 @@ export class BatchOperations {
       await this.fs.createDirectory(parentPath, dirName);
     } catch (error) {
       // Might have been created concurrently, check again
-      const metadata = await this.fs.getMetadata(path);
+      const metadata = await this.fs.getMetadata(path, { fresh: true });
       if (!metadata || metadata.type !== "directory") {
         throw error;
       }

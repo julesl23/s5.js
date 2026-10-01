@@ -2,20 +2,36 @@
  * Typed filesystem errors.
  *
  * The directory-load contract (added with the ensureIdentityInitialized
- * data-loss fix): a directory that *cannot be loaded right now* must be
- * clearly distinguishable from a directory that is *genuinely absent*.
+ * data-loss fix, refined in beta.56): a directory that *cannot be loaded right
+ * now* must be clearly distinguishable from a directory that is *genuinely absent*.
  *
- * - Genuinely absent (no registry entry): reads return `undefined`, as before.
- * - Unavailable (registry entry exists, but the blob 404s / fails to download):
- *   throw `S5DirectoryLoadError` with `retryable === true`. Consumers MUST treat
- *   this as "retry with backoff", NEVER as "empty". Treating a transient 404 as
- *   an empty directory is what silently orphaned entire user subtrees — the
- *   root would re-publish `home`/`archive` as empty at a valid next revision.
+ * - Genuinely absent: the (freshly read) parent does not link it →
+ *   `Directory "…" does not exist`, or `undefined` from `get`/`getMetadata` for a
+ *   name the parent does not hold. A root with no registry entry (a new identity)
+ *   is also absent — when a peer was asked and none had it.
+ * - Unavailable → `S5DirectoryLoadError` with `retryable === true`, and a `reason`:
+ *   - `'blob-unavailable'`: the registry entry exists but the blob 404s / fails
+ *     to download;
+ *   - `'registry-unavailable'`: no local entry and no connected peer could even be
+ *     asked (the protocol has no negative reply, so this is not an answer);
+ *   - `'entry-unavailable'`: the parent LINKS this directory (so it was published —
+ *     `_createDirectory` writes the entry before the parent links it) but its
+ *     registry entry cannot be found. Before beta.56 this read as "absent/empty".
+ *   Consumers MUST treat all of these as "retry with backoff", NEVER as "empty".
+ *   Treating a transient failure as an empty directory is what silently orphaned
+ *   entire user subtrees — the root would re-publish `home`/`archive` as empty at a
+ *   valid next revision. None of their messages uses the certain-absence wording
+ *   (`does not exist`, `Path not found`).
  * - Structurally incomplete (e.g. a root that exists but is missing
  *   `home`/`archive`, with no transient failure involved): throw
  *   `S5DirectoryLoadError` with `retryable === false`. Retrying cannot fix this;
  *   it needs an explicit, opt-in repair (see `FS5.ensureIdentityInitialized`).
  */
+export type S5DirectoryLoadReason =
+  | "blob-unavailable"
+  | "registry-unavailable"
+  | "entry-unavailable";
+
 export class S5DirectoryLoadError extends Error {
   /**
    * `true`  → transient/unavailable; retrying (with backoff) may succeed.
@@ -51,15 +67,29 @@ export class S5DirectoryLoadError extends Error {
    */
   readonly publicKey?: string;
 
+  /**
+   * Why the directory is unavailable (retryable errors only; see the contract above).
+   * `repairDirectory` acts only on `'blob-unavailable'` — rebuilding a directory because
+   * its *registry* could not be reached would replace a healthy directory.
+   */
+  readonly reason?: S5DirectoryLoadReason;
+
   constructor(
     message: string,
-    opts: { retryable: boolean; cause?: unknown; path?: string; publicKey?: string }
+    opts: {
+      retryable: boolean;
+      cause?: unknown;
+      path?: string;
+      publicKey?: string;
+      reason?: S5DirectoryLoadReason;
+    }
   ) {
     super(message);
     this.name = "S5DirectoryLoadError";
     this.retryable = opts.retryable;
     if (opts.path !== undefined) this.path = opts.path;
     if (opts.publicKey !== undefined) this.publicKey = opts.publicKey;
+    if (opts.reason !== undefined) this.reason = opts.reason;
     if (opts.cause !== undefined) {
       // Preserve a short description of the underlying cause WITHOUT holding a
       // reference to the original Error object: a nested Error in `cause` is a
@@ -103,7 +133,7 @@ export function as404DirLoadError(
     return new S5DirectoryLoadError(
       `${context} is temporarily unavailable (404); likely a transient propagation ` +
         `failure — retry. Refusing to treat it as empty (that would drop data).`,
-      { retryable: true, cause: error, ...attribution }
+      { retryable: true, cause: error, reason: "blob-unavailable", ...attribution }
     );
   }
   return error;

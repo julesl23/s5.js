@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Post-grant releases are summarised below. For exhaustive per-version notes (including production-hardening fixes across beta.2–beta.44), see [`docs/POST_GRANT_UPDATE.md`](docs/POST_GRANT_UPDATE.md).
 
+## [0.9.0-beta.56] - 2026-09-30
+
+### Fixed
+
+- **Critical data-loss fix — tabs of one origin silently overwrote each other's directory writes.** Every tab has its own registry service with a 60 s `recentWrites` cache, and all tabs share one IndexedDB registry store. A tab answered reads of a key it had written in the last 60 s from that cache, checked its own writes against it too, and wrote in a *separate* transaction from the check — so a newer entry another tab had committed was invisible to it and got overwritten. Two tabs creating RAG databases within a minute dropped each other's entry from the shared parent: a whole database disappeared from every listing. Reported by the Platformless AI SDK developer.
+  - **`recentWrites` is now a floor, never an override:** a cached read returns the newer of the cached entry and the shared DB entry.
+  - **The revision check and the write are one step:** a new optional `KeyValueStore.putIfNewer` runs the comparison and the write in **one IndexedDB `readwrite` transaction**, which IndexedDB serialises across every tab of the origin. `MemoryLevelStore` gets the same method behind an in-process lock (its async get/put interleave — it is *not* "trivially atomic"). Stores without the method fall back to the old non-atomic check.
+  - **A refused put is never announced:** `listen()` subscribers are notified only after the store accepted the entry. This also stops a stale tab's cache from letting an *older* entry arriving over P2P **downgrade** the shared registry.
+  - FS5 needed no change for the merge: `runTransactionOnDirectory` already re-reads and retries a `Revision number too low`, so a stale tab now re-applies its change on top of the other tab's instead of replacing it.
+- **Writes can no longer rebuild a linked directory empty.** A directory reached through its parent's link is always published before it is linked, so a missing registry entry for it means "unavailable", not "absent". A write used to build on an empty directory and publish revision 1 over the real one; it now fails with a retryable `S5DirectoryLoadError` (`reason: 'entry-unavailable'`) and writes nothing.
+- **An offline tab can no longer conclude "new identity".** With no connected peer and no local entry, a registry read is not an answer; `ensureIdentityInitialized` now rejects retryably instead of creating a fresh root.
+- **Writes never decide from a stale cached directory.** Every write resolves its path fresh — `put`, `delete`, `createDirectory`, `createFile`, `BatchOperations`' existence/emptiness checks and `repairDirectory`'s checks. A write into a directory another tab had just deleted used to land in the *unlinked* directory (a silent lost write); it now re-creates it. A write into a directory another tab had just created no longer fails with `does not exist`.
+- **`delete()` writes nothing when there is nothing to delete** (it used to create missing parent directories on the way), judges a directory's emptiness **fresh** (a child another tab just added no longer gets the directory deleted from under it), and never treats a **sharded** directory as empty (its inline maps are always empty — a 1000+ entry directory could be deleted with its whole subtree orphaned). `_createDirectory`'s overwrite guard uses the same predicate.
+- **Sharded directories survive a round trip.** The DirV1 decoder left the nested `sharding` header as a `Map`, so every `header.sharding.root.cid` check missed it: once a directory crossed 1000 entries (auto-sharding), every fresh instance listed **0** entries, `get` returned `undefined`, and the next `put` rewrote the directory with a single file — orphaning the rest. Decode-side fix only: the bytes on disk (and Rust compatibility) are unchanged.
+- `repairDirectory` (and `ensureIdentityInitialized({ repair: true })`) now repairs **only** an unretrievable blob (`reason: 'blob-unavailable'`) — a registry that briefly could not be reached can no longer lead to a healthy directory being rebuilt empty.
+- A directory's registry entry is no longer rewritten in place by the download path (the blob hash was a *view* into `entry.data`, and the node rewrites its prefix byte). The same entry read differently depending on whether a download had run.
+- `IDBStore.putIfNewer` observes the aborted transaction when the write itself fails (quota, …), so a failed registry write no longer leaves an unhandled rejection behind.
+
+### Added
+
+- **Fresh reads:** `get(path, { fresh: true })`, `list(path, { fresh: true })`, `getMetadata(path, { fresh: true })`, `FS5Advanced.pathToCID(path, { fresh: true })`. Every directory on the path is re-read from the registry; with `fresh`, `Directory "…" does not exist` is a certain absence. A fresh read that finds a newer directory evicts the stale cached copy, so later default reads never go backwards.
+- **Content-addressed directory-blob cache** (in memory, per `FS5`, 8 MiB LRU): a fresh read of an unchanged directory costs one registry read and no download. A blob is addressed by its hash, so this cache cannot be stale. `repairDirectory` bypasses it — its question is whether the *network* still has the blob.
+- **`S5DirectoryLoadError.reason`**: `'blob-unavailable' | 'registry-unavailable' | 'entry-unavailable'` (type `S5DirectoryLoadReason`).
+- **`S5RegistryUnavailableError` / `isS5RegistryUnavailableError()`** (`code: 'S5_REGISTRY_UNAVAILABLE'`, always retryable), raised by `registryGet(pk, { requireAnswer: true })` when there is no local entry and no connected peer could be asked. The S5 protocol has no negative registry reply, so this is the one case in which "nobody answered" is certain rather than the protocol's "absent".
+
+### Changed
+
+- **Behaviour change — linked directory with no registry entry:** `get`/`list`/`getMetadata`/`pathToCID` throw a retryable `S5DirectoryLoadError` (`reason: 'entry-unavailable'`) where they used to return `undefined` / yield nothing / throw `Path not found`. This reverses beta.50's "no registry entry → `undefined`" for directories their parent links; a path its parent does *not* link still reads exactly as before. None of the new errors uses the wording `does not exist` or `Path not found`.
+- **Behaviour change — no connected peer:** creating a *new* directory is refused (retryable) instead of writing a local-only revision 1 that nothing would ever re-broadcast. Keys already in the local/shared-IndexedDB registry are still served, so existing directories stay readable and writable offline. Cross-identity public reads keep returning `undefined`.
+- With no connected peer, `registryGet(pk, { requireAnswer: true })` answers at once (the local entry, or the error) instead of waiting out the 2.5 s P2P window; and a key first read while offline is no longer marked "subscribed", so it is asked of the network once a peer is back.
+- Whether a write creates missing directories is decided by a typed marker (`code: 'S5_PATH_NOT_FOUND'`) on `getKeySet`'s `Directory "…" does not exist` errors — the message itself is unchanged — instead of by matching "does not exist" in any error.
+- `_updateDirectory` is transaction-first: the parent-creation walk (which re-resolved every prefix from the root on every write — O(depth²) reads) now runs only when a directory on the path is missing.
+
+### Known issues (found during this release, not fixed)
+
+- **The HAMT leaf encoder is lossy:** a sharded directory stores only `hash`/`size` for a file (dropping `media_type`, `timestamp` and `extra` — including an encrypted file's key) and only `link.type`/`link.hash` for a subdirectory (dropping its public key). When a directory shards, its subdirectories become unaddressable and its encrypted files unreadable. Fixing it changes the HAMT storage encoding and needs its own plan (Rust byte-compatibility).
+- Cross-device writes (P3) are still last-writer-wins without notice: the S5 protocol has no acknowledgement for a registry put.
+- **Security (pre-existing):** `Directory "…" does not exist` and `Parent Directory of "…" does not exist` embed the full `fs5://write:<rootWriteKey>@…` URI, so a user's root write key reaches any log that records these errors. The message is parsed by downstream consumers, so changing it will be coordinated in a follow-up release.
+
 ## [0.9.0-beta.55] - 2026-09-02
 
 ### Fixed

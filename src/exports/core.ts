@@ -7,6 +7,8 @@
 export { S5 } from '../s5.js';
 export { FS5 } from '../fs/fs5.js';
 export { S5DirectoryLoadError, isS5DirectoryLoadError } from '../fs/errors.js';
+export type { S5DirectoryLoadReason } from '../fs/errors.js';
+export { S5RegistryUnavailableError, isS5RegistryUnavailableError } from '../node/errors.js';
 export type { RepairResult } from '../fs/errors.js';
 export { S5UserIdentity } from '../identity/identity.js';
 export { S5Node } from '../node/node.js';

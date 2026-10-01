@@ -78,8 +78,11 @@ describe("ensureIdentityInitialized data-loss protection", () => {
       restore();
     });
 
-    test("a genuinely-absent directory (no registry entry) still returns undefined", async () => {
-      // Remove the "a" directory's registry entry entirely (genuine absence).
+    test("a LINKED directory with no registry entry is unavailable (retryable), never absent (beta.56 D3b)", async () => {
+      // Remove the "a" directory's registry entry. Before beta.56 this counted as
+      // genuine absence (get → undefined). But "home" LINKS "a", and a directory's
+      // entry is published before its parent links it — so the miss means the entry
+      // is unavailable here, and treating it as absent/empty is the orphaning path.
       // Find it by reading once and capturing the third key touched.
       const probe = new FS5(api as any, identity as any);
       const touched: string[] = [];
@@ -93,7 +96,20 @@ describe("ensureIdentityInitialized data-loss protection", () => {
       api.registry.delete(aRegKey);
 
       const cold = new FS5(api as any, identity as any);
-      expect(await cold.get("home/a/x.txt")).toBeUndefined();
+      const err = await cold.get("home/a/x.txt").then(
+        () => { throw new Error("expected get() to reject"); },
+        (e) => e
+      );
+      expect(isS5DirectoryLoadError(err)).toBe(true);
+      expect(err.retryable).toBe(true);
+      expect(err.reason).toBe("entry-unavailable");
+    });
+
+    test("a directory its parent does NOT link is still genuinely absent", async () => {
+      const cold = new FS5(api as any, identity as any);
+      await expect(cold.get("home/never/x.txt")).rejects.toThrow(/Directory ".*" does not exist/);
+      expect(await cold.get("home/a/never.txt")).toBeUndefined();
+      expect(await cold.getMetadata("home/never")).toBeUndefined();
     });
 
     test("write path recovers when a transient 404 clears on retry", async () => {
@@ -284,7 +300,12 @@ describe("ensureIdentityInitialized data-loss protection", () => {
         throw new Error("404 not found"); // home blob can't be confirmed
       });
 
-      const err = await (fs as any)
+      // A COLD instance: since beta.56 an instance that already downloaded home's current
+      // blob holds it in its content-addressed cache and can confirm it without the
+      // network (it then links, writing nothing — also safe). The premise here is "the
+      // blob is unavailable to this instance".
+      const cold = new FS5(api as any, identity as any);
+      const err = await (cold as any)
         ._createDirectory("home", rootWriteKey(api, identity))
         .then(() => { throw new Error("expected reject"); }, (e: any) => e);
       expect(isS5DirectoryLoadError(err)).toBe(true);

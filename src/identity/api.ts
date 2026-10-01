@@ -690,8 +690,8 @@ export class S5APIWithIdentity implements S5APIInterface {
         return data;
     }
 
-    registryGet(pk: Uint8Array): Promise<RegistryEntry | undefined> {
-        return this.node.registryGet(pk);
+    registryGet(pk: Uint8Array, opts?: { requireAnswer?: boolean }): Promise<RegistryEntry | undefined> {
+        return this.node.registryGet(pk, opts);
     }
     registryListen(pk: Uint8Array): AsyncIterator<RegistryEntry> {
         return this.node.registryListen(pk);

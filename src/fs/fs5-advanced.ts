@@ -55,8 +55,11 @@ export class FS5Advanced {
    * Extract CID from a file or directory path
    *
    * @param path - The file or directory path
+   * @param options - `fresh: true` bypasses the directory cache for every directory read
+   *   (use it when another tab/device may have just changed the path)
    * @returns The CID as Uint8Array (32 bytes)
-   * @throws Error if path does not exist
+   * @throws Error if path does not exist; a retryable `S5DirectoryLoadError` if a directory
+   *   on the path cannot be loaded right now (never "Path not found" for that case)
    *
    * @example
    * ```typescript
@@ -64,9 +67,10 @@ export class FS5Advanced {
    * console.log(cid); // Uint8Array(32) [...]
    * ```
    */
-  async pathToCID(path: string): Promise<Uint8Array> {
+  async pathToCID(path: string, options?: { fresh?: boolean }): Promise<Uint8Array> {
+    const fresh = options?.fresh;
     // Get metadata for the path
-    const metadata = await this.fs5.getMetadata(path);
+    const metadata = await this.fs5.getMetadata(path, { fresh });
 
     if (!metadata) {
       throw new Error(`Path not found: ${path}`);
@@ -75,7 +79,7 @@ export class FS5Advanced {
     // For files, extract CID from FileRef hash
     if (metadata.type === 'file') {
       // FileRef contains the file data hash as CID
-      const fileRef = await this._getFileRef(path);
+      const fileRef = await this._getFileRef(path, fresh);
       if (!fileRef || !fileRef.hash) {
         throw new Error(`Failed to extract CID for file: ${path}`);
       }
@@ -84,7 +88,7 @@ export class FS5Advanced {
 
     // For directories, compute CID from directory structure
     if (metadata.type === 'directory') {
-      const dirCID = await this._getDirectoryCID(path);
+      const dirCID = await this._getDirectoryCID(path, fresh);
       if (!dirCID) {
         throw new Error(`Failed to extract CID for directory: ${path}`);
       }
@@ -239,14 +243,14 @@ export class FS5Advanced {
   /**
    * Get FileRef for a file path
    */
-  private async _getFileRef(path: string): Promise<any> {
+  private async _getFileRef(path: string, fresh?: boolean): Promise<any> {
     // Navigate to parent directory
     const parts = path.split('/').filter(Boolean);
     const fileName = parts.pop() || '';
     const parentPath = parts.join('/');
 
     // Load parent directory using the private method
-    const dir = await (this.fs5 as any)._loadDirectory(parentPath);
+    const dir = await (this.fs5 as any)._loadDirectory(parentPath, { fresh });
 
     if (!dir || !dir.files) {
       return null;
@@ -259,9 +263,9 @@ export class FS5Advanced {
   /**
    * Get CID for a directory
    */
-  private async _getDirectoryCID(path: string): Promise<Uint8Array | null> {
+  private async _getDirectoryCID(path: string, fresh?: boolean): Promise<Uint8Array | null> {
     // Load directory
-    const dir = await (this.fs5 as any)._loadDirectory(path);
+    const dir = await (this.fs5 as any)._loadDirectory(path, { fresh });
 
     if (!dir) {
       return null;

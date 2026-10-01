@@ -209,8 +209,8 @@ export class S5Node implements S5APIInterface {
             await new Promise(resolve => setTimeout(resolve, 10));
         }
     }
-    registryGet(pk: Uint8Array): Promise<RegistryEntry | undefined> {
-        return this.registry.get(pk);
+    registryGet(pk: Uint8Array, opts?: { requireAnswer?: boolean }): Promise<RegistryEntry | undefined> {
+        return this.registry.get(pk, opts);
     }
 
     registryListen(pk: Uint8Array): AsyncIterator<RegistryEntry> {
